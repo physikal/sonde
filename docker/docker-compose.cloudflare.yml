@@ -1,0 +1,49 @@
+# Sonde Hub — Cloudflare Tunnel Deployment
+#
+# Standalone compose for running Sonde Hub behind a Cloudflare Tunnel.
+# No ports are exposed to the host — all traffic flows through the tunnel.
+#
+# Setup:
+#   1. Create a Cloudflare Tunnel:
+#        cloudflared tunnel login
+#        cloudflared tunnel create sonde-hub
+#        cloudflared tunnel token sonde-hub
+#   2. In the Cloudflare dashboard, add a public hostname route:
+#        Hostname: sonde.example.com  →  http://sonde-hub:3000
+#   3. Create a .env file next to this compose file:
+#        SONDE_API_KEY=<openssl rand -hex 32>
+#        SONDE_HUB_URL=https://sonde.example.com
+#        CF_TUNNEL_TOKEN=<token from step 1>
+#   4. Run:
+#        docker compose -f docker-compose.cloudflare.yml up -d
+
+services:
+  sonde-hub:
+    build:
+      context: ..
+      dockerfile: docker/hub.Dockerfile
+    env_file: .env
+    environment:
+      SONDE_DB_PATH: /data/sonde.db
+    volumes:
+      - hub-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    depends_on:
+      sonde-hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  hub-data:
