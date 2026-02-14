@@ -62,8 +62,8 @@ export class SondeDb {
       .prepare(`
       INSERT INTO agents (id, name, status, last_seen, os, agent_version, packs_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
+      ON CONFLICT(name) DO UPDATE SET
+        id = excluded.id,
         status = excluded.status,
         last_seen = excluded.last_seen,
         os = excluded.os,

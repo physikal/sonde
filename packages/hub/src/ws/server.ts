@@ -39,22 +39,22 @@ export function setupWsServer(
   });
 
   wss.on('connection', (ws) => {
+    console.log('Agent connected');
+
     ws.on('message', (data) => {
       try {
         const raw: unknown = JSON.parse(data.toString());
         const envelope = MessageEnvelope.parse(raw);
         handleMessage(ws, envelope, dispatcher, db);
-      } catch {
-        ws.send(JSON.stringify({ error: 'Invalid message format' }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`WebSocket message error: ${message}`);
+        ws.send(JSON.stringify({ error: message }));
       }
     });
 
     ws.on('close', () => {
-      const agentIds = dispatcher.getOnlineAgentIds();
-      for (const id of agentIds) {
-        // Find and remove the agent that owned this socket
-        dispatcher.removeBySocket(ws);
-      }
+      dispatcher.removeBySocket(ws);
     });
   });
 }
@@ -113,6 +113,7 @@ function handleRegister(
   };
 
   ws.send(JSON.stringify(ack));
+  console.log(`Agent registered: ${payload.name} (${agentId})`);
 }
 
 function handleHeartbeat(
