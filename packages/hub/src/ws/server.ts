@@ -34,9 +34,20 @@ export function setupWsServer(
   ca?: CaContext,
 ): void {
   const wss = new WebSocketServer({ noServer: true });
+  const dashboardWss = new WebSocketServer({ noServer: true });
 
   httpServer.on('upgrade', (req, socket, head) => {
-    if (req.url !== '/ws/agent') {
+    const url = req.url ?? '';
+
+    // Dashboard WebSocket — no auth required (same origin)
+    if (url === '/ws/dashboard' || url.startsWith('/ws/dashboard?')) {
+      dashboardWss.handleUpgrade(req, socket, head, (ws) => {
+        dashboardWss.emit('connection', ws);
+      });
+      return;
+    }
+
+    if (url !== '/ws/agent' && !url.startsWith('/ws/agent?')) {
       socket.destroy();
       return;
     }
@@ -65,6 +76,14 @@ export function setupWsServer(
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
+    });
+  });
+
+  // Dashboard WebSocket connections
+  dashboardWss.on('connection', (ws) => {
+    dispatcher.addDashboardClient(ws);
+    ws.on('close', () => {
+      dispatcher.removeDashboardClient(ws);
     });
   });
 

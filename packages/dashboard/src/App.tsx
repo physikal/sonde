@@ -3,6 +3,8 @@ import { Overview } from './components/dashboard/Overview';
 import { AppShell } from './components/layout/AppShell';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useSetupStatus } from './hooks/useSetupStatus';
+import { AgentDetail } from './pages/AgentDetail';
+import { Fleet } from './pages/Fleet';
 
 export function App() {
   const { status, loading, refetch } = useSetupStatus();
@@ -21,7 +23,8 @@ export function App() {
         {status.setupComplete ? (
           <Route element={<AppShell />}>
             <Route index element={<Overview />} />
-            <Route path="agents" element={<PlaceholderPage title="Agents" />} />
+            <Route path="agents" element={<Fleet />} />
+            <Route path="agents/:id" element={<AgentDetail />} />
             <Route path="api-keys" element={<PlaceholderPage title="API Keys" />} />
             <Route path="audit" element={<PlaceholderPage title="Audit Log" />} />
             <Route path="settings" element={<PlaceholderPage title="Settings" />} />

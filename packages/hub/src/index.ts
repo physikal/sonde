@@ -93,6 +93,53 @@ app.delete('/api/v1/api-keys/:id', (c) => {
   return c.json({ ok: true });
 });
 
+// Agent list endpoint (unauthenticated — dashboard needs it)
+app.get('/api/v1/agents', (c) => {
+  const agents = db.getAllAgents().map((a) => ({
+    ...a,
+    status: dispatcher.isAgentOnline(a.id)
+      ? 'online'
+      : a.status === 'degraded'
+        ? 'degraded'
+        : 'offline',
+  }));
+  return c.json({ agents });
+});
+
+// Agent detail endpoint
+app.get('/api/v1/agents/:id', (c) => {
+  const agent = db.getAgent(c.req.param('id'));
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  return c.json({
+    ...agent,
+    status: dispatcher.isAgentOnline(agent.id)
+      ? 'online'
+      : agent.status === 'degraded'
+        ? 'degraded'
+        : 'offline',
+  });
+});
+
+// Agent audit log
+app.get('/api/v1/agents/:id/audit', (c) => {
+  const agent = db.getAgent(c.req.param('id'));
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  const limit = Number(c.req.query('limit')) || 50;
+  const entries = db.getAuditEntries({ agentId: agent.id, limit });
+  return c.json({ entries });
+});
+
+// Global audit log
+app.get('/api/v1/audit', (c) => {
+  const limit = Number(c.req.query('limit')) || 50;
+  const entries = db.getAuditEntries({ limit });
+  return c.json({ entries });
+});
+
 // Setup status (unauthenticated — needed for first-boot wizard)
 app.get('/api/v1/setup/status', (c) => {
   const setupComplete = db.getSetupValue('setup_complete') === 'true';

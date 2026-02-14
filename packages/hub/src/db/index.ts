@@ -257,6 +257,48 @@ export class SondeDb {
       );
   }
 
+  getAuditEntries(opts?: { agentId?: string; limit?: number }): Array<{
+    id: number;
+    timestamp: string;
+    agentId: string;
+    probe: string;
+    status: string;
+    durationMs: number;
+    requestJson: string | null;
+    responseJson: string | null;
+  }> {
+    const limit = opts?.limit ?? 50;
+    const agentId = opts?.agentId;
+
+    const sql = agentId
+      ? 'SELECT id, timestamp, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log WHERE agent_id = ? ORDER BY id DESC LIMIT ?'
+      : 'SELECT id, timestamp, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log ORDER BY id DESC LIMIT ?';
+
+    const rows = (
+      agentId ? this.db.prepare(sql).all(agentId, limit) : this.db.prepare(sql).all(limit)
+    ) as Array<{
+      id: number;
+      timestamp: string;
+      agent_id: string;
+      probe: string;
+      status: string;
+      duration_ms: number;
+      request_json: string | null;
+      response_json: string | null;
+    }>;
+
+    return rows.map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      agentId: r.agent_id,
+      probe: r.probe,
+      status: r.status,
+      durationMs: r.duration_ms,
+      requestJson: r.request_json,
+      responseJson: r.response_json,
+    }));
+  }
+
   verifyAuditChain(): { valid: boolean; brokenAt?: number } {
     const rows = this.db.prepare('SELECT * FROM audit_log ORDER BY id ASC').all() as Array<
       Record<string, unknown>
