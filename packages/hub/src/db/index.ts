@@ -122,6 +122,15 @@ export class SondeDb {
       )
     `);
 
+    // Add last_used_at column to existing api_keys tables
+    const apiKeyCols = this.db.prepare("PRAGMA table_info('api_keys')").all() as Array<{
+      name: string;
+    }>;
+    const apiKeyColNames = new Set(apiKeyCols.map((c) => c.name));
+    if (!apiKeyColNames.has('last_used_at')) {
+      this.db.exec('ALTER TABLE api_keys ADD COLUMN last_used_at TEXT');
+    }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS oauth_clients (
         client_id TEXT PRIMARY KEY,
@@ -153,6 +162,14 @@ export class SondeDb {
         resource TEXT,
         created_at INTEGER NOT NULL,
         expires_at INTEGER NOT NULL
+      )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS setup (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )
     `);
   }
@@ -249,6 +266,73 @@ export class SondeDb {
       );
   }
 
+  getAuditEntries(opts?: {
+    agentId?: string;
+    apiKeyId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }): Array<{
+    id: number;
+    timestamp: string;
+    apiKeyId: string;
+    agentId: string;
+    probe: string;
+    status: string;
+    durationMs: number;
+    requestJson: string | null;
+    responseJson: string | null;
+  }> {
+    const limit = opts?.limit ?? 50;
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (opts?.agentId) {
+      conditions.push('agent_id = ?');
+      params.push(opts.agentId);
+    }
+    if (opts?.apiKeyId) {
+      conditions.push('api_key_id = ?');
+      params.push(opts.apiKeyId);
+    }
+    if (opts?.startDate) {
+      conditions.push('timestamp >= ?');
+      params.push(opts.startDate);
+    }
+    if (opts?.endDate) {
+      conditions.push('timestamp <= ?');
+      params.push(opts.endDate);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `SELECT id, timestamp, api_key_id, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log ${where} ORDER BY id DESC LIMIT ?`;
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params) as Array<{
+      id: number;
+      timestamp: string;
+      api_key_id: string;
+      agent_id: string;
+      probe: string;
+      status: string;
+      duration_ms: number;
+      request_json: string | null;
+      response_json: string | null;
+    }>;
+
+    return rows.map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      apiKeyId: r.api_key_id,
+      agentId: r.agent_id,
+      probe: r.probe,
+      status: r.status,
+      durationMs: r.duration_ms,
+      requestJson: r.request_json,
+      responseJson: r.response_json,
+    }));
+  }
+
   verifyAuditChain(): { valid: boolean; brokenAt?: number } {
     const rows = this.db.prepare('SELECT * FROM audit_log ORDER BY id ASC').all() as Array<
       Record<string, unknown>
@@ -294,6 +378,41 @@ export class SondeDb {
     this.db
       .prepare('INSERT INTO enrollment_tokens (token, created_at, expires_at) VALUES (?, ?, ?)')
       .run(token, new Date().toISOString(), expiresAt);
+  }
+
+  listEnrollmentTokens(): Array<{
+    token: string;
+    createdAt: string;
+    expiresAt: string;
+    usedAt: string | null;
+    usedByAgent: string | null;
+    status: 'active' | 'used' | 'expired';
+  }> {
+    const rows = this.db
+      .prepare(
+        'SELECT token, created_at, expires_at, used_at, used_by_agent FROM enrollment_tokens ORDER BY created_at DESC',
+      )
+      .all() as Array<{
+      token: string;
+      created_at: string;
+      expires_at: string;
+      used_at: string | null;
+      used_by_agent: string | null;
+    }>;
+    const now = new Date();
+    return rows.map((r) => {
+      let status: 'active' | 'used' | 'expired' = 'active';
+      if (r.used_at) status = 'used';
+      else if (new Date(r.expires_at) < now) status = 'expired';
+      return {
+        token: r.token,
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        usedAt: r.used_at,
+        usedByAgent: r.used_by_agent,
+        status,
+      };
+    });
   }
 
   consumeEnrollmentToken(token: string, agentName: string): { valid: boolean; reason?: string } {
@@ -383,21 +502,40 @@ export class SondeDb {
       .run(new Date().toISOString(), id);
   }
 
+  updateApiKeyPolicy(id: string, policyJson: string): boolean {
+    const result = this.db
+      .prepare('UPDATE api_keys SET policy_json = ? WHERE id = ?')
+      .run(policyJson, id);
+    return result.changes > 0;
+  }
+
+  updateApiKeyLastUsed(id: string): void {
+    this.db
+      .prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+  }
+
   listApiKeys(): Array<{
     id: string;
     name: string;
     createdAt: string;
     expiresAt: string | null;
     revokedAt: string | null;
+    policyJson: string;
+    lastUsedAt: string | null;
   }> {
     const rows = this.db
-      .prepare('SELECT id, name, created_at, expires_at, revoked_at FROM api_keys')
+      .prepare(
+        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at FROM api_keys',
+      )
       .all() as Array<{
       id: string;
       name: string;
+      policy_json: string;
       created_at: string;
       expires_at: string | null;
       revoked_at: string | null;
+      last_used_at: string | null;
     }>;
     return rows.map((r) => ({
       id: r.id,
@@ -405,6 +543,8 @@ export class SondeDb {
       createdAt: r.created_at,
       expiresAt: r.expires_at,
       revokedAt: r.revoked_at,
+      policyJson: r.policy_json,
+      lastUsedAt: r.last_used_at,
     }));
   }
 
@@ -530,6 +670,23 @@ export class SondeDb {
 
   deleteOAuthToken(token: string): void {
     this.db.prepare('DELETE FROM oauth_tokens WHERE token = ?').run(token);
+  }
+
+  // --- Setup ---
+
+  getSetupValue(key: string): string | undefined {
+    const row = this.db.prepare('SELECT value FROM setup WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value;
+  }
+
+  setSetupValue(key: string, value: string): void {
+    this.db
+      .prepare(
+        'INSERT INTO setup (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      )
+      .run(key, value, new Date().toISOString());
   }
 
   close(): void {

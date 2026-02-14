@@ -118,3 +118,120 @@ describe('Audit hash chain', () => {
     db.close();
   });
 });
+
+describe('getAuditEntries filters', () => {
+  it('filters by apiKeyId', () => {
+    const db = new SondeDb(':memory:');
+
+    db.logAudit({
+      apiKeyId: 'key-a',
+      agentId: 'a1',
+      probe: 'p1',
+      status: 'success',
+      durationMs: 1,
+    });
+    db.logAudit({
+      apiKeyId: 'key-b',
+      agentId: 'a1',
+      probe: 'p2',
+      status: 'success',
+      durationMs: 2,
+    });
+    db.logAudit({
+      apiKeyId: 'key-a',
+      agentId: 'a2',
+      probe: 'p3',
+      status: 'success',
+      durationMs: 3,
+    });
+
+    const results = db.getAuditEntries({ apiKeyId: 'key-a' });
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.apiKeyId === 'key-a')).toBe(true);
+
+    db.close();
+  });
+
+  it('returns apiKeyId in results', () => {
+    const db = new SondeDb(':memory:');
+
+    db.logAudit({
+      apiKeyId: 'key-xyz',
+      agentId: 'a1',
+      probe: 'p1',
+      status: 'success',
+      durationMs: 1,
+    });
+
+    const results = db.getAuditEntries();
+    expect(results).toHaveLength(1);
+    expect(results[0]?.apiKeyId).toBe('key-xyz');
+
+    db.close();
+  });
+
+  it('filters by date range', () => {
+    const db = new SondeDb(':memory:');
+
+    // Insert entries with controlled timestamps via raw SQL
+    const rawDb = (
+      db as unknown as { db: { prepare: (s: string) => { run: (...a: unknown[]) => void } } }
+    ).db;
+    rawDb
+      .prepare(
+        "INSERT INTO audit_log (timestamp, api_key_id, agent_id, probe, status, duration_ms, prev_hash) VALUES (?, '', 'a1', 'p1', 'success', 1, '')",
+      )
+      .run('2026-01-01T00:00:00Z');
+    rawDb
+      .prepare(
+        "INSERT INTO audit_log (timestamp, api_key_id, agent_id, probe, status, duration_ms, prev_hash) VALUES (?, '', 'a1', 'p2', 'success', 2, '')",
+      )
+      .run('2026-01-15T00:00:00Z');
+    rawDb
+      .prepare(
+        "INSERT INTO audit_log (timestamp, api_key_id, agent_id, probe, status, duration_ms, prev_hash) VALUES (?, '', 'a1', 'p3', 'success', 3, '')",
+      )
+      .run('2026-02-01T00:00:00Z');
+
+    const results = db.getAuditEntries({
+      startDate: '2026-01-10T00:00:00Z',
+      endDate: '2026-01-20T00:00:00Z',
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.probe).toBe('p2');
+
+    db.close();
+  });
+
+  it('combines apiKeyId and agentId filters', () => {
+    const db = new SondeDb(':memory:');
+
+    db.logAudit({
+      apiKeyId: 'key-a',
+      agentId: 'a1',
+      probe: 'p1',
+      status: 'success',
+      durationMs: 1,
+    });
+    db.logAudit({
+      apiKeyId: 'key-a',
+      agentId: 'a2',
+      probe: 'p2',
+      status: 'success',
+      durationMs: 2,
+    });
+    db.logAudit({
+      apiKeyId: 'key-b',
+      agentId: 'a1',
+      probe: 'p3',
+      status: 'success',
+      durationMs: 3,
+    });
+
+    const results = db.getAuditEntries({ apiKeyId: 'key-a', agentId: 'a1' });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.probe).toBe('p1');
+
+    db.close();
+  });
+});

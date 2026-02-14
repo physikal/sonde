@@ -78,6 +78,38 @@ describe('evaluateProbeAccess', () => {
     expect(evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage', 'manage').allowed).toBe(false);
   });
 
+  it('per-agent cap restricts specific agent', () => {
+    const auth = makeAuth({
+      policy: { agentCapabilities: { 'agent-1': 'observe' } },
+    });
+
+    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'observe').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'interact').allowed).toBe(false);
+    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'manage').allowed).toBe(false);
+  });
+
+  it('per-agent cap does not affect other agents', () => {
+    const auth = makeAuth({
+      policy: { agentCapabilities: { 'agent-1': 'observe' } },
+    });
+
+    // agent-2 is not in agentCapabilities, so no per-agent restriction
+    expect(evaluateProbeAccess(auth, 'agent-2', 'p', 'manage').allowed).toBe(true);
+  });
+
+  it('global maxCapabilityLevel still blocks even if per-agent allows higher', () => {
+    const auth = makeAuth({
+      policy: {
+        maxCapabilityLevel: 'observe',
+        agentCapabilities: { 'agent-1': 'manage' },
+      },
+    });
+
+    // Global cap is observe, so even though per-agent says manage, observe is the ceiling
+    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'observe').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'interact').allowed).toBe(false);
+  });
+
   it('legacy key (empty policy) has full access', () => {
     const auth: AuthContext = { type: 'api_key', keyId: 'legacy', policy: {} };
 

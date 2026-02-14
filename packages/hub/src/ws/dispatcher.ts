@@ -25,6 +25,8 @@ export class AgentDispatcher {
   private socketIndex = new Map<WebSocket, string>();
   /** Hub CA private key PEM for signing outgoing messages */
   private caKeyPem?: string;
+  /** Dashboard WebSocket clients for real-time updates */
+  private dashboardClients = new Set<WebSocket>();
 
   constructor(caKeyPem?: string) {
     this.caKeyPem = caKeyPem;
@@ -39,6 +41,7 @@ export class AgentDispatcher {
     this.connections.set(id, { id, name, ws });
     this.nameIndex.set(name, id);
     this.socketIndex.set(ws, id);
+    this.broadcastAgentStatus();
   }
 
   removeAgent(agentId: string): void {
@@ -56,6 +59,8 @@ export class AgentDispatcher {
       this.pending.delete(agentId);
       req.reject(new Error(`Agent '${conn.name}' disconnected`));
     }
+
+    this.broadcastAgentStatus();
   }
 
   removeBySocket(ws: WebSocket): void {
@@ -136,6 +141,48 @@ export class AgentDispatcher {
       req.resolve(response);
     } else {
       req.resolve(response); // Still resolve — caller inspects status
+    }
+  }
+
+  // --- Dashboard WebSocket broadcast ---
+
+  addDashboardClient(ws: WebSocket): void {
+    this.dashboardClients.add(ws);
+    // Send current state immediately
+    this.sendAgentStatusTo(ws);
+  }
+
+  removeDashboardClient(ws: WebSocket): void {
+    this.dashboardClients.delete(ws);
+  }
+
+  /** Returns online agent IDs and names for dashboard broadcast */
+  getOnlineAgents(): Array<{ id: string; name: string }> {
+    return [...this.connections.values()].map((c) => ({ id: c.id, name: c.name }));
+  }
+
+  private broadcastAgentStatus(): void {
+    const msg = JSON.stringify({
+      type: 'agent.status',
+      onlineAgentIds: this.getOnlineAgentIds(),
+      onlineAgents: this.getOnlineAgents(),
+    });
+    for (const client of this.dashboardClients) {
+      if (client.readyState === 1) {
+        client.send(msg);
+      }
+    }
+  }
+
+  private sendAgentStatusTo(ws: WebSocket): void {
+    if (ws.readyState === 1) {
+      ws.send(
+        JSON.stringify({
+          type: 'agent.status',
+          onlineAgentIds: this.getOnlineAgentIds(),
+          onlineAgents: this.getOnlineAgents(),
+        }),
+      );
     }
   }
 }

@@ -1,0 +1,42 @@
+# Sonde Hub — Dokploy Deployment
+#
+# Deploy via Dokploy UI:
+#   1. Create a new Compose project in Dokploy
+#   2. Set the Git repository to: https://github.com/sonde-dev/sonde.git
+#   3. Set the compose path to: docker/docker-compose.dokploy.yml
+#   4. Add these environment variables in Dokploy:
+#      - SONDE_API_KEY   (required) — generate with: openssl rand -hex 32
+#      - SONDE_HUB_URL   (required) — your public URL, e.g. https://sonde.example.com
+#      - SONDE_DOMAIN    (required) — just the hostname, e.g. sonde.example.com
+#   5. Deploy
+#
+# Dokploy's built-in Traefik handles TLS termination via the labels below.
+# Ensure the domain's DNS points to your Dokploy server.
+
+services:
+  sonde-hub:
+    build:
+      context: ..
+      dockerfile: docker/hub.Dockerfile
+    environment:
+      SONDE_API_KEY: ${SONDE_API_KEY:?Set SONDE_API_KEY in Dokploy environment}
+      SONDE_HUB_URL: ${SONDE_HUB_URL:-https://${SONDE_DOMAIN}}
+      SONDE_DB_PATH: /data/sonde.db
+    volumes:
+      - hub-data:/data
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sonde.rule=Host(`${SONDE_DOMAIN}`)
+      - traefik.http.routers.sonde.entrypoints=websecure
+      - traefik.http.routers.sonde.tls.certresolver=letsencrypt
+      - traefik.http.services.sonde.loadbalancer.server.port=3000
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  hub-data:
