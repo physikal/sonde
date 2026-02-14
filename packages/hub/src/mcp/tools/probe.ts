@@ -37,6 +37,10 @@ export async function handleProbe(
       responseJson: JSON.stringify(response),
     });
 
+    if (auth?.keyId && auth.keyId !== 'legacy') {
+      db.updateApiKeyLastUsed(auth.keyId);
+    }
+
     return {
       content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
     };

@@ -4,6 +4,8 @@ export interface ApiKeyPolicy {
   allowedAgents?: string[];
   allowedProbes?: string[];
   maxCapabilityLevel?: CapabilityLevel;
+  agentCapabilities?: Record<string, CapabilityLevel>;
+  allowedClients?: string[];
 }
 
 export interface AuthContext {
@@ -57,7 +59,7 @@ export function evaluateProbeAccess(
     }
   }
 
-  // Check capability level
+  // Check capability level (global ceiling)
   if (policy.maxCapabilityLevel) {
     const maxLevel = CAPABILITY_ORDER[policy.maxCapabilityLevel] ?? 0;
     const requestedLevel = CAPABILITY_ORDER[capabilityLevel] ?? 0;
@@ -66,6 +68,21 @@ export function evaluateProbeAccess(
         allowed: false,
         reason: `Capability level "${capabilityLevel}" exceeds max "${policy.maxCapabilityLevel}"`,
       };
+    }
+  }
+
+  // Check per-agent capability ceiling (further restricts beyond global cap)
+  if (policy.agentCapabilities) {
+    const agentCap = policy.agentCapabilities[agentNameOrId];
+    if (agentCap) {
+      const agentMaxLevel = CAPABILITY_ORDER[agentCap] ?? 0;
+      const requestedLevel = CAPABILITY_ORDER[capabilityLevel] ?? 0;
+      if (requestedLevel > agentMaxLevel) {
+        return {
+          allowed: false,
+          reason: `Capability level "${capabilityLevel}" exceeds agent "${agentNameOrId}" cap "${agentCap}"`,
+        };
+      }
     }
   }
 

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../lib/api';
+import { ApiKeyGate } from '../components/common/ApiKeyGate';
+import { authFetch } from '../hooks/useApiKey';
 
 interface AuditEntry {
   id: number;
   timestamp: string;
+  apiKeyId: string;
   agentId: string;
   probe: string;
   status: string;
@@ -17,6 +19,11 @@ interface ChainStatus {
   brokenAt?: number;
 }
 
+interface ApiKeyOption {
+  id: string;
+  name: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   success: 'text-emerald-400',
   error: 'text-red-400',
@@ -24,19 +31,46 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function Audit() {
+  return <ApiKeyGate>{(apiKey) => <AuditInner apiKey={apiKey} />}</ApiKeyGate>;
+}
+
+function AuditInner({ apiKey }: { apiKey: string }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [chain, setChain] = useState<ChainStatus | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [filterAgent, setFilterAgent] = useState('');
   const [filterProbe, setFilterProbe] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterApiKeyId, setFilterApiKeyId] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [limit, setLimit] = useState(100);
+  const [apiKeys, setApiKeys] = useState<ApiKeyOption[]>([]);
+
+  // Fetch API key list for dropdown
+  useEffect(() => {
+    authFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys', apiKey).then((data) =>
+      setApiKeys(data.keys.map((k) => ({ id: k.id, name: k.name }))),
+    );
+  }, [apiKey]);
 
   const fetchEntries = useCallback(() => {
-    apiFetch<{ entries: AuditEntry[] }>(`/audit?limit=${limit}`).then((data) =>
-      setEntries(data.entries),
-    );
-  }, [limit]);
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filterApiKeyId) params.set('apiKeyId', filterApiKeyId);
+    if (filterStartDate) params.set('startDate', new Date(filterStartDate).toISOString());
+    if (filterEndDate) params.set('endDate', new Date(filterEndDate).toISOString());
+
+    authFetch<{ entries: AuditEntry[] }>(`/audit?${params.toString()}`, apiKey)
+      .then((data) => setEntries(data.entries))
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : 'Failed to load audit entries'),
+      )
+      .finally(() => setLoading(false));
+  }, [apiKey, limit, filterApiKeyId, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     fetchEntries();
@@ -44,18 +78,41 @@ export function Audit() {
 
   const handleVerify = () => {
     setVerifying(true);
-    apiFetch<ChainStatus>('/audit/verify')
+    authFetch<ChainStatus>('/audit/verify', apiKey)
       .then(setChain)
       .finally(() => setVerifying(false));
   };
 
-  // Client-side filtering
+  // Client-side filtering (agent, probe, status are still client-side)
   const filtered = entries.filter((e) => {
     if (filterAgent && !e.agentId.toLowerCase().includes(filterAgent.toLowerCase())) return false;
     if (filterProbe && !e.probe.toLowerCase().includes(filterProbe.toLowerCase())) return false;
     if (filterStatus && e.status !== filterStatus) return false;
     return true;
   });
+
+  // Build a lookup for API key names
+  const apiKeyNames = new Map(apiKeys.map((k) => [k.id, k.name]));
+
+  if (loading) {
+    return <div className="p-8 text-gray-400">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-semibold text-white">Audit Log</h1>
+        <p className="mt-4 text-red-400">{error}</p>
+        <button
+          type="button"
+          onClick={fetchEntries}
+          className="mt-2 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -65,7 +122,6 @@ export function Audit() {
           <p className="mt-1 text-sm text-gray-400">{entries.length} entries loaded</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Chain integrity indicator */}
           {chain && (
             <span
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium ${
@@ -93,6 +149,30 @@ export function Audit() {
 
       {/* Filters */}
       <div className="mt-4 flex flex-wrap gap-3">
+        <select
+          value={filterApiKeyId}
+          onChange={(e) => setFilterApiKeyId(e.target.value)}
+          className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">All API keys</option>
+          {apiKeys.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={filterStartDate}
+          onChange={(e) => setFilterStartDate(e.target.value)}
+          className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+        />
+        <input
+          type="date"
+          value={filterEndDate}
+          onChange={(e) => setFilterEndDate(e.target.value)}
+          className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+        />
         <input
           type="text"
           value={filterAgent}
@@ -139,6 +219,7 @@ export function Audit() {
             <tr>
               <th className="px-4 py-3">#</th>
               <th className="px-4 py-3">Time</th>
+              <th className="px-4 py-3">API Key</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Probe</th>
               <th className="px-4 py-3">Status</th>
@@ -149,7 +230,7 @@ export function Audit() {
           <tbody className="divide-y divide-gray-800">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                   No audit entries found.
                 </td>
               </tr>
@@ -159,6 +240,11 @@ export function Audit() {
                   <td className="px-4 py-3 text-gray-500 text-xs">{entry.id}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">
                     {new Date(entry.timestamp).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">
+                    {entry.apiKeyId
+                      ? (apiKeyNames.get(entry.apiKeyId) ?? entry.apiKeyId.slice(0, 8))
+                      : '\u2014'}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-400">
                     {entry.agentId.slice(0, 8)}...

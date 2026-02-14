@@ -13,6 +13,8 @@ import { generateCaCert } from './crypto/ca.js';
 import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
 import { createMcpHandler } from './mcp/server.js';
+import { handleDiagnose } from './mcp/tools/diagnose.js';
+import { handleProbe } from './mcp/tools/probe.js';
 import type { SondeOAuthProvider } from './oauth/provider.js';
 import { AgentDispatcher } from './ws/dispatcher.js';
 import { setupWsServer } from './ws/server.js';
@@ -154,14 +156,20 @@ app.get('/api/v1/agents/:id/audit', (c) => {
     return c.json({ error: 'Agent not found' }, 404);
   }
   const limit = Number(c.req.query('limit')) || 50;
-  const entries = db.getAuditEntries({ agentId: agent.id, limit });
+  const apiKeyId = c.req.query('apiKeyId') || undefined;
+  const startDate = c.req.query('startDate') || undefined;
+  const endDate = c.req.query('endDate') || undefined;
+  const entries = db.getAuditEntries({ agentId: agent.id, apiKeyId, startDate, endDate, limit });
   return c.json({ entries });
 });
 
 // Global audit log
 app.get('/api/v1/audit', (c) => {
   const limit = Number(c.req.query('limit')) || 50;
-  const entries = db.getAuditEntries({ limit });
+  const apiKeyId = c.req.query('apiKeyId') || undefined;
+  const startDate = c.req.query('startDate') || undefined;
+  const endDate = c.req.query('endDate') || undefined;
+  const entries = db.getAuditEntries({ apiKeyId, startDate, endDate, limit });
   return c.json({ entries });
 });
 
@@ -169,6 +177,90 @@ app.get('/api/v1/audit', (c) => {
 app.get('/api/v1/audit/verify', (c) => {
   const result = db.verifyAuditChain();
   return c.json(result);
+});
+
+// Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
+app.get('/api/v1/packs', (c) => {
+  const packs = [...packRegistry.values()].map((p) => ({
+    name: p.manifest.name,
+    version: p.manifest.version,
+    description: p.manifest.description,
+    probes: p.manifest.probes.map((probe) => ({
+      name: probe.name,
+      description: probe.description,
+      capability: probe.capability,
+      params: probe.params,
+      timeout: probe.timeout,
+    })),
+    runbook: p.manifest.runbook
+      ? {
+          category: p.manifest.runbook.category,
+          probes: p.manifest.runbook.probes,
+          parallel: p.manifest.runbook.parallel,
+        }
+      : null,
+  }));
+  return c.json({ packs });
+});
+
+// Execute single probe via REST (authenticated — used by Try It page)
+app.post('/api/v1/probe', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (key !== config.apiKey) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const body = await c.req.json<{
+    agent: string;
+    probe: string;
+    params?: Record<string, unknown>;
+  }>();
+  if (!body.agent || !body.probe) {
+    return c.json({ error: 'agent and probe are required' }, 400);
+  }
+
+  const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
+  const result = await handleProbe(body, dispatcher, db, auth);
+  const text = result.content[0]?.text ?? '';
+
+  if (result.isError) {
+    return c.json({ error: text }, 400);
+  }
+
+  try {
+    return c.json(JSON.parse(text));
+  } catch {
+    return c.json({ raw: text });
+  }
+});
+
+// Execute diagnostic runbook via REST (authenticated — used by Try It page)
+app.post('/api/v1/diagnose', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (key !== config.apiKey) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const body = await c.req.json<{ agent: string; category: string }>();
+  if (!body.agent || !body.category) {
+    return c.json({ error: 'agent and category are required' }, 400);
+  }
+
+  const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
+  const result = await handleDiagnose(body, dispatcher, runbookEngine, db, auth);
+  const text = result.content[0]?.text ?? '';
+
+  if (result.isError) {
+    return c.json({ error: text }, 400);
+  }
+
+  try {
+    return c.json(JSON.parse(text));
+  } catch {
+    return c.json({ raw: text });
+  }
 });
 
 // Setup status (unauthenticated — needed for first-boot wizard)

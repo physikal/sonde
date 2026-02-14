@@ -8,12 +8,19 @@ interface HealthData {
 
 export function Overview() {
   const [health, setHealth] = useState<HealthData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchHealth = useCallback(() => {
     fetch('/health')
       .then((r) => r.json() as Promise<HealthData>)
-      .then(setHealth)
-      .catch(() => setHealth(null));
+      .then((data) => {
+        setHealth(data);
+        setError(null);
+      })
+      .catch(() => {
+        setHealth(null);
+        setError('Unable to reach hub');
+      });
   }, []);
 
   useEffect(() => {
@@ -21,6 +28,22 @@ export function Overview() {
     const interval = setInterval(fetchHealth, 10_000);
     return () => clearInterval(interval);
   }, [fetchHealth]);
+
+  if (error && !health) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-semibold text-white">Overview</h1>
+        <p className="mt-4 text-red-400">{error}</p>
+        <button
+          type="button"
+          onClick={fetchHealth}
+          className="mt-2 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">

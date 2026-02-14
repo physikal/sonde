@@ -5,7 +5,11 @@ interface HealthData {
   agents: number;
 }
 
-export function TopBar() {
+interface TopBarProps {
+  onMenuToggle: () => void;
+}
+
+export function TopBar({ onMenuToggle }: TopBarProps) {
   const [health, setHealth] = useState<HealthData | null>(null);
 
   const fetchHealth = useCallback(() => {
@@ -25,7 +29,27 @@ export function TopBar() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-gray-800 bg-gray-900 px-6">
-      <span className="text-sm font-medium text-gray-300">Dashboard</span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onMenuToggle}
+          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
+          aria-label="Open menu"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            role="img"
+            aria-label="Menu"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span className="text-sm font-medium text-gray-300">Dashboard</span>
+      </div>
       <div className="flex items-center gap-3">
         <span
           className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-red-400'}`}

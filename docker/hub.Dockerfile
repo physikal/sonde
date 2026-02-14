@@ -23,6 +23,7 @@ COPY packages/hub/src packages/hub/src
 COPY packages/dashboard/src packages/dashboard/src
 COPY packages/dashboard/index.html packages/dashboard/index.html
 COPY packages/dashboard/vite.config.ts packages/dashboard/vite.config.ts
+COPY packages/dashboard/postcss.config.mjs packages/dashboard/postcss.config.mjs
 COPY packages/dashboard/tsconfig.json packages/dashboard/tsconfig.json
 
 RUN npx turbo build --filter=@sonde/hub --filter=@sonde/dashboard

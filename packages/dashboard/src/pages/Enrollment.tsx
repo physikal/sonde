@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiKeyGate } from '../components/common/ApiKeyGate';
+import { useToast } from '../components/common/Toast';
 import { authFetch } from '../hooks/useApiKey';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -23,16 +24,26 @@ export function Enrollment() {
 }
 
 function EnrollmentInner({ apiKey }: { apiKey: string }) {
+  const { toast } = useToast();
   const [tokens, setTokens] = useState<EnrollmentToken[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const { agentStatus } = useWebSocket();
 
   const fetchTokens = useCallback(() => {
-    authFetch<{ tokens: EnrollmentToken[] }>('/enrollment-tokens', apiKey).then((data) =>
-      setTokens(data.tokens),
-    );
-  }, [apiKey]);
+    setLoading(true);
+    setError(null);
+    authFetch<{ tokens: EnrollmentToken[] }>('/enrollment-tokens', apiKey)
+      .then((data) => setTokens(data.tokens))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Failed to load tokens';
+        setError(msg);
+        toast(msg, 'error');
+      })
+      .finally(() => setLoading(false));
+  }, [apiKey, toast]);
 
   useEffect(() => {
     fetchTokens();
@@ -46,9 +57,33 @@ function EnrollmentInner({ apiKey }: { apiKey: string }) {
       .then((data) => {
         setNewToken(data.token);
         fetchTokens();
+        toast('Enrollment token created', 'success');
       })
+      .catch((err: unknown) =>
+        toast(err instanceof Error ? err.message : 'Failed to create token', 'error'),
+      )
       .finally(() => setCreating(false));
   };
+
+  if (loading) {
+    return <div className="p-8 text-gray-400">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-semibold text-white">Enrollment</h1>
+        <p className="mt-4 text-red-400">{error}</p>
+        <button
+          type="button"
+          onClick={fetchTokens}
+          className="mt-2 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   const hubUrl = window.location.origin;
 

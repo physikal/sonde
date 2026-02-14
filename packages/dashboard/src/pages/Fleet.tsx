@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { apiFetch } from '../lib/api';
 
@@ -39,12 +39,25 @@ function timeAgo(isoString: string): string {
 
 export function Fleet() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { agentStatus } = useWebSocket();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    apiFetch<{ agents: Agent[] }>('/agents').then((data) => setAgents(data.agents));
+  const fetchAgents = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    apiFetch<{ agents: Agent[] }>('/agents')
+      .then((data) => setAgents(data.agents))
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : 'Failed to load agents'),
+      )
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   // Merge real-time online status from WebSocket
   const onlineIds = new Set(agentStatus.onlineAgentIds);
@@ -52,6 +65,26 @@ export function Fleet() {
     ...a,
     status: onlineIds.has(a.id) ? 'online' : a.status === 'degraded' ? 'degraded' : 'offline',
   }));
+
+  if (loading) {
+    return <div className="p-8 text-gray-400">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-semibold text-white">Fleet</h1>
+        <p className="mt-4 text-red-400">{error}</p>
+        <button
+          type="button"
+          onClick={fetchAgents}
+          className="mt-2 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -78,7 +111,11 @@ export function Fleet() {
             {mergedAgents.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                  No agents enrolled yet.
+                  No agents enrolled yet. Visit{' '}
+                  <NavLink to="/enrollment" className="text-blue-400 hover:text-blue-300">
+                    Enrollment
+                  </NavLink>{' '}
+                  to get started.
                 </td>
               </tr>
             ) : (

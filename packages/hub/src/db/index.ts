@@ -122,6 +122,15 @@ export class SondeDb {
       )
     `);
 
+    // Add last_used_at column to existing api_keys tables
+    const apiKeyCols = this.db.prepare("PRAGMA table_info('api_keys')").all() as Array<{
+      name: string;
+    }>;
+    const apiKeyColNames = new Set(apiKeyCols.map((c) => c.name));
+    if (!apiKeyColNames.has('last_used_at')) {
+      this.db.exec('ALTER TABLE api_keys ADD COLUMN last_used_at TEXT');
+    }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS oauth_clients (
         client_id TEXT PRIMARY KEY,
@@ -257,9 +266,16 @@ export class SondeDb {
       );
   }
 
-  getAuditEntries(opts?: { agentId?: string; limit?: number }): Array<{
+  getAuditEntries(opts?: {
+    agentId?: string;
+    apiKeyId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }): Array<{
     id: number;
     timestamp: string;
+    apiKeyId: string;
     agentId: string;
     probe: string;
     status: string;
@@ -268,17 +284,34 @@ export class SondeDb {
     responseJson: string | null;
   }> {
     const limit = opts?.limit ?? 50;
-    const agentId = opts?.agentId;
+    const conditions: string[] = [];
+    const params: unknown[] = [];
 
-    const sql = agentId
-      ? 'SELECT id, timestamp, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log WHERE agent_id = ? ORDER BY id DESC LIMIT ?'
-      : 'SELECT id, timestamp, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log ORDER BY id DESC LIMIT ?';
+    if (opts?.agentId) {
+      conditions.push('agent_id = ?');
+      params.push(opts.agentId);
+    }
+    if (opts?.apiKeyId) {
+      conditions.push('api_key_id = ?');
+      params.push(opts.apiKeyId);
+    }
+    if (opts?.startDate) {
+      conditions.push('timestamp >= ?');
+      params.push(opts.startDate);
+    }
+    if (opts?.endDate) {
+      conditions.push('timestamp <= ?');
+      params.push(opts.endDate);
+    }
 
-    const rows = (
-      agentId ? this.db.prepare(sql).all(agentId, limit) : this.db.prepare(sql).all(limit)
-    ) as Array<{
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `SELECT id, timestamp, api_key_id, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log ${where} ORDER BY id DESC LIMIT ?`;
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params) as Array<{
       id: number;
       timestamp: string;
+      api_key_id: string;
       agent_id: string;
       probe: string;
       status: string;
@@ -290,6 +323,7 @@ export class SondeDb {
     return rows.map((r) => ({
       id: r.id,
       timestamp: r.timestamp,
+      apiKeyId: r.api_key_id,
       agentId: r.agent_id,
       probe: r.probe,
       status: r.status,
@@ -475,6 +509,12 @@ export class SondeDb {
     return result.changes > 0;
   }
 
+  updateApiKeyLastUsed(id: string): void {
+    this.db
+      .prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+  }
+
   listApiKeys(): Array<{
     id: string;
     name: string;
@@ -482,9 +522,12 @@ export class SondeDb {
     expiresAt: string | null;
     revokedAt: string | null;
     policyJson: string;
+    lastUsedAt: string | null;
   }> {
     const rows = this.db
-      .prepare('SELECT id, name, policy_json, created_at, expires_at, revoked_at FROM api_keys')
+      .prepare(
+        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at FROM api_keys',
+      )
       .all() as Array<{
       id: string;
       name: string;
@@ -492,6 +535,7 @@ export class SondeDb {
       created_at: string;
       expires_at: string | null;
       revoked_at: string | null;
+      last_used_at: string | null;
     }>;
     return rows.map((r) => ({
       id: r.id,
@@ -500,6 +544,7 @@ export class SondeDb {
       expiresAt: r.expires_at,
       revokedAt: r.revoked_at,
       policyJson: r.policy_json,
+      lastUsedAt: r.last_used_at,
     }));
   }
 
