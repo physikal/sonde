@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    # TODO (Phase 6): Full release pipeline
+    # See docs/CICD.md for the complete spec.
+    #
+    # Steps to implement:
+    # 1. Checkout + Node setup + npm ci (same as CI)
+    # 2. Full CI checks (typecheck, lint, test, build)
+    # 3. Changesets version bump → create "Version Packages" PR
+    #    - uses: changesets/action@v1
+    #      with:
+    #        publish: npx changeset publish
+    # 4. Docker build + push to ghcr.io/sonde-dev/hub
+    #    - Tags: :latest, :sha-${{ github.sha }}, :v<version>
+    #    - Dashboard bundled as static assets inside hub image
+    # 5. npm publish @sonde/* packages
+    # 6. GitHub Release with auto-generated changelog
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx turbo run build
+
+      # TODO: Uncomment when changesets is configured with repo tokens
+      # - name: Create Release Pull Request or Publish
+      #   uses: changesets/action@v1
+      #   with:
+      #     publish: npx changeset publish
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # TODO: Docker build + push
+      # - name: Login to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # - name: Build and push hub image
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     file: docker/hub.Dockerfile
+      #     push: true
+      #     tags: |
+      #       ghcr.io/sonde-dev/hub:latest
+      #       ghcr.io/sonde-dev/hub:sha-${{ github.sha }}

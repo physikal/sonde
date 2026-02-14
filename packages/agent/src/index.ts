@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import os from 'node:os';
-import { getConfigPath, loadConfig, saveConfig } from './config.js';
-import { AgentConnection } from './runtime/connection.js';
+import { type AgentConfig, getConfigPath, loadConfig, saveConfig } from './config.js';
+import { AgentConnection, enrollWithHub } from './runtime/connection.js';
 import { ProbeExecutor } from './runtime/executor.js';
 
 const args = process.argv.slice(2);
@@ -28,7 +28,7 @@ function getArg(flag: string): string | undefined {
   return args[idx + 1];
 }
 
-function cmdEnroll(): void {
+async function cmdEnroll(): Promise<void> {
   const hubUrl = getArg('--hub');
   const apiKey = getArg('--key');
   const agentName = getArg('--name') ?? os.hostname();
@@ -39,11 +39,21 @@ function cmdEnroll(): void {
     process.exit(1);
   }
 
-  saveConfig({ hubUrl, apiKey, agentName });
+  const config: AgentConfig = { hubUrl, apiKey, agentName };
+  saveConfig(config);
+
+  const executor = new ProbeExecutor();
+  console.log(`Enrolling with hub at ${hubUrl}...`);
+
+  const agentId = await enrollWithHub(config, executor);
+  config.agentId = agentId;
+  saveConfig(config);
+
   console.log('Agent enrolled successfully.');
-  console.log(`  Hub:    ${hubUrl}`);
-  console.log(`  Name:   ${agentName}`);
-  console.log(`  Config: ${getConfigPath()}`);
+  console.log(`  Hub:      ${hubUrl}`);
+  console.log(`  Name:     ${agentName}`);
+  console.log(`  Agent ID: ${agentId}`);
+  console.log(`  Config:   ${getConfigPath()}`);
   console.log('');
   console.log('Run "sonde start" to connect.');
 }
@@ -103,7 +113,10 @@ function cmdStatus(): void {
 
 switch (command) {
   case 'enroll':
-    cmdEnroll();
+    cmdEnroll().catch((err: Error) => {
+      console.error(`Enrollment failed: ${err.message}`);
+      process.exit(1);
+    });
     break;
   case 'start':
     cmdStart();

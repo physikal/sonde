@@ -1,0 +1,21 @@
+services:
+  sonde-hub:
+    build:
+      context: ..
+      dockerfile: docker/hub.Dockerfile
+    environment:
+      SONDE_API_KEY: test-key-123
+      SONDE_DB_PATH: /data/sonde.db
+    volumes:
+      - hub-data:/data
+    ports:
+      - '3000:3000'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  hub-data:

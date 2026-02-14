@@ -1,7 +1,7 @@
 import type { ProbeRequest } from '@sonde/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '../config.js';
-import { AgentConnection } from './connection.js';
+import { AgentConnection, enrollWithHub } from './connection.js';
 import { ProbeExecutor } from './executor.js';
 
 // Mock WebSocket
@@ -216,5 +216,86 @@ describe('AgentConnection', () => {
 
     vi.advanceTimersByTime(60_000);
     expect(mockWsInstances).toHaveLength(1); // No reconnect
+  });
+});
+
+describe('enrollWithHub', () => {
+  beforeEach(() => {
+    mockWsInstances.length = 0;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('connects to correct URL and sends register', () => {
+    const promise = enrollWithHub(createConfig(), createExecutor());
+
+    expect(mockWsInstances).toHaveLength(1);
+    expect(mockWsInstances[0]?.url).toBe('ws://localhost:3000/ws/agent');
+
+    const ws = mockWsInstances[0];
+    ws?.handlers.open?.();
+
+    expect(ws?.send).toHaveBeenCalledOnce();
+    const sent = JSON.parse(ws?.send.mock.calls[0]?.[0] as string);
+    expect(sent.type).toBe('agent.register');
+    expect(sent.payload.name).toBe('test-agent');
+
+    // Send ack to resolve and avoid dangling promise
+    ws?.handlers.message?.(
+      JSON.stringify({
+        id: '00000000-0000-0000-0000-000000000001',
+        type: 'hub.ack',
+        timestamp: new Date().toISOString(),
+        agentId: 'enrolled-id',
+        signature: '',
+        payload: { agentId: 'enrolled-id' },
+      }),
+    );
+
+    return promise;
+  });
+
+  it('returns agentId from hub.ack', async () => {
+    const promise = enrollWithHub(createConfig(), createExecutor());
+
+    const ws = mockWsInstances[0];
+    ws?.handlers.open?.();
+
+    ws?.handlers.message?.(
+      JSON.stringify({
+        id: '00000000-0000-0000-0000-000000000001',
+        type: 'hub.ack',
+        timestamp: new Date().toISOString(),
+        agentId: 'enrolled-id',
+        signature: '',
+        payload: { agentId: 'enrolled-id' },
+      }),
+    );
+
+    await expect(promise).resolves.toBe('enrolled-id');
+  });
+
+  it('rejects on timeout when no ack received', async () => {
+    const promise = enrollWithHub(createConfig(), createExecutor());
+
+    const ws = mockWsInstances[0];
+    ws?.handlers.open?.();
+
+    // Advance past the 10s timeout
+    vi.advanceTimersByTime(10_000);
+
+    await expect(promise).rejects.toThrow('Enrollment timed out');
+  });
+
+  it('rejects on WebSocket error', async () => {
+    const promise = enrollWithHub(createConfig(), createExecutor());
+
+    const ws = mockWsInstances[0];
+    ws?.handlers.error?.(new Error('Connection refused'));
+
+    await expect(promise).rejects.toThrow('Connection refused');
   });
 });

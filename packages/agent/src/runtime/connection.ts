@@ -20,6 +20,70 @@ export interface ConnectionEvents {
 const MIN_RECONNECT_MS = 1_000;
 const MAX_RECONNECT_MS = 60_000;
 
+const ENROLL_TIMEOUT_MS = 10_000;
+
+/**
+ * One-shot enrollment: connect to hub, register, get agentId, disconnect.
+ * Validates the hub URL and API key at enrollment time.
+ */
+export function enrollWithHub(config: AgentConfig, executor: ProbeExecutor): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const wsUrl = `${config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
+
+    const ws = new WebSocket(wsUrl, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error('Enrollment timed out waiting for hub acknowledgement'));
+    }, ENROLL_TIMEOUT_MS);
+
+    ws.on('open', () => {
+      ws.send(
+        JSON.stringify({
+          id: crypto.randomUUID(),
+          type: 'agent.register',
+          timestamp: new Date().toISOString(),
+          signature: '',
+          payload: {
+            name: config.agentName,
+            os: `${process.platform} ${process.arch}`,
+            agentVersion: '0.1.0',
+            packs: executor.getLoadedPacks(),
+          },
+        }),
+      );
+    });
+
+    ws.on('message', (data) => {
+      let envelope: MessageEnvelope;
+      try {
+        envelope = MessageEnvelopeSchema.parse(JSON.parse(data.toString()));
+      } catch {
+        return;
+      }
+
+      if (envelope.type === 'hub.ack') {
+        clearTimeout(timeout);
+        const payload = envelope.payload as { agentId?: string };
+        const agentId = payload.agentId;
+        ws.close();
+        if (agentId) {
+          resolve(agentId);
+        } else {
+          reject(new Error('Hub ack did not contain agentId'));
+        }
+      }
+    });
+
+    ws.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
 export class AgentConnection {
   private ws: WebSocket | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
