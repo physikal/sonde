@@ -346,6 +346,41 @@ export class SondeDb {
       .run(token, new Date().toISOString(), expiresAt);
   }
 
+  listEnrollmentTokens(): Array<{
+    token: string;
+    createdAt: string;
+    expiresAt: string;
+    usedAt: string | null;
+    usedByAgent: string | null;
+    status: 'active' | 'used' | 'expired';
+  }> {
+    const rows = this.db
+      .prepare(
+        'SELECT token, created_at, expires_at, used_at, used_by_agent FROM enrollment_tokens ORDER BY created_at DESC',
+      )
+      .all() as Array<{
+      token: string;
+      created_at: string;
+      expires_at: string;
+      used_at: string | null;
+      used_by_agent: string | null;
+    }>;
+    const now = new Date();
+    return rows.map((r) => {
+      let status: 'active' | 'used' | 'expired' = 'active';
+      if (r.used_at) status = 'used';
+      else if (new Date(r.expires_at) < now) status = 'expired';
+      return {
+        token: r.token,
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        usedAt: r.used_at,
+        usedByAgent: r.used_by_agent,
+        status,
+      };
+    });
+  }
+
   consumeEnrollmentToken(token: string, agentName: string): { valid: boolean; reason?: string } {
     const row = this.db.prepare('SELECT * FROM enrollment_tokens WHERE token = ?').get(token) as
       | { token: string; expires_at: string; used_at: string | null }
@@ -433,18 +468,27 @@ export class SondeDb {
       .run(new Date().toISOString(), id);
   }
 
+  updateApiKeyPolicy(id: string, policyJson: string): boolean {
+    const result = this.db
+      .prepare('UPDATE api_keys SET policy_json = ? WHERE id = ?')
+      .run(policyJson, id);
+    return result.changes > 0;
+  }
+
   listApiKeys(): Array<{
     id: string;
     name: string;
     createdAt: string;
     expiresAt: string | null;
     revokedAt: string | null;
+    policyJson: string;
   }> {
     const rows = this.db
-      .prepare('SELECT id, name, created_at, expires_at, revoked_at FROM api_keys')
+      .prepare('SELECT id, name, policy_json, created_at, expires_at, revoked_at FROM api_keys')
       .all() as Array<{
       id: string;
       name: string;
+      policy_json: string;
       created_at: string;
       expires_at: string | null;
       revoked_at: string | null;
@@ -455,6 +499,7 @@ export class SondeDb {
       createdAt: r.created_at,
       expiresAt: r.expires_at,
       revokedAt: r.revoked_at,
+      policyJson: r.policy_json,
     }));
   }
 

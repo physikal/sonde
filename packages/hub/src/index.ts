@@ -49,6 +49,16 @@ app.post('/api/v1/enrollment-tokens', async (c) => {
   return c.json({ token, expiresAt });
 });
 
+app.get('/api/v1/enrollment-tokens', (c) => {
+  const authHeader = c.req.header('Authorization');
+  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (key !== config.apiKey) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  return c.json({ tokens: db.listEnrollmentTokens() });
+});
+
 // API key management endpoints (require legacy key auth)
 app.post('/api/v1/api-keys', async (c) => {
   const authHeader = c.req.header('Authorization');
@@ -90,6 +100,21 @@ app.delete('/api/v1/api-keys/:id', (c) => {
   }
 
   db.revokeApiKey(c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.put('/api/v1/api-keys/:id/policy', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (key !== config.apiKey) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const body = await c.req.json<{ policy: Record<string, unknown> }>();
+  const updated = db.updateApiKeyPolicy(c.req.param('id'), JSON.stringify(body.policy ?? {}));
+  if (!updated) {
+    return c.json({ error: 'API key not found' }, 404);
+  }
   return c.json({ ok: true });
 });
 
@@ -138,6 +163,12 @@ app.get('/api/v1/audit', (c) => {
   const limit = Number(c.req.query('limit')) || 50;
   const entries = db.getAuditEntries({ limit });
   return c.json({ entries });
+});
+
+// Audit chain integrity check
+app.get('/api/v1/audit/verify', (c) => {
+  const result = db.verifyAuditChain();
+  return c.json(result);
 });
 
 // Setup status (unauthenticated — needed for first-boot wizard)

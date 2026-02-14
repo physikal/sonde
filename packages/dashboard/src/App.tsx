@@ -4,7 +4,11 @@ import { AppShell } from './components/layout/AppShell';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { AgentDetail } from './pages/AgentDetail';
+import { ApiKeys } from './pages/ApiKeys';
+import { Audit } from './pages/Audit';
+import { Enrollment } from './pages/Enrollment';
 import { Fleet } from './pages/Fleet';
+import { Policies } from './pages/Policies';
 
 export function App() {
   const { status, loading, refetch } = useSetupStatus();
@@ -25,8 +29,10 @@ export function App() {
             <Route index element={<Overview />} />
             <Route path="agents" element={<Fleet />} />
             <Route path="agents/:id" element={<AgentDetail />} />
-            <Route path="api-keys" element={<PlaceholderPage title="API Keys" />} />
-            <Route path="audit" element={<PlaceholderPage title="Audit Log" />} />
+            <Route path="enrollment" element={<Enrollment />} />
+            <Route path="api-keys" element={<ApiKeys />} />
+            <Route path="policies" element={<Policies />} />
+            <Route path="audit" element={<Audit />} />
             <Route path="settings" element={<PlaceholderPage title="Settings" />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

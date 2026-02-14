@@ -3,7 +3,9 @@ import { NavLink } from 'react-router-dom';
 const NAV_ITEMS = [
   { to: '/', label: 'Overview' },
   { to: '/agents', label: 'Agents' },
+  { to: '/enrollment', label: 'Enrollment' },
   { to: '/api-keys', label: 'API Keys' },
+  { to: '/policies', label: 'Policies' },
   { to: '/audit', label: 'Audit Log' },
   { to: '/settings', label: 'Settings' },
 ];
