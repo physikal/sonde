@@ -1,0 +1,35 @@
+{
+  "name": "@sonde/hub",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sonde/shared": "*",
+    "@sonde/packs": "*",
+    "@hono/node-server": "^1.13.0",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.7.0",
+    "hono": "^4.6.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/ws": "^8.5.13",
+    "vitest": "^2.1.8"
+  }
+}

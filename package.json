@@ -1,0 +1,28 @@
+{
+  "name": "sonde",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/packs",
+    "packages/hub",
+    "packages/agent",
+    "packages/dashboard"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.2"
+}
