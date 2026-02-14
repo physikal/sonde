@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { type ExecFn, type Pack, packRegistry } from '@sonde/packs';
 import type { ProbeRequest, ProbeResponse } from '@sonde/shared';
+import { type ScrubPattern, buildPatterns, scrubData } from './scrubber.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -19,10 +20,12 @@ async function defaultExec(command: string, args: string[]): Promise<string> {
 export class ProbeExecutor {
   private packs: ReadonlyMap<string, Pack>;
   private exec: ExecFn;
+  private scrubPatterns: ScrubPattern[];
 
-  constructor(packs?: ReadonlyMap<string, Pack>, exec?: ExecFn) {
+  constructor(packs?: ReadonlyMap<string, Pack>, exec?: ExecFn, scrubPatterns?: ScrubPattern[]) {
     this.packs = packs ?? packRegistry;
     this.exec = exec ?? defaultExec;
+    this.scrubPatterns = scrubPatterns ?? buildPatterns();
   }
 
   /** Get list of loaded packs with status info */
@@ -57,7 +60,8 @@ export class ProbeExecutor {
     }
 
     try {
-      const data = await handler(request.params, this.exec);
+      const rawData = await handler(request.params, this.exec);
+      const data = scrubData(rawData, this.scrubPatterns);
       return {
         probe: probeName,
         status: 'success',

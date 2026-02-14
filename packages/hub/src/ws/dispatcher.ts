@@ -1,5 +1,5 @@
 import type { ProbeResponse } from '@sonde/shared';
-import { DEFAULT_PROBE_TIMEOUT_MS } from '@sonde/shared';
+import { DEFAULT_PROBE_TIMEOUT_MS, signPayload } from '@sonde/shared';
 import type { WebSocket } from 'ws';
 
 interface ConnectedAgent {
@@ -23,6 +23,17 @@ export class AgentDispatcher {
   private pending = new Map<string, PendingRequest>();
   /** ws instance → agentId (for cleanup on disconnect) */
   private socketIndex = new Map<WebSocket, string>();
+  /** Hub CA private key PEM for signing outgoing messages */
+  private caKeyPem?: string;
+
+  constructor(caKeyPem?: string) {
+    this.caKeyPem = caKeyPem;
+  }
+
+  /** Set the CA private key for signing outgoing messages */
+  setCaKeyPem(pem: string): void {
+    this.caKeyPem = pem;
+  }
 
   registerAgent(id: string, name: string, ws: WebSocket): void {
     this.connections.set(id, { id, name, ws });
@@ -93,18 +104,20 @@ export class AgentDispatcher {
 
       this.pending.set(agent.id, { resolve, reject, timer });
 
+      const payload = {
+        probe,
+        params,
+        timeout: DEFAULT_PROBE_TIMEOUT_MS,
+        requestedBy: 'api',
+      };
+
       const envelope = {
         id: requestId,
         type: 'probe.request' as const,
         timestamp: new Date().toISOString(),
         agentId: agent.id,
-        signature: '',
-        payload: {
-          probe,
-          params,
-          timeout: DEFAULT_PROBE_TIMEOUT_MS,
-          requestedBy: 'api',
-        },
+        signature: this.caKeyPem ? signPayload(payload, this.caKeyPem) : '',
+        payload,
       };
 
       agent.ws.send(JSON.stringify(envelope));

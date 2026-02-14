@@ -1,12 +1,18 @@
+import fs from 'node:fs';
 import {
   HEARTBEAT_INTERVAL_MS,
   type MessageEnvelope,
   MessageEnvelope as MessageEnvelopeSchema,
   type ProbeRequest,
   ProbeRequest as ProbeRequestSchema,
+  signPayload,
+  verifyPayload,
 } from '@sonde/shared';
 import WebSocket from 'ws';
 import type { AgentConfig } from '../config.js';
+import { saveCerts } from '../config.js';
+import { generateAttestation } from './attestation.js';
+import { AgentAuditLog } from './audit.js';
 import type { ProbeExecutor } from './executor.js';
 
 export interface ConnectionEvents {
@@ -24,9 +30,13 @@ const ENROLL_TIMEOUT_MS = 10_000;
 
 /**
  * One-shot enrollment: connect to hub, register, get agentId, disconnect.
- * Validates the hub URL and API key at enrollment time.
+ * If enrollmentToken is set in config, includes it in registration for cert-based enrollment.
+ * Returns { agentId, certIssued } — certIssued is true if certs were saved.
  */
-export function enrollWithHub(config: AgentConfig, executor: ProbeExecutor): Promise<string> {
+export function enrollWithHub(
+  config: AgentConfig,
+  executor: ProbeExecutor,
+): Promise<{ agentId: string; certIssued: boolean }> {
   return new Promise((resolve, reject) => {
     const wsUrl = `${config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
 
@@ -40,18 +50,24 @@ export function enrollWithHub(config: AgentConfig, executor: ProbeExecutor): Pro
     }, ENROLL_TIMEOUT_MS);
 
     ws.on('open', () => {
+      const payload: Record<string, unknown> = {
+        name: config.agentName,
+        os: `${process.platform} ${process.arch}`,
+        agentVersion: '0.1.0',
+        packs: executor.getLoadedPacks(),
+        attestation: generateAttestation(config, executor),
+      };
+      if (config.enrollmentToken) {
+        payload.enrollmentToken = config.enrollmentToken;
+      }
+
       ws.send(
         JSON.stringify({
           id: crypto.randomUUID(),
           type: 'agent.register',
           timestamp: new Date().toISOString(),
           signature: '',
-          payload: {
-            name: config.agentName,
-            os: `${process.platform} ${process.arch}`,
-            agentVersion: '0.1.0',
-            packs: executor.getLoadedPacks(),
-          },
+          payload,
         }),
       );
     });
@@ -66,14 +82,35 @@ export function enrollWithHub(config: AgentConfig, executor: ProbeExecutor): Pro
 
       if (envelope.type === 'hub.ack') {
         clearTimeout(timeout);
-        const payload = envelope.payload as { agentId?: string };
-        const agentId = payload.agentId;
+        const ackPayload = envelope.payload as {
+          agentId?: string;
+          error?: string;
+          certPem?: string;
+          keyPem?: string;
+          caCertPem?: string;
+        };
+
         ws.close();
-        if (agentId) {
-          resolve(agentId);
-        } else {
-          reject(new Error('Hub ack did not contain agentId'));
+
+        if (ackPayload.error) {
+          reject(new Error(ackPayload.error));
+          return;
         }
+
+        const agentId = ackPayload.agentId;
+        if (!agentId) {
+          reject(new Error('Hub ack did not contain agentId'));
+          return;
+        }
+
+        // If hub issued certs, save them
+        let certIssued = false;
+        if (ackPayload.certPem && ackPayload.keyPem && ackPayload.caCertPem) {
+          saveCerts(config, ackPayload.certPem, ackPayload.keyPem, ackPayload.caCertPem);
+          certIssued = true;
+        }
+
+        resolve({ agentId, certIssued });
       }
     });
 
@@ -84,6 +121,28 @@ export function enrollWithHub(config: AgentConfig, executor: ProbeExecutor): Pro
   });
 }
 
+/** Build WebSocket options, including TLS client cert if available. */
+function buildWsOptions(config: AgentConfig): WebSocket.ClientOptions {
+  const options: WebSocket.ClientOptions = {
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+  };
+
+  if (config.certPath && config.keyPath && config.caCertPath) {
+    try {
+      options.cert = fs.readFileSync(config.certPath, 'utf-8');
+      options.key = fs.readFileSync(config.keyPath, 'utf-8');
+      options.ca = [fs.readFileSync(config.caCertPath, 'utf-8')];
+      options.rejectUnauthorized = false; // Hub uses self-signed CA cert
+    } catch {
+      // Cert files missing or unreadable — fall back to API key only
+    }
+  }
+
+  return options;
+}
+
 export class AgentConnection {
   private ws: WebSocket | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -91,12 +150,32 @@ export class AgentConnection {
   private reconnectAttempts = 0;
   private agentId: string | undefined;
   private running = false;
+  private privateKeyPem: string | undefined;
+  private caCertPem: string | undefined;
+  private auditLog = new AgentAuditLog();
 
   constructor(
     private config: AgentConfig,
     private executor: ProbeExecutor,
     private events: ConnectionEvents = {},
-  ) {}
+  ) {
+    // Load private key for signing outbound messages
+    if (config.keyPath) {
+      try {
+        this.privateKeyPem = fs.readFileSync(config.keyPath, 'utf-8');
+      } catch {
+        // Key not available — messages will be sent unsigned
+      }
+    }
+    // Load CA cert for verifying hub messages
+    if (config.caCertPath) {
+      try {
+        this.caCertPem = fs.readFileSync(config.caCertPath, 'utf-8');
+      } catch {
+        // CA cert not available — skip verification
+      }
+    }
+  }
 
   /** Start the connection (connect + auto-reconnect loop) */
   start(): void {
@@ -126,12 +205,9 @@ export class AgentConnection {
 
   private connect(): void {
     const wsUrl = `${this.config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
+    const options = buildWsOptions(this.config);
 
-    this.ws = new WebSocket(wsUrl, {
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-    });
+    this.ws = new WebSocket(wsUrl, options);
 
     this.ws.on('open', () => {
       this.reconnectAttempts = 0;
@@ -162,6 +238,15 @@ export class AgentConnection {
       envelope = MessageEnvelopeSchema.parse(JSON.parse(raw));
     } catch {
       return; // Invalid message, ignore
+    }
+
+    // Verify hub signature if we have a CA cert and the message is signed
+    if (this.caCertPem && envelope.signature !== '') {
+      const valid = verifyPayload(envelope.payload, envelope.signature, this.caCertPem);
+      if (!valid) {
+        this.events.onError?.(new Error(`Signature verification failed for ${envelope.type}`));
+        return;
+      }
     }
 
     switch (envelope.type) {
@@ -198,6 +283,8 @@ export class AgentConnection {
 
     const response = await this.executor.execute(request);
 
+    this.auditLog.log(request.probe, response.status, response.durationMs);
+
     this.send({
       id: crypto.randomUUID(),
       type: response.status === 'success' ? 'probe.response' : 'probe.error',
@@ -206,6 +293,11 @@ export class AgentConnection {
       signature: '',
       payload: response,
     });
+  }
+
+  /** Get the agent-side audit log (for testing/inspection) */
+  getAuditLog(): AgentAuditLog {
+    return this.auditLog;
   }
 
   private sendRegister(): void {
@@ -219,6 +311,7 @@ export class AgentConnection {
         os: `${process.platform} ${process.arch}`,
         agentVersion: '0.1.0',
         packs: this.executor.getLoadedPacks(),
+        attestation: generateAttestation(this.config, this.executor),
       },
     });
   }
@@ -262,6 +355,10 @@ export class AgentConnection {
 
   private send(envelope: MessageEnvelope): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      // Sign the payload if we have a private key
+      if (this.privateKeyPem && envelope.signature === '') {
+        envelope.signature = signPayload(envelope.payload, this.privateKeyPem);
+      }
       this.ws.send(JSON.stringify(envelope));
     }
   }
