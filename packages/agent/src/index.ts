@@ -157,10 +157,11 @@ function cmdStatus(): void {
 }
 
 async function cmdInstall(): Promise<void> {
+  const initialHubUrl = getArg('--hub');
   const { render } = await import('ink');
   const { createElement } = await import('react');
   const { InstallerApp } = await import('./tui/installer/InstallerApp.js');
-  const { waitUntilExit } = render(createElement(InstallerApp));
+  const { waitUntilExit } = render(createElement(InstallerApp, { initialHubUrl }));
   await waitUntilExit();
 }
 

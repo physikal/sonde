@@ -25,6 +25,103 @@ const dispatcher = new AgentDispatcher();
 const runbookEngine = new RunbookEngine();
 runbookEngine.loadFromManifests([...packRegistry.values()].map((p) => p.manifest));
 
+function generateInstallScript(hubUrl: string): string {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+# --- Sonde Agent Installer ---
+# Bootstraps Node.js 22 + @sonde/agent, then hands off to the interactive TUI.
+# Usage: curl -fsSL ${hubUrl}/install | bash
+
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+CYAN='\\033[0;36m'
+BOLD='\\033[1m'
+RESET='\\033[0m'
+
+info()  { printf "\${CYAN}[sonde]\${RESET} %s\\n" "$1"; }
+ok()    { printf "\${GREEN}[sonde]\${RESET} %s\\n" "$1"; }
+fail()  { printf "\${RED}[sonde]\${RESET} %s\\n" "$1" >&2; exit 1; }
+
+# --- OS / arch detection ---
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  Linux)  ;;
+  Darwin) ;;
+  *)      fail "Unsupported OS: $OS" ;;
+esac
+
+case "$ARCH" in
+  x86_64|amd64)  ;;
+  arm64|aarch64) ;;
+  *)             fail "Unsupported architecture: $ARCH" ;;
+esac
+
+info "Detected $OS ($ARCH)"
+
+# --- Node.js >= 22 check / install ---
+needs_node=0
+if command -v node >/dev/null 2>&1; then
+  NODE_VER="$(node -v | sed 's/^v//' | cut -d. -f1)"
+  if [ "$NODE_VER" -ge 22 ] 2>/dev/null; then
+    ok "Node.js v$(node -v | sed 's/^v//') found"
+  else
+    info "Node.js v$(node -v | sed 's/^v//') found (need >= 22)"
+    needs_node=1
+  fi
+else
+  info "Node.js not found"
+  needs_node=1
+fi
+
+if [ "$needs_node" -eq 1 ]; then
+  info "Installing Node.js 22..."
+  case "$OS" in
+    Linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+      elif command -v dnf >/dev/null 2>&1; then
+        curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo -E bash -
+        sudo dnf install -y nodejs
+      elif command -v yum >/dev/null 2>&1; then
+        curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo -E bash -
+        sudo yum install -y nodejs
+      else
+        fail "No supported package manager found (need apt-get, dnf, or yum)"
+      fi
+      ;;
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then
+        brew install node@22
+        brew link --overwrite node@22
+      else
+        fail "Homebrew is required to install Node.js on macOS. Install it from https://brew.sh"
+      fi
+      ;;
+  esac
+
+  # Verify installation
+  if ! command -v node >/dev/null 2>&1; then
+    fail "Node.js installation failed"
+  fi
+  ok "Node.js v$(node -v | sed 's/^v//') installed"
+fi
+
+# --- Install @sonde/agent ---
+info "Installing @sonde/agent..."
+npm install -g @sonde/agent
+ok "@sonde/agent installed"
+
+# --- Launch interactive installer TUI ---
+info "Launching Sonde installer..."
+printf "\\n"
+exec sonde install --hub ${hubUrl}
+`;
+}
+
 // Hono app for REST routes
 const app = new Hono();
 
@@ -286,6 +383,14 @@ app.post('/api/v1/setup/complete', (c) => {
   }
   db.setSetupValue('setup_complete', 'true');
   return c.json({ ok: true });
+});
+
+// Agent installer script (curl -fsSL https://hub.example.com/install | bash)
+app.get('/install', (c) => {
+  const hubUrl =
+    config.hubUrl ?? `${c.req.header('x-forwarded-proto') ?? 'http'}://${c.req.header('host')}`;
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  return c.body(generateInstallScript(hubUrl));
 });
 
 // Static file serving for dashboard SPA

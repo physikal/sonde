@@ -24,7 +24,11 @@ const STEP_LABELS: Record<Step, string> = {
   complete: 'Complete',
 };
 
-export function InstallerApp(): JSX.Element {
+interface InstallerAppProps {
+  initialHubUrl?: string;
+}
+
+export function InstallerApp({ initialHubUrl }: InstallerAppProps): JSX.Element {
   const [step, setStep] = useState<Step>('hub');
   const [hubConfig, setHubConfig] = useState<HubConfig>({ hubUrl: '', apiKey: '', agentName: '' });
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
@@ -41,6 +45,7 @@ export function InstallerApp(): JSX.Element {
 
       {step === 'hub' && (
         <StepHub
+          initialHubUrl={initialHubUrl}
           onNext={(config) => {
             setHubConfig(config);
             setStep('scan');
