@@ -10,9 +10,9 @@ Hub = central MCP server. Agents = lightweight daemons on target machines connec
 
 - **Language:** TypeScript, Node.js 22 LTS
 - **Monorepo:** npm workspaces + Turborepo
-- **Hub:** Hono (HTTP/SSE/REST) + ws (WebSocket) + better-sqlite3
-- **Agent:** ws client, Ink v5 TUI (Phase 3+)
-- **Dashboard:** React 19 + Vite + Tailwind (Phase 4+)
+- **Hub:** Hono (HTTP/REST) + ws (WebSocket) + better-sqlite3 + static dashboard serving
+- **Agent:** ws client, Ink v5 TUI, privilege dropping, attestation
+- **Dashboard:** React 19 + Vite 6 + Tailwind v4 (PostCSS)
 - **MCP:** @modelcontextprotocol/sdk
 - **Schemas:** Zod everywhere
 - **Logging:** pino
@@ -23,13 +23,13 @@ Hub = central MCP server. Agents = lightweight daemons on target machines connec
 
 ## Monorepo Packages
 
-- `@sonde/shared` — Protocol Zod schemas, types, crypto utils
-- `@sonde/packs` — Official pack definitions (system, docker, systemd, etc.)
-- `@sonde/hub` — MCP SSE server, WebSocket server, runbook engine, policy engine, REST API
-- `@sonde/agent` — WebSocket client, pack loader, probe executor, CLI, TUI
-- `@sonde/dashboard` — React frontend (builds to static assets served by hub)
+- `@sonde/shared` — Protocol Zod schemas, types, crypto utils (signing)
+- `@sonde/packs` — Official pack definitions (system, docker, systemd)
+- `@sonde/hub` — MCP server, WebSocket server, runbook engine, policy engine, OAuth, REST API, dashboard serving
+- `@sonde/agent` — WebSocket client, pack loader, probe executor, CLI, TUI, scrubber, attestation
+- `@sonde/dashboard` — React 19 SPA (setup wizard + dashboard UI, builds to static assets served by hub)
 
-Dependency graph: shared → packs → hub + agent. Dashboard is independent.
+Dependency graph: shared → packs → hub + agent. Dashboard is independent (no @sonde/* deps).
 
 ## Branch Strategy
 
@@ -38,26 +38,22 @@ Dependency graph: shared → packs → hub + agent. Dashboard is independent.
 - `feature/*` — off dev
 - `hotfix/*` — off main
 
-## Current Phase: Phase 0 — MVP
+## Completed Phases
 
-**Goal:** End-to-end proof of concept. Claude asks about a server, gets an answer through Sonde.
+### Phase 0 — MVP
+End-to-end proof of concept. Hub (Hono + MCP StreamableHTTP + WebSocket), agent CLI (enroll + start), system pack (disk/memory/cpu), Docker Compose, CI/CD.
 
-**MVP scope only:**
-- Hub: Hono + MCP StreamableHTTP (`/mcp`) + WebSocket (`/ws/agent`) + health check (`/health`)
-- Auth: API key from env var `SONDE_API_KEY`
-- One MCP tool: `probe`
-- One pack: `system` (disk.usage, memory.usage, cpu.usage)
-- No mTLS, no TUI, no scrubbing, no dashboard, no OAuth
-- SQLite: agents table + audit_log table, migrations on startup
-- Agent: CLI (enroll + start), WebSocket client, heartbeats, exponential backoff reconnect
-- Docker Compose for hub
+### Phase 1 — Docker & CI
+Docker multi-stage build, GitHub Actions CI, integration test, README.
 
-**MVP demo flow:**
-1. `docker compose up` (hub)
-2. `sonde enroll --hub http://localhost:3000 --key test-key-123`
-3. `sonde start`
-4. Add MCP URL to Claude.ai → "What's the disk usage?"
-5. Claude calls probe → hub routes to agent → result → Claude answers
+### Phase 2 — Security & Policy
+mTLS (hub CA, agent certs), payload signing (RSA-SHA256), output scrubbing, agent attestation, OAuth 2.0 (dynamic client registration + PKCE), policy engine (allow/deny rules per API key), audit log with SHA-256 hash chain.
+
+### Phase 3 — Agent TUI & Management
+Agent management TUI (Ink v5), installer TUI, pack management CLI, privilege dropping, enrollment tokens.
+
+### Phase 4 — Hub Dashboard (current)
+React 19 + Vite + Tailwind v4 SPA served by hub. 5-step setup wizard (Welcome, API Key, AI Tools, Agent Enroll, Complete). App shell with sidebar navigation. Overview dashboard with hub health + agent count. Setup state persisted in SQLite `setup` table. Hub serves static assets with SPA fallback for client-side routing.
 
 ## Key Architecture Rules
 
@@ -79,7 +75,7 @@ Detailed specs live in `/docs/` — read these when working on specific areas:
 - `docs/DEPLOYMENT.md` — Hub deployment paths, agent install, TUI mockups, UX design
 - `docs/SECURITY.md` — All 9 security layers, agent privilege model, mTLS, attestation
 
-## Project Structure (Phase 0)
+## Project Structure
 
 ```
 sonde/
@@ -91,34 +87,53 @@ sonde/
 │   ├── ci.yml
 │   └── release.yml (scaffold)
 ├── docker/
-│   ├── hub.Dockerfile
+│   ├── hub.Dockerfile             # Multi-stage: builds hub + dashboard
 │   └── docker-compose.yml
 ├── docs/                          # Detailed reference docs
 ├── packages/
 │   ├── shared/src/
 │   │   ├── schemas/               # protocol.ts, probes.ts, packs.ts, mcp.ts
 │   │   ├── types/                 # common.ts, agent.ts, hub.ts
+│   │   ├── crypto/                # signing.ts (RSA-SHA256)
 │   │   └── index.ts
 │   ├── hub/src/
-│   │   ├── index.ts               # Entry: starts Hono + WS
+│   │   ├── index.ts               # Entry: Hono + WS + static serving
 │   │   ├── mcp/server.ts          # MCP StreamableHTTP via SDK
-│   │   ├── mcp/tools/probe.ts     # probe tool handler
-│   │   ├── mcp/auth.ts            # API key validation
-│   │   ├── ws/server.ts           # WebSocket for agents
+│   │   ├── mcp/tools/             # probe.ts, list-agents.ts, diagnose.ts, agent-overview.ts
+│   │   ├── mcp/auth.ts            # API key + OAuth validation
+│   │   ├── ws/server.ts           # WebSocket for agents (mTLS)
 │   │   ├── ws/dispatcher.ts       # Route probes to agents
-│   │   ├── db/index.ts            # better-sqlite3 setup + migrations
+│   │   ├── db/index.ts            # SQLite: agents, audit, api_keys, oauth, setup
+│   │   ├── crypto/                # ca.ts, mtls.ts
+│   │   ├── engine/                # runbooks.ts, policy.ts
+│   │   ├── oauth/                 # provider.ts
 │   │   └── config.ts
 │   ├── agent/src/
-│   │   ├── index.ts               # CLI entry (enroll, start, status)
-│   │   ├── runtime/connection.ts  # WS client + heartbeat + reconnect
-│   │   ├── runtime/executor.ts    # Maps probe requests → pack functions
+│   │   ├── index.ts               # CLI entry (enroll, start, status, packs)
+│   │   ├── runtime/               # connection.ts, executor.ts, scrubber.ts, attestation.ts, privilege.ts, audit.ts
+│   │   ├── system/                # scanner.ts
+│   │   ├── cli/                   # packs.ts
 │   │   └── config.ts
-│   └── packs/src/
-│       ├── types.ts               # Pack interface
-│       ├── index.ts               # Pack registry
-│       └── system/
-│           ├── manifest.json
-│           └── probes/            # disk-usage.ts, memory-usage.ts, cpu-usage.ts
+│   ├── packs/src/
+│   │   ├── types.ts               # Pack interface
+│   │   ├── index.ts               # Pack registry
+│   │   ├── system/                # disk-usage, memory-usage, cpu-usage
+│   │   ├── docker/                # containers-list, images-list, logs-tail, daemon-info
+│   │   └── systemd/               # services-list, service-status, journal-query
+│   └── dashboard/
+│       ├── index.html             # Vite SPA entry
+│       ├── vite.config.ts         # React plugin, dev proxy
+│       ├── postcss.config.mjs     # Tailwind v4 via PostCSS
+│       └── src/
+│           ├── main.tsx           # React root
+│           ├── App.tsx            # Router: setup wizard vs app shell
+│           ├── index.css          # Tailwind v4 import
+│           ├── lib/api.ts         # Fetch wrapper
+│           ├── hooks/             # useSetupStatus.ts
+│           └── components/
+│               ├── layout/        # AppShell, Sidebar, TopBar
+│               ├── setup/         # SetupWizard + 5 step components
+│               └── dashboard/     # Overview
 ```
 
 ## File Conventions
@@ -129,10 +144,12 @@ sonde/
 - Config: env vars for runtime, Zod-validated
 - Logging: pino, structured JSON
 
-## Implementation Notes (Phase 0)
+## Implementation Notes
 
 - **MCP transport**: Using `StreamableHTTPServerTransport` + `McpServer.registerTool()` from MCP SDK (not deprecated SSE/`.tool()` APIs)
-- **Hub routing**: Raw Node HTTP server routes `/mcp` → MCP handler, rest → Hono via `getRequestListener`. Per-session McpServer instances.
+- **Hub routing**: Raw Node HTTP server routes `/mcp` → MCP handler, OAuth paths → Express sub-app, rest → Hono via `getRequestListener`. Per-session McpServer instances.
 - **Probe testability**: ExecFn injection — probe handlers accept `(params, exec)` where `exec` is `(cmd, args) => Promise<string>`. Tests mock `exec`.
 - **Dispatcher**: MVP uses one pending probe per agent (`Map<agentId, PendingRequest>`). Will need request-ID correlation for concurrent probes.
-- **Auth**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param.
+- **Auth**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param. OAuth 2.0 with PKCE for MCP clients.
+- **Dashboard**: Tailwind v4 via `@tailwindcss/postcss` (not `@tailwindcss/vite`) due to monorepo Vite version conflict (root has v5 from vitest, dashboard needs v6). Hub serves built dashboard assets with SPA fallback.
+- **Setup flow**: First-boot wizard persisted in `setup` table. `GET /api/v1/setup/status` is unauthenticated. `POST /api/v1/setup/complete` is one-time (409 on repeat).

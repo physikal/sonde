@@ -16,12 +16,16 @@ COPY packages/dashboard/package.json packages/dashboard/
 
 RUN npm ci
 
-# Copy source for shared, packs, hub only
+# Copy source for shared, packs, hub, dashboard
 COPY packages/shared/src packages/shared/src
 COPY packages/packs/src packages/packs/src
 COPY packages/hub/src packages/hub/src
+COPY packages/dashboard/src packages/dashboard/src
+COPY packages/dashboard/index.html packages/dashboard/index.html
+COPY packages/dashboard/vite.config.ts packages/dashboard/vite.config.ts
+COPY packages/dashboard/tsconfig.json packages/dashboard/tsconfig.json
 
-RUN npx turbo build --filter=@sonde/hub
+RUN npx turbo build --filter=@sonde/hub --filter=@sonde/dashboard
 
 # ── Runtime ──────────────────────────────────────────────────────────
 FROM node:22-alpine
@@ -44,6 +48,7 @@ RUN npm ci --omit=dev && apk del python3 make g++
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/packs/dist packages/packs/dist
 COPY --from=builder /app/packages/hub/dist packages/hub/dist
+COPY --from=builder /app/packages/dashboard/dist packages/dashboard/dist
 
 # SQLite data directory
 RUN mkdir -p /data

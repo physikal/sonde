@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { packRegistry } from '@sonde/packs';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
@@ -89,6 +92,46 @@ app.delete('/api/v1/api-keys/:id', (c) => {
   db.revokeApiKey(c.req.param('id'));
   return c.json({ ok: true });
 });
+
+// Setup status (unauthenticated — needed for first-boot wizard)
+app.get('/api/v1/setup/status', (c) => {
+  const setupComplete = db.getSetupValue('setup_complete') === 'true';
+  const apiKeys = db.listApiKeys();
+  const agents = db.getAllAgents();
+
+  return c.json({
+    setupComplete,
+    steps: {
+      admin_created: setupComplete,
+      api_key_exists: apiKeys.length > 0,
+      agent_enrolled: agents.length > 0,
+    },
+  });
+});
+
+// Mark setup complete (one-time, no auth for first boot)
+app.post('/api/v1/setup/complete', (c) => {
+  if (db.getSetupValue('setup_complete') === 'true') {
+    return c.json({ error: 'Setup already completed' }, 409);
+  }
+  db.setSetupValue('setup_complete', 'true');
+  return c.json({ ok: true });
+});
+
+// Static file serving for dashboard SPA
+const dashboardDist = path.resolve(process.cwd(), 'packages/dashboard/dist');
+const dashboardExists = fs.existsSync(dashboardDist);
+
+if (dashboardExists) {
+  app.use('/*', serveStatic({ root: path.relative(process.cwd(), dashboardDist) }));
+  app.get('/*', (c) => {
+    const indexPath = path.join(dashboardDist, 'index.html');
+    const html = fs.readFileSync(indexPath, 'utf-8');
+    return c.html(html);
+  });
+} else {
+  app.get('/', (c) => c.text('Sonde Hub running. Dashboard not built.'));
+}
 
 // Initialize CA if TLS is enabled
 let ca: { certPem: string; keyPem: string } | undefined;
