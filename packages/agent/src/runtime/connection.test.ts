@@ -275,7 +275,9 @@ describe('enrollWithHub', () => {
       }),
     );
 
-    await expect(promise).resolves.toBe('enrolled-id');
+    const result = await promise;
+    expect(result.agentId).toBe('enrolled-id');
+    expect(result.certIssued).toBe(false);
   });
 
   it('rejects on timeout when no ack received', async () => {

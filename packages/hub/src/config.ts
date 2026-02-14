@@ -5,6 +5,8 @@ export interface HubConfig {
   host: string;
   apiKey: string;
   dbPath: string;
+  tlsEnabled: boolean;
+  hubUrl?: string;
 }
 
 export function loadConfig(): HubConfig {
@@ -18,5 +20,7 @@ export function loadConfig(): HubConfig {
     host: process.env.HOST ?? '0.0.0.0',
     apiKey,
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',
+    tlsEnabled: process.env.SONDE_TLS === 'true',
+    hubUrl: process.env.SONDE_HUB_URL || undefined,
   };
 }

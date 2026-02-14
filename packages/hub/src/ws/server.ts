@@ -1,7 +1,14 @@
 import type http from 'node:http';
-import { MessageEnvelope, ProbeResponse } from '@sonde/shared';
+import {
+  AttestationData,
+  MessageEnvelope,
+  ProbeResponse,
+  signPayload,
+  verifyPayload,
+} from '@sonde/shared';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { extractApiKey } from '../auth.js';
+import { getCertFingerprint, issueAgentCert } from '../crypto/ca.js';
 import type { SondeDb } from '../db/index.js';
 import type { AgentDispatcher } from './dispatcher.js';
 
@@ -10,6 +17,13 @@ interface RegisterPayload {
   os: string;
   agentVersion: string;
   packs: Array<{ name: string; version: string; status: string }>;
+  enrollmentToken?: string;
+  attestation?: unknown;
+}
+
+interface CaContext {
+  certPem: string;
+  keyPem: string;
 }
 
 export function setupWsServer(
@@ -17,6 +31,7 @@ export function setupWsServer(
   dispatcher: AgentDispatcher,
   db: SondeDb,
   validateKey: (key: string) => boolean,
+  ca?: CaContext,
 ): void {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -26,6 +41,21 @@ export function setupWsServer(
       return;
     }
 
+    // If TLS is enabled, check for valid client cert first
+    const tlsSocket = req.socket as import('node:tls').TLSSocket;
+    if (ca && typeof tlsSocket.getPeerCertificate === 'function') {
+      const peerCert = tlsSocket.getPeerCertificate();
+      if (peerCert?.raw) {
+        // Client presented a cert — verify it against CA
+        // Certificate is verified during TLS handshake; allow through
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+        return;
+      }
+    }
+
+    // Fall back to API key auth
     const key = extractApiKey(req);
     if (!validateKey(key)) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
@@ -39,22 +69,22 @@ export function setupWsServer(
   });
 
   wss.on('connection', (ws) => {
+    console.log('Agent connected');
+
     ws.on('message', (data) => {
       try {
         const raw: unknown = JSON.parse(data.toString());
         const envelope = MessageEnvelope.parse(raw);
-        handleMessage(ws, envelope, dispatcher, db);
-      } catch {
-        ws.send(JSON.stringify({ error: 'Invalid message format' }));
+        handleMessage(ws, envelope, dispatcher, db, ca);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`WebSocket message error: ${message}`);
+        ws.send(JSON.stringify({ error: message }));
       }
     });
 
     ws.on('close', () => {
-      const agentIds = dispatcher.getOnlineAgentIds();
-      for (const id of agentIds) {
-        // Find and remove the agent that owned this socket
-        dispatcher.removeBySocket(ws);
-      }
+      dispatcher.removeBySocket(ws);
     });
   });
 }
@@ -64,10 +94,24 @@ function handleMessage(
   envelope: MessageEnvelope,
   dispatcher: AgentDispatcher,
   db: SondeDb,
+  ca?: CaContext,
 ): void {
+  // Verify signature if present (non-empty) and agent has a stored cert
+  if (envelope.signature !== '' && envelope.agentId) {
+    const certPem = db.getAgentCertPem(envelope.agentId);
+    if (certPem) {
+      const valid = verifyPayload(envelope.payload, envelope.signature, certPem);
+      if (!valid) {
+        console.warn(`Signature verification failed for agent ${envelope.agentId}`);
+        ws.send(JSON.stringify({ error: 'Signature verification failed' }));
+        return;
+      }
+    }
+  }
+
   switch (envelope.type) {
     case 'agent.register':
-      handleRegister(ws, envelope, dispatcher, db);
+      handleRegister(ws, envelope, dispatcher, db, ca);
       break;
     case 'agent.heartbeat':
       handleHeartbeat(envelope, dispatcher, db);
@@ -86,33 +130,101 @@ function handleRegister(
   envelope: MessageEnvelope,
   dispatcher: AgentDispatcher,
   db: SondeDb,
+  ca?: CaContext,
 ): void {
   const payload = envelope.payload as RegisterPayload;
   const agentId = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  db.upsertAgent({
-    id: agentId,
-    name: payload.name,
-    status: 'online',
-    lastSeen: now,
-    os: payload.os,
-    agentVersion: payload.agentVersion,
-    packs: payload.packs,
-  });
+  // If enrollment token is provided, validate it and issue cert
+  let certData: { certPem: string; keyPem: string; caCertPem: string } | undefined;
+  if (payload.enrollmentToken && ca) {
+    const result = db.consumeEnrollmentToken(payload.enrollmentToken, payload.name);
+    if (!result.valid) {
+      ws.send(
+        JSON.stringify({
+          id: crypto.randomUUID(),
+          type: 'hub.ack' as const,
+          timestamp: now,
+          signature: '',
+          payload: { error: `Enrollment token rejected: ${result.reason}` },
+        }),
+      );
+      ws.close();
+      return;
+    }
+
+    const agentCert = issueAgentCert(ca.certPem, ca.keyPem, payload.name);
+    const fingerprint = getCertFingerprint(agentCert.certPem);
+
+    certData = {
+      certPem: agentCert.certPem,
+      keyPem: agentCert.keyPem,
+      caCertPem: ca.certPem,
+    };
+
+    // Store fingerprint and cert after agent is created
+    db.upsertAgent({
+      id: agentId,
+      name: payload.name,
+      status: 'online',
+      lastSeen: now,
+      os: payload.os,
+      agentVersion: payload.agentVersion,
+      packs: payload.packs,
+    });
+    db.updateAgentCertFingerprint(agentId, fingerprint);
+    db.updateAgentCertPem(agentId, agentCert.certPem);
+  } else {
+    db.upsertAgent({
+      id: agentId,
+      name: payload.name,
+      status: 'online',
+      lastSeen: now,
+      os: payload.os,
+      agentVersion: payload.agentVersion,
+      packs: payload.packs,
+    });
+  }
 
   dispatcher.registerAgent(agentId, payload.name, ws);
+
+  // Handle attestation data
+  if (payload.attestation) {
+    const parsed = AttestationData.safeParse(payload.attestation);
+    if (parsed.success) {
+      const newJson = JSON.stringify(parsed.data);
+      // Check for mismatch on re-registration (existing agent by name)
+      const existing = db.getAgent(payload.name);
+      const storedJson = existing?.attestationJson;
+      const mismatch = !!(storedJson && storedJson !== '{}' && storedJson !== newJson);
+      if (mismatch) {
+        db.updateAgentStatus(agentId, 'degraded', now);
+        console.warn(`Attestation mismatch for agent ${payload.name} (${agentId})`);
+      }
+      db.updateAgentAttestation(agentId, newJson, mismatch);
+    }
+  }
+
+  const ackPayload: Record<string, unknown> = { agentId };
+  if (certData) {
+    ackPayload.certPem = certData.certPem;
+    ackPayload.keyPem = certData.keyPem;
+    ackPayload.caCertPem = certData.caCertPem;
+  }
 
   const ack = {
     id: crypto.randomUUID(),
     type: 'hub.ack' as const,
     timestamp: now,
     agentId,
-    signature: '',
-    payload: { agentId },
+    signature: ca ? signPayload(ackPayload, ca.keyPem) : '',
+    payload: ackPayload,
   };
 
   ws.send(JSON.stringify(ack));
+  const authMethod = certData ? 'mTLS cert issued' : 'API key';
+  console.log(`Agent registered: ${payload.name} (${agentId}) [${authMethod}]`);
 }
 
 function handleHeartbeat(

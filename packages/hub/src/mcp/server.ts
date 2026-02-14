@@ -2,9 +2,15 @@ import type http from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { extractApiKey } from '../auth.js';
+import { validateAuth } from '../auth.js';
 import type { SondeDb } from '../db/index.js';
+import type { AuthContext } from '../engine/policy.js';
+import type { RunbookEngine } from '../engine/runbooks.js';
+import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
+import { handleAgentOverview } from './tools/agent-overview.js';
+import { handleDiagnose } from './tools/diagnose.js';
+import { handleListAgents } from './tools/list-agents.js';
 import { handleProbe } from './tools/probe.js';
 
 /**
@@ -15,11 +21,19 @@ export function createMcpHandler(
   dispatcher: AgentDispatcher,
   db: SondeDb,
   apiKey: string,
+  runbookEngine: RunbookEngine,
+  oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
   // Per-session transports (sessionId → transport)
-  const sessions = new Map<string, StreamableHTTPServerTransport>();
+  const sessions = new Map<
+    string,
+    { transport: StreamableHTTPServerTransport; auth: AuthContext }
+  >();
 
-  function createSessionServer(): { server: McpServer; transport: StreamableHTTPServerTransport } {
+  function createSessionServer(auth: AuthContext): {
+    server: McpServer;
+    transport: StreamableHTTPServerTransport;
+  } {
     const server = new McpServer(
       { name: 'sonde-hub', version: '0.1.0' },
       { capabilities: { tools: {} } },
@@ -37,7 +51,51 @@ export function createMcpHandler(
         }),
       },
       async (args) => {
-        return handleProbe(args, dispatcher, db);
+        return handleProbe(args, dispatcher, db, auth);
+      },
+    );
+
+    server.registerTool(
+      'diagnose',
+      {
+        description:
+          'Run a diagnostic runbook against an agent. Executes all probes in the runbook and returns consolidated findings.',
+        inputSchema: z.object({
+          agent: z.string().describe('Agent name or ID'),
+          category: z.string().describe('Runbook category, e.g. "docker", "system", "systemd"'),
+          description: z
+            .string()
+            .optional()
+            .describe('Optional natural language problem description'),
+        }),
+      },
+      async (args) => {
+        return handleDiagnose(args, dispatcher, runbookEngine, db, auth);
+      },
+    );
+
+    server.registerTool(
+      'list_agents',
+      {
+        description: 'List all registered agents with their status, packs, and last seen time.',
+        inputSchema: z.object({}),
+      },
+      async () => {
+        return handleListAgents(db, dispatcher, auth);
+      },
+    );
+
+    server.registerTool(
+      'agent_overview',
+      {
+        description:
+          'Get detailed information about a single agent including pack details and status.',
+        inputSchema: z.object({
+          agent: z.string().describe('Agent name or ID'),
+        }),
+      },
+      async (args) => {
+        return handleAgentOverview(args, db, dispatcher, auth);
       },
     );
 
@@ -48,7 +106,7 @@ export function createMcpHandler(
     // Track session
     const sessionId = transport.sessionId;
     if (sessionId) {
-      sessions.set(sessionId, transport);
+      sessions.set(sessionId, { transport, auth });
     }
 
     transport.onclose = () => {
@@ -60,10 +118,37 @@ export function createMcpHandler(
     return { server, transport };
   }
 
+  async function resolveAuth(req: http.IncomingMessage): Promise<AuthContext | undefined> {
+    // Try API key auth first (legacy + scoped)
+    const apiKeyAuth = validateAuth(req, db, apiKey);
+    if (apiKeyAuth) return apiKeyAuth;
+
+    // Try OAuth if provider is configured
+    if (oauthProvider) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const authInfo = await oauthProvider.verifyAccessToken(token);
+          return {
+            type: 'oauth',
+            keyId: authInfo.clientId,
+            policy: {},
+            scopes: authInfo.scopes,
+          };
+        } catch {
+          // Invalid OAuth token
+        }
+      }
+    }
+
+    return undefined;
+  }
+
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    // Validate API key
-    const key = extractApiKey(req);
-    if (key !== apiKey) {
+    // Authenticate
+    const auth = await resolveAuth(req);
+    if (!auth) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
@@ -88,14 +173,14 @@ export function createMcpHandler(
     // Check for existing session
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
-      const transport = sessions.get(sessionId);
-      await transport?.handleRequest(req, res, body);
+      const session = sessions.get(sessionId);
+      await session?.transport.handleRequest(req, res, body);
       return;
     }
 
     // For new sessions (no session ID or unknown session), handle initialization
     if (req.method === 'POST' || req.method === 'GET') {
-      const { server, transport } = createSessionServer();
+      const { server, transport } = createSessionServer(auth);
       await server.connect(transport);
       await transport.handleRequest(req, res, body);
       return;
@@ -104,9 +189,9 @@ export function createMcpHandler(
     if (req.method === 'DELETE') {
       // Session termination
       if (sessionId) {
-        const transport = sessions.get(sessionId);
-        if (transport) {
-          await transport.close();
+        const session = sessions.get(sessionId);
+        if (session) {
+          await session.transport.close();
           sessions.delete(sessionId);
         }
       }

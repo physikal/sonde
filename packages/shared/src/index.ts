@@ -29,6 +29,12 @@ export {
   PackManifest,
 } from './schemas/packs.js';
 
+// Schemas — Attestation
+export { AttestationData } from './schemas/attestation.js';
+
+// Crypto — Signing
+export { signPayload, verifyPayload } from './crypto/signing.js';
+
 // Schemas — MCP
 export {
   ProbeInput,

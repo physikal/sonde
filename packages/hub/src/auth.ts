@@ -1,4 +1,7 @@
+import crypto from 'node:crypto';
 import type http from 'node:http';
+import type { SondeDb } from './db/index.js';
+import type { AuthContext } from './engine/policy.js';
 
 /** Extract API key from Authorization header or query param */
 export function extractApiKey(req: http.IncomingMessage): string {
@@ -9,4 +12,45 @@ export function extractApiKey(req: http.IncomingMessage): string {
 
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   return url.searchParams.get('apiKey') ?? '';
+}
+
+/** SHA-256 hex hash of a raw API key */
+export function hashApiKey(raw: string): string {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+/**
+ * Validate an incoming request against API key auth.
+ *
+ * 1. Extract bearer token
+ * 2. If token === legacyApiKey → full access (empty policy)
+ * 3. Else hash → lookup in api_keys table → check not expired/revoked → return with policy
+ * 4. Else undefined (caller should check OAuth next)
+ */
+export function validateAuth(
+  req: http.IncomingMessage,
+  db: SondeDb,
+  legacyApiKey: string,
+): AuthContext | undefined {
+  const token = extractApiKey(req);
+  if (!token) return undefined;
+
+  // Legacy key check
+  if (token === legacyApiKey) {
+    return { type: 'api_key', keyId: 'legacy', policy: {} };
+  }
+
+  // Scoped key lookup
+  const keyHash = hashApiKey(token);
+  const record = db.getApiKeyByHash(keyHash);
+  if (!record) return undefined;
+
+  // Check revoked
+  if (record.revokedAt) return undefined;
+
+  // Check expired
+  if (record.expiresAt && new Date(record.expiresAt) < new Date()) return undefined;
+
+  const policy = JSON.parse(record.policyJson);
+  return { type: 'api_key', keyId: record.id, policy };
 }

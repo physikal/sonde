@@ -29,6 +29,11 @@ export const systemManifest: PackManifest = {
       timeout: 10_000,
     },
   ],
+  runbook: {
+    category: 'system',
+    probes: ['disk.usage', 'memory.usage', 'cpu.usage'],
+    parallel: true,
+  },
   detect: {
     files: ['/proc/loadavg'],
   },
