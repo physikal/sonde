@@ -37,6 +37,11 @@ export class ProbeExecutor {
     }));
   }
 
+  /** Get a pack by name */
+  getPackByName(name: string): Pack | undefined {
+    return this.packs.get(name);
+  }
+
   /** Execute a probe request and return a probe response */
   async execute(request: ProbeRequest): Promise<ProbeResponse> {
     const start = Date.now();

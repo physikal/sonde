@@ -3,7 +3,7 @@
 import os from 'node:os';
 import { handlePacksCommand } from './cli/packs.js';
 import { type AgentConfig, getConfigPath, loadConfig, saveConfig } from './config.js';
-import { AgentConnection, enrollWithHub } from './runtime/connection.js';
+import { AgentConnection, type ConnectionEvents, enrollWithHub } from './runtime/connection.js';
 import { ProbeExecutor } from './runtime/executor.js';
 import { checkNotRoot } from './runtime/privilege.js';
 import { buildPatterns } from './runtime/scrubber.js';
@@ -11,12 +11,18 @@ import { buildPatterns } from './runtime/scrubber.js';
 const args = process.argv.slice(2);
 const command = args[0];
 
+function hasFlag(flag: string): boolean {
+  return args.includes(flag);
+}
+
 function printUsage(): void {
-  console.log('Usage: sonde <command>');
+  console.log('Usage: sonde [command]');
   console.log('');
   console.log('Commands:');
+  console.log('  (none)    Launch management TUI (if enrolled)');
+  console.log('  install   Interactive guided setup (enroll + scan + packs)');
   console.log('  enroll    Enroll this agent with a hub');
-  console.log('  start     Start the agent (connect to hub)');
+  console.log('  start     Start the agent (TUI by default, --headless for daemon)');
   console.log('  status    Show agent status');
   console.log('  packs     Manage packs (list, scan, install, uninstall)');
   console.log('');
@@ -25,12 +31,36 @@ function printUsage(): void {
   console.log('  --key <key>      API key for authentication');
   console.log('  --name <name>    Agent name (default: hostname)');
   console.log('  --token <token>  Enrollment token for mTLS cert issuance');
+  console.log('');
+  console.log('Start options:');
+  console.log('  --headless       Run without TUI (for systemd / background)');
 }
 
 function getArg(flag: string): string | undefined {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx + 1 >= args.length) return undefined;
   return args[idx + 1];
+}
+
+interface Runtime {
+  config: AgentConfig;
+  executor: ProbeExecutor;
+  connection: AgentConnection;
+}
+
+function createRuntime(events: ConnectionEvents): Runtime {
+  checkNotRoot();
+
+  const config = loadConfig();
+  if (!config) {
+    console.error('Error: Agent not enrolled. Run "sonde enroll" first.');
+    process.exit(1);
+  }
+
+  const executor = new ProbeExecutor(undefined, undefined, buildPatterns(config.scrubPatterns));
+  const connection = new AgentConnection(config, executor, events);
+
+  return { config, executor, connection };
 }
 
 async function cmdEnroll(): Promise<void> {
@@ -73,21 +103,7 @@ async function cmdEnroll(): Promise<void> {
 }
 
 function cmdStart(): void {
-  checkNotRoot();
-
-  const config = loadConfig();
-  if (!config) {
-    console.error('Error: Agent not enrolled. Run "sonde enroll" first.');
-    process.exit(1);
-  }
-
-  console.log('Sonde Agent v0.1.0');
-  console.log(`  Name: ${config.agentName}`);
-  console.log(`  Hub:  ${config.hubUrl}`);
-  console.log('');
-
-  const executor = new ProbeExecutor(undefined, undefined, buildPatterns(config.scrubPatterns));
-  const connection = new AgentConnection(config, executor, {
+  const { config, connection } = createRuntime({
     onConnected: (agentId) => {
       console.log(`Connected to hub (agentId: ${agentId})`);
     },
@@ -103,6 +119,11 @@ function cmdStart(): void {
     },
   });
 
+  console.log('Sonde Agent v0.1.0');
+  console.log(`  Name: ${config.agentName}`);
+  console.log(`  Hub:  ${config.hubUrl}`);
+  console.log('');
+
   connection.start();
 
   process.on('SIGINT', () => {
@@ -110,6 +131,14 @@ function cmdStart(): void {
     connection.stop();
     process.exit(0);
   });
+}
+
+async function cmdManager(): Promise<void> {
+  const { render } = await import('ink');
+  const { createElement } = await import('react');
+  const { ManagerApp } = await import('./tui/manager/ManagerApp.js');
+  const { waitUntilExit } = render(createElement(ManagerApp, { createRuntime }));
+  await waitUntilExit();
 }
 
 function cmdStatus(): void {
@@ -127,7 +156,21 @@ function cmdStatus(): void {
   console.log(`  Config:   ${getConfigPath()}`);
 }
 
+async function cmdInstall(): Promise<void> {
+  const { render } = await import('ink');
+  const { createElement } = await import('react');
+  const { InstallerApp } = await import('./tui/installer/InstallerApp.js');
+  const { waitUntilExit } = render(createElement(InstallerApp));
+  await waitUntilExit();
+}
+
 switch (command) {
+  case 'install':
+    cmdInstall().catch((err: Error) => {
+      console.error(err.message);
+      process.exit(1);
+    });
+    break;
   case 'enroll':
     cmdEnroll().catch((err: Error) => {
       console.error(`Enrollment failed: ${err.message}`);
@@ -135,7 +178,14 @@ switch (command) {
     });
     break;
   case 'start':
-    cmdStart();
+    if (hasFlag('--headless')) {
+      cmdStart();
+    } else {
+      cmdManager().catch((err: Error) => {
+        console.error(err.message);
+        process.exit(1);
+      });
+    }
     break;
   case 'status':
     cmdStatus();
@@ -144,10 +194,24 @@ switch (command) {
     handlePacksCommand(args.slice(1));
     break;
   default:
-    printUsage();
     if (command) {
+      printUsage();
       console.error(`\nUnknown command: ${command}`);
       process.exit(1);
+    } else {
+      // No command: launch TUI if enrolled, otherwise show usage
+      const config = loadConfig();
+      if (config) {
+        cmdManager().catch((err: Error) => {
+          console.error(err.message);
+          process.exit(1);
+        });
+      } else {
+        printUsage();
+      }
     }
     break;
 }
+
+export { createRuntime };
+export type { Runtime };

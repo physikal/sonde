@@ -20,6 +20,7 @@ export interface ConnectionEvents {
   onDisconnected?: () => void;
   onError?: (error: Error) => void;
   onRegistered?: (agentId: string) => void;
+  onProbeCompleted?: (probe: string, status: string, durationMs: number) => void;
 }
 
 /** Minimum/maximum reconnect delays */
@@ -284,6 +285,7 @@ export class AgentConnection {
     const response = await this.executor.execute(request);
 
     this.auditLog.log(request.probe, response.status, response.durationMs);
+    this.events.onProbeCompleted?.(request.probe, response.status, response.durationMs);
 
     this.send({
       id: crypto.randomUUID(),
