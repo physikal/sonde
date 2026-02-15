@@ -146,6 +146,16 @@ export function createMcpHandler(
   }
 
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    // Ensure Accept header includes required MIME types for StreamableHTTP.
+    // Some clients (e.g. mcp-remote) omit text/event-stream, causing the SDK
+    // to reject with "Not Acceptable". Normalise it so all clients work.
+    if (req.method === 'POST') {
+      const accept = req.headers.accept ?? '';
+      if (!accept.includes('text/event-stream')) {
+        req.headers.accept = 'application/json, text/event-stream';
+      }
+    }
+
     // Authenticate
     const auth = await resolveAuth(req);
     if (!auth) {
