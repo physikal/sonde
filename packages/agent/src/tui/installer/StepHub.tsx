@@ -13,7 +13,7 @@ type Field = 'hubUrl' | 'apiKey' | 'agentName';
 const FIELDS: Field[] = ['hubUrl', 'apiKey', 'agentName'];
 const FIELD_LABELS: Record<Field, string> = {
   hubUrl: 'Hub URL',
-  apiKey: 'API Key',
+  apiKey: 'Token',
   agentName: 'Agent Name',
 };
 
@@ -56,7 +56,7 @@ export function StepHub({ onNext, initialHubUrl }: StepHubProps): JSX.Element {
         return;
       }
       if (!apiKey.trim()) {
-        setError('API Key is required');
+        setError('API key or enrollment token is required');
         setActiveField('apiKey');
         return;
       }

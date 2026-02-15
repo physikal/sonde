@@ -37,7 +37,7 @@ const ENROLL_TIMEOUT_MS = 10_000;
 export function enrollWithHub(
   config: AgentConfig,
   executor: ProbeExecutor,
-): Promise<{ agentId: string; certIssued: boolean }> {
+): Promise<{ agentId: string; certIssued: boolean; apiKey?: string }> {
   return new Promise((resolve, reject) => {
     const wsUrl = `${config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
 
@@ -91,6 +91,7 @@ export function enrollWithHub(
           certPem?: string;
           keyPem?: string;
           caCertPem?: string;
+          apiKey?: string;
         };
 
         ws.close();
@@ -113,7 +114,7 @@ export function enrollWithHub(
           certIssued = true;
         }
 
-        resolve({ agentId, certIssued });
+        resolve({ agentId, certIssued, apiKey: ackPayload.apiKey });
       }
     });
 

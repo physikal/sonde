@@ -7,7 +7,7 @@ import {
   verifyPayload,
 } from '@sonde/shared';
 import { type WebSocket, WebSocketServer } from 'ws';
-import { extractApiKey } from '../auth.js';
+import { extractApiKey, hashApiKey } from '../auth.js';
 import { getCertFingerprint, issueAgentCert } from '../crypto/ca.js';
 import type { SondeDb } from '../db/index.js';
 import type { AgentDispatcher } from './dispatcher.js';
@@ -87,14 +87,15 @@ export function setupWsServer(
     });
   });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
     console.log('Agent connected');
+    const bearerToken = extractApiKey(req);
 
     ws.on('message', (data) => {
       try {
         const raw: unknown = JSON.parse(data.toString());
         const envelope = MessageEnvelope.parse(raw);
-        handleMessage(ws, envelope, dispatcher, db, ca);
+        handleMessage(ws, envelope, dispatcher, db, ca, bearerToken);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`WebSocket message error: ${message}`);
@@ -114,6 +115,7 @@ function handleMessage(
   dispatcher: AgentDispatcher,
   db: SondeDb,
   ca?: CaContext,
+  bearerToken?: string,
 ): void {
   // Verify signature if present (non-empty) and agent has a stored cert
   if (envelope.signature !== '' && envelope.agentId) {
@@ -130,7 +132,7 @@ function handleMessage(
 
   switch (envelope.type) {
     case 'agent.register':
-      handleRegister(ws, envelope, dispatcher, db, ca);
+      handleRegister(ws, envelope, dispatcher, db, ca, bearerToken);
       break;
     case 'agent.heartbeat':
       handleHeartbeat(envelope, dispatcher, db);
@@ -150,6 +152,7 @@ function handleRegister(
   dispatcher: AgentDispatcher,
   db: SondeDb,
   ca?: CaContext,
+  bearerToken?: string,
 ): void {
   const payload = envelope.payload as RegisterPayload;
   // Reuse existing agent ID if same name re-registers (stable identity)
@@ -157,10 +160,17 @@ function handleRegister(
   const agentId = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // If enrollment token is provided, validate it and issue cert
+  // Resolve enrollment token: explicit in payload (CLI --token) or auto-detect from bearer (TUI)
+  const enrollmentToken =
+    payload.enrollmentToken ||
+    (bearerToken && db.isValidEnrollmentToken(bearerToken) ? bearerToken : undefined);
+
+  // If enrollment token is present, validate and consume it
   let certData: { certPem: string; keyPem: string; caCertPem: string } | undefined;
-  if (payload.enrollmentToken && ca) {
-    const result = db.consumeEnrollmentToken(payload.enrollmentToken, payload.name);
+  let mintedApiKey: string | undefined;
+
+  if (enrollmentToken) {
+    const result = db.consumeEnrollmentToken(enrollmentToken, payload.name);
     if (!result.valid) {
       ws.send(
         JSON.stringify({
@@ -175,27 +185,45 @@ function handleRegister(
       return;
     }
 
-    const agentCert = issueAgentCert(ca.certPem, ca.keyPem, payload.name);
-    const fingerprint = getCertFingerprint(agentCert.certPem);
+    // Issue TLS cert if CA is available
+    if (ca) {
+      const agentCert = issueAgentCert(ca.certPem, ca.keyPem, payload.name);
+      const fingerprint = getCertFingerprint(agentCert.certPem);
 
-    certData = {
-      certPem: agentCert.certPem,
-      keyPem: agentCert.keyPem,
-      caCertPem: ca.certPem,
-    };
+      certData = {
+        certPem: agentCert.certPem,
+        keyPem: agentCert.keyPem,
+        caCertPem: ca.certPem,
+      };
 
-    // Store fingerprint and cert after agent is created
-    db.upsertAgent({
-      id: agentId,
-      name: payload.name,
-      status: 'online',
-      lastSeen: now,
-      os: payload.os,
-      agentVersion: payload.agentVersion,
-      packs: payload.packs,
-    });
-    db.updateAgentCertFingerprint(agentId, fingerprint);
-    db.updateAgentCertPem(agentId, agentCert.certPem);
+      db.upsertAgent({
+        id: agentId,
+        name: payload.name,
+        status: 'online',
+        lastSeen: now,
+        os: payload.os,
+        agentVersion: payload.agentVersion,
+        packs: payload.packs,
+      });
+      db.updateAgentCertFingerprint(agentId, fingerprint);
+      db.updateAgentCertPem(agentId, agentCert.certPem);
+    } else {
+      db.upsertAgent({
+        id: agentId,
+        name: payload.name,
+        status: 'online',
+        lastSeen: now,
+        os: payload.os,
+        agentVersion: payload.agentVersion,
+        packs: payload.packs,
+      });
+    }
+
+    // Mint a scoped API key so the agent can reconnect without the consumed token
+    const keyId = crypto.randomUUID();
+    mintedApiKey = crypto.randomUUID();
+    const keyHash = hashApiKey(mintedApiKey);
+    db.createApiKey(keyId, `agent:${payload.name}`, keyHash, '{}');
   } else {
     db.upsertAgent({
       id: agentId,
@@ -233,6 +261,9 @@ function handleRegister(
     ackPayload.keyPem = certData.keyPem;
     ackPayload.caCertPem = certData.caCertPem;
   }
+  if (mintedApiKey) {
+    ackPayload.apiKey = mintedApiKey;
+  }
 
   const ack = {
     id: crypto.randomUUID(),
@@ -244,7 +275,11 @@ function handleRegister(
   };
 
   ws.send(JSON.stringify(ack));
-  const authMethod = certData ? 'mTLS cert issued' : 'API key';
+  const authMethod = certData
+    ? 'mTLS cert issued'
+    : mintedApiKey
+      ? 'token → API key minted'
+      : 'API key';
   console.log(`Agent registered: ${payload.name} (${agentId}) [${authMethod}]`);
 }
 

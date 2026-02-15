@@ -493,7 +493,17 @@ const server: http.Server =
     : http.createServer(requestHandler);
 
 // WebSocket server for agent connections
-setupWsServer(server, dispatcher, db, (key) => key === config.apiKey, ca);
+setupWsServer(
+  server,
+  dispatcher,
+  db,
+  (key) => {
+    if (key === config.apiKey) return true;
+    const record = db.getApiKeyByHash(hashApiKey(key));
+    return !!record && !record.revokedAt;
+  },
+  ca,
+);
 
 const protocol = config.tlsEnabled ? 'https' : 'http';
 const wsProtocol = config.tlsEnabled ? 'wss' : 'ws';

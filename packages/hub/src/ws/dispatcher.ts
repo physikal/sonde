@@ -38,6 +38,13 @@ export class AgentDispatcher {
   }
 
   registerAgent(id: string, name: string, ws: WebSocket): void {
+    // Clean up stale socket from a previous connection for the same agent,
+    // so its delayed 'close' event won't remove the new live connection.
+    const prev = this.connections.get(id);
+    if (prev && prev.ws !== ws) {
+      this.socketIndex.delete(prev.ws);
+    }
+
     this.connections.set(id, { id, name, ws });
     this.nameIndex.set(name, id);
     this.socketIndex.set(ws, id);

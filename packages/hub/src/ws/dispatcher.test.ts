@@ -51,6 +51,25 @@ describe('AgentDispatcher', () => {
     expect(dispatcher.isAgentOnline('server-1')).toBe(false);
   });
 
+  it('stale socket close does not evict re-registered agent', () => {
+    const dispatcher = new AgentDispatcher();
+    const ws1 = createMockWs();
+    const ws2 = createMockWs();
+
+    // Agent registers with ws1
+    dispatcher.registerAgent('agent-1', 'server-1', ws1);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+
+    // Agent reconnects with ws2 (ws1 hasn't closed yet)
+    dispatcher.registerAgent('agent-1', 'server-1', ws2);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+
+    // Old ws1 finally closes — must NOT remove the live ws2 connection
+    dispatcher.removeBySocket(ws1);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+    expect(dispatcher.isAgentOnline('server-1')).toBe(true);
+  });
+
   it('rejects probe for unknown agent', async () => {
     const dispatcher = new AgentDispatcher();
 

@@ -91,8 +91,12 @@ async function cmdEnroll(): Promise<void> {
   const executor = new ProbeExecutor();
   console.log(`Enrolling with hub at ${hubUrl}...`);
 
-  const { agentId, certIssued } = await enrollWithHub(config, executor);
+  const { agentId, certIssued, apiKey: mintedKey } = await enrollWithHub(config, executor);
   config.agentId = agentId;
+  // Save the hub-minted API key so the agent can reconnect after the token is consumed
+  if (mintedKey) {
+    config.apiKey = mintedKey;
+  }
   // Clear the one-time token after use
   config.enrollmentToken = undefined;
   saveConfig(config);
