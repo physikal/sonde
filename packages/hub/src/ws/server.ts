@@ -66,9 +66,9 @@ export function setupWsServer(
       }
     }
 
-    // Fall back to API key auth
+    // Fall back to API key or enrollment token auth
     const key = extractApiKey(req);
-    if (!validateKey(key)) {
+    if (!validateKey(key) && !db.isValidEnrollmentToken(key)) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;

@@ -28,9 +28,9 @@ function printUsage(): void {
   console.log('');
   console.log('Enroll options:');
   console.log('  --hub <url>      Hub URL (e.g. http://localhost:3000)');
-  console.log('  --key <key>      API key for authentication');
+  console.log('  --key <key>      API key for authentication (or use --token)');
   console.log('  --name <name>    Agent name (default: hostname)');
-  console.log('  --token <token>  Enrollment token for mTLS cert issuance');
+  console.log('  --token <token>  Enrollment token (can be used instead of --key)');
   console.log('');
   console.log('Start options:');
   console.log('  --headless       Run without TUI (for systemd / background)');
@@ -69,13 +69,20 @@ async function cmdEnroll(): Promise<void> {
   const agentName = getArg('--name') ?? os.hostname();
   const enrollmentToken = getArg('--token');
 
-  if (!hubUrl || !apiKey) {
-    console.error('Error: --hub and --key are required');
+  if (!hubUrl) {
+    console.error('Error: --hub is required');
     console.error('  sonde enroll --hub http://localhost:3000 --key your-api-key');
+    console.error('  sonde enroll --hub http://localhost:3000 --token enrollment-token');
+    process.exit(1);
+  }
+  if (!apiKey && !enrollmentToken) {
+    console.error('Error: --key or --token is required');
+    console.error('  sonde enroll --hub http://localhost:3000 --key your-api-key');
+    console.error('  sonde enroll --hub http://localhost:3000 --token enrollment-token');
     process.exit(1);
   }
 
-  const config: AgentConfig = { hubUrl, apiKey, agentName };
+  const config: AgentConfig = { hubUrl, apiKey: apiKey ?? '', agentName };
   if (enrollmentToken) {
     config.enrollmentToken = enrollmentToken;
   }

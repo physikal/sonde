@@ -41,8 +41,10 @@ export function enrollWithHub(
   return new Promise((resolve, reject) => {
     const wsUrl = `${config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
 
+    // Use API key if available, otherwise use enrollment token for WS auth
+    const bearerToken = config.apiKey || config.enrollmentToken || '';
     const ws = new WebSocket(wsUrl, {
-      headers: { Authorization: `Bearer ${config.apiKey}` },
+      headers: { Authorization: `Bearer ${bearerToken}` },
     });
 
     const timeout = setTimeout(() => {
