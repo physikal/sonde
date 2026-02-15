@@ -152,7 +152,9 @@ function handleRegister(
   ca?: CaContext,
 ): void {
   const payload = envelope.payload as RegisterPayload;
-  const agentId = crypto.randomUUID();
+  // Reuse existing agent ID if same name re-registers (stable identity)
+  const existing = db.getAgent(payload.name);
+  const agentId = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
 
   // If enrollment token is provided, validate it and issue cert

@@ -59,11 +59,17 @@ export function Fleet() {
     fetchAgents();
   }, [fetchAgents]);
 
-  // Merge real-time online status from WebSocket
+  // Merge real-time online status from WebSocket (match by ID or name)
   const onlineIds = new Set(agentStatus.onlineAgentIds);
+  const onlineNames = new Set(agentStatus.onlineAgents.map((a) => a.name));
   const mergedAgents = agents.map((a) => ({
     ...a,
-    status: onlineIds.has(a.id) ? 'online' : a.status === 'degraded' ? 'degraded' : 'offline',
+    status:
+      onlineIds.has(a.id) || onlineNames.has(a.name)
+        ? 'online'
+        : a.status === 'degraded'
+          ? 'degraded'
+          : 'offline',
   }));
 
   if (loading) {
