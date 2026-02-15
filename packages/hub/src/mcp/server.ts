@@ -103,15 +103,10 @@ export function createMcpHandler(
       sessionIdGenerator: () => crypto.randomUUID(),
     });
 
-    // Track session
-    const sessionId = transport.sessionId;
-    if (sessionId) {
-      sessions.set(sessionId, { transport, auth });
-    }
-
     transport.onclose = () => {
-      if (sessionId) {
-        sessions.delete(sessionId);
+      const sid = transport.sessionId;
+      if (sid) {
+        sessions.delete(sid);
       }
     };
 
@@ -146,6 +141,16 @@ export function createMcpHandler(
   }
 
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    // Ensure Accept header includes required MIME types for StreamableHTTP.
+    // Some clients (e.g. mcp-remote) omit text/event-stream, causing the SDK
+    // to reject with "Not Acceptable". Normalise it so all clients work.
+    if (req.method === 'POST') {
+      const accept = req.headers.accept ?? '';
+      if (!accept.includes('text/event-stream')) {
+        req.headers.accept = 'application/json, text/event-stream';
+      }
+    }
+
     // Authenticate
     const auth = await resolveAuth(req);
     if (!auth) {
@@ -183,6 +188,12 @@ export function createMcpHandler(
       const { server, transport } = createSessionServer(auth);
       await server.connect(transport);
       await transport.handleRequest(req, res, body);
+
+      // Register session after handleRequest so the transport has its session ID
+      const newSessionId = transport.sessionId;
+      if (newSessionId) {
+        sessions.set(newSessionId, { transport, auth });
+      }
       return;
     }
 
