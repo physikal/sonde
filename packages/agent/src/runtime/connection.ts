@@ -288,6 +288,11 @@ export class AgentConnection {
 
     const response = await this.executor.execute(request);
 
+    // Echo back requestId for concurrent probe correlation
+    if (request.requestId) {
+      response.requestId = request.requestId;
+    }
+
     this.auditLog.log(request.probe, response.status, response.durationMs);
     this.events.onProbeCompleted?.(request.probe, response.status, response.durationMs);
 

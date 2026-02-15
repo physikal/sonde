@@ -15,6 +15,8 @@ export const ProbeRequest = z.object({
   requestedBy: z.string(),
   /** Set if this probe is part of a runbook execution */
   runbookId: z.string().optional(),
+  /** Correlation ID for concurrent probe support */
+  requestId: z.string().optional(),
 });
 export type ProbeRequest = z.infer<typeof ProbeRequest>;
 
@@ -37,5 +39,7 @@ export const ProbeResponse = z.object({
     packVersion: z.string(),
     capabilityLevel: CapabilityLevel,
   }),
+  /** Correlation ID echoed from request for concurrent probe support */
+  requestId: z.string().optional(),
 });
 export type ProbeResponse = z.infer<typeof ProbeResponse>;
