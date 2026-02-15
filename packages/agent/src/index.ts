@@ -7,6 +7,7 @@ import { AgentConnection, type ConnectionEvents, enrollWithHub } from './runtime
 import { ProbeExecutor } from './runtime/executor.js';
 import { checkNotRoot } from './runtime/privilege.js';
 import { buildPatterns } from './runtime/scrubber.js';
+import { VERSION } from './version.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -130,7 +131,7 @@ function cmdStart(): void {
     },
   });
 
-  console.log('Sonde Agent v0.1.0');
+  console.log(`Sonde Agent v${VERSION}`);
   console.log(`  Name: ${config.agentName}`);
   console.log(`  Hub:  ${config.hubUrl}`);
   console.log('');
@@ -174,6 +175,11 @@ async function cmdInstall(): Promise<void> {
   const { InstallerApp } = await import('./tui/installer/InstallerApp.js');
   const { waitUntilExit } = render(createElement(InstallerApp, { initialHubUrl }));
   await waitUntilExit();
+}
+
+if (command === '--version' || command === '-v' || hasFlag('--version')) {
+  console.log(VERSION);
+  process.exit(0);
 }
 
 switch (command) {

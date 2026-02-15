@@ -11,6 +11,7 @@ import {
 import WebSocket from 'ws';
 import type { AgentConfig } from '../config.js';
 import { saveCerts } from '../config.js';
+import { VERSION } from '../version.js';
 import { generateAttestation } from './attestation.js';
 import { AgentAuditLog } from './audit.js';
 import type { ProbeExecutor } from './executor.js';
@@ -56,7 +57,7 @@ export function enrollWithHub(
       const payload: Record<string, unknown> = {
         name: config.agentName,
         os: `${process.platform} ${process.arch}`,
-        agentVersion: '0.1.0',
+        agentVersion: VERSION,
         packs: executor.getLoadedPacks(),
         attestation: generateAttestation(config, executor),
       };
@@ -314,7 +315,7 @@ export class AgentConnection {
       payload: {
         name: this.config.agentName,
         os: `${process.platform} ${process.arch}`,
-        agentVersion: '0.1.0',
+        agentVersion: VERSION,
         packs: this.executor.getLoadedPacks(),
         attestation: generateAttestation(this.config, this.executor),
       },
@@ -349,7 +350,7 @@ export class AgentConnection {
         data: { error: message },
         durationMs: 0,
         metadata: {
-          agentVersion: '0.1.0',
+          agentVersion: VERSION,
           packName: 'unknown',
           packVersion: '0.0.0',
           capabilityLevel: 'observe',
