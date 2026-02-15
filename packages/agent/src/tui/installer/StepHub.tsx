@@ -6,19 +6,20 @@ import type { HubConfig } from './InstallerApp.js';
 
 interface StepHubProps {
   onNext: (config: HubConfig) => void;
+  initialHubUrl?: string;
 }
 
 type Field = 'hubUrl' | 'apiKey' | 'agentName';
 const FIELDS: Field[] = ['hubUrl', 'apiKey', 'agentName'];
 const FIELD_LABELS: Record<Field, string> = {
   hubUrl: 'Hub URL',
-  apiKey: 'API Key',
+  apiKey: 'Token',
   agentName: 'Agent Name',
 };
 
-export function StepHub({ onNext }: StepHubProps): JSX.Element {
-  const [activeField, setActiveField] = useState<Field>('hubUrl');
-  const [hubUrl, setHubUrl] = useState('');
+export function StepHub({ onNext, initialHubUrl }: StepHubProps): JSX.Element {
+  const [activeField, setActiveField] = useState<Field>(initialHubUrl ? 'apiKey' : 'hubUrl');
+  const [hubUrl, setHubUrl] = useState(initialHubUrl ?? '');
   const [apiKey, setApiKey] = useState('');
   const [agentName, setAgentName] = useState(os.hostname());
   const [error, setError] = useState('');
@@ -55,7 +56,7 @@ export function StepHub({ onNext }: StepHubProps): JSX.Element {
         return;
       }
       if (!apiKey.trim()) {
-        setError('API Key is required');
+        setError('API key or enrollment token is required');
         setActiveField('apiKey');
         return;
       }

@@ -110,12 +110,12 @@ describe('WebSocket server', () => {
     expect(dispatcher.getOnlineAgentIds()).toContain(agentId);
   });
 
-  it('should handle re-enrollment with the same agent name', async () => {
+  it('should reuse agent ID on re-enrollment with the same name', async () => {
     const firstId = await registerAgent('re-enroll-agent');
     const secondId = await registerAgent('re-enroll-agent');
 
     expect(firstId).toBeDefined();
     expect(secondId).toBeDefined();
-    expect(secondId).not.toBe(firstId);
+    expect(secondId).toBe(firstId);
   });
 });

@@ -2,11 +2,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { type ExecFn, type Pack, packRegistry } from '@sonde/packs';
 import type { ProbeRequest, ProbeResponse } from '@sonde/shared';
+import { VERSION } from '../version.js';
 import { type ScrubPattern, buildPatterns, scrubData } from './scrubber.js';
 
 const execFileAsync = promisify(execFile);
-
-const AGENT_VERSION = '0.1.0';
 
 /** Default exec function that shells out to real commands */
 async function defaultExec(command: string, args: string[]): Promise<string> {
@@ -73,7 +72,7 @@ export class ProbeExecutor {
         data,
         durationMs: Date.now() - start,
         metadata: {
-          agentVersion: AGENT_VERSION,
+          agentVersion: VERSION,
           packName: pack.manifest.name,
           packVersion: pack.manifest.version,
           capabilityLevel: 'observe',
@@ -97,7 +96,7 @@ export class ProbeExecutor {
       data: { error: message },
       durationMs: Date.now() - startMs,
       metadata: {
-        agentVersion: AGENT_VERSION,
+        agentVersion: VERSION,
         packName: pack?.manifest.name ?? 'unknown',
         packVersion: pack?.manifest.version ?? '0.0.0',
         capabilityLevel: 'observe',

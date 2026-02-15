@@ -15,7 +15,10 @@
     "format": "biome format --write .",
     "test": "turbo test",
     "test:integration": "vitest run --config vitest.config.integration.ts",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset version && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

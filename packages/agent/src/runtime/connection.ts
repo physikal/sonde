@@ -11,6 +11,7 @@ import {
 import WebSocket from 'ws';
 import type { AgentConfig } from '../config.js';
 import { saveCerts } from '../config.js';
+import { VERSION } from '../version.js';
 import { generateAttestation } from './attestation.js';
 import { AgentAuditLog } from './audit.js';
 import type { ProbeExecutor } from './executor.js';
@@ -37,12 +38,14 @@ const ENROLL_TIMEOUT_MS = 10_000;
 export function enrollWithHub(
   config: AgentConfig,
   executor: ProbeExecutor,
-): Promise<{ agentId: string; certIssued: boolean }> {
+): Promise<{ agentId: string; certIssued: boolean; apiKey?: string }> {
   return new Promise((resolve, reject) => {
     const wsUrl = `${config.hubUrl.replace(/^http/, 'ws')}/ws/agent`;
 
+    // Use API key if available, otherwise use enrollment token for WS auth
+    const bearerToken = config.apiKey || config.enrollmentToken || '';
     const ws = new WebSocket(wsUrl, {
-      headers: { Authorization: `Bearer ${config.apiKey}` },
+      headers: { Authorization: `Bearer ${bearerToken}` },
     });
 
     const timeout = setTimeout(() => {
@@ -54,7 +57,7 @@ export function enrollWithHub(
       const payload: Record<string, unknown> = {
         name: config.agentName,
         os: `${process.platform} ${process.arch}`,
-        agentVersion: '0.1.0',
+        agentVersion: VERSION,
         packs: executor.getLoadedPacks(),
         attestation: generateAttestation(config, executor),
       };
@@ -89,6 +92,7 @@ export function enrollWithHub(
           certPem?: string;
           keyPem?: string;
           caCertPem?: string;
+          apiKey?: string;
         };
 
         ws.close();
@@ -111,7 +115,7 @@ export function enrollWithHub(
           certIssued = true;
         }
 
-        resolve({ agentId, certIssued });
+        resolve({ agentId, certIssued, apiKey: ackPayload.apiKey });
       }
     });
 
@@ -284,6 +288,11 @@ export class AgentConnection {
 
     const response = await this.executor.execute(request);
 
+    // Echo back requestId for concurrent probe correlation
+    if (request.requestId) {
+      response.requestId = request.requestId;
+    }
+
     this.auditLog.log(request.probe, response.status, response.durationMs);
     this.events.onProbeCompleted?.(request.probe, response.status, response.durationMs);
 
@@ -311,7 +320,7 @@ export class AgentConnection {
       payload: {
         name: this.config.agentName,
         os: `${process.platform} ${process.arch}`,
-        agentVersion: '0.1.0',
+        agentVersion: VERSION,
         packs: this.executor.getLoadedPacks(),
         attestation: generateAttestation(this.config, this.executor),
       },
@@ -346,7 +355,7 @@ export class AgentConnection {
         data: { error: message },
         durationMs: 0,
         metadata: {
-          agentVersion: '0.1.0',
+          agentVersion: VERSION,
           packName: 'unknown',
           packVersion: '0.0.0',
           capabilityLevel: 'observe',

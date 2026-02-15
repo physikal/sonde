@@ -12,6 +12,7 @@ interface PendingRequest {
   resolve: (response: ProbeResponse) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  agentId: string;
 }
 
 export class AgentDispatcher {
@@ -19,7 +20,7 @@ export class AgentDispatcher {
   private connections = new Map<string, ConnectedAgent>();
   /** agent name → agentId (for lookup by name) */
   private nameIndex = new Map<string, string>();
-  /** agentId → pending probe request (MVP: one pending per agent) */
+  /** requestId → pending probe request (supports concurrent probes per agent) */
   private pending = new Map<string, PendingRequest>();
   /** ws instance → agentId (for cleanup on disconnect) */
   private socketIndex = new Map<WebSocket, string>();
@@ -38,6 +39,13 @@ export class AgentDispatcher {
   }
 
   registerAgent(id: string, name: string, ws: WebSocket): void {
+    // Clean up stale socket from a previous connection for the same agent,
+    // so its delayed 'close' event won't remove the new live connection.
+    const prev = this.connections.get(id);
+    if (prev && prev.ws !== ws) {
+      this.socketIndex.delete(prev.ws);
+    }
+
     this.connections.set(id, { id, name, ws });
     this.nameIndex.set(name, id);
     this.socketIndex.set(ws, id);
@@ -52,12 +60,13 @@ export class AgentDispatcher {
     this.nameIndex.delete(conn.name);
     this.socketIndex.delete(conn.ws);
 
-    // Reject any pending request for this agent
-    const req = this.pending.get(agentId);
-    if (req) {
-      clearTimeout(req.timer);
-      this.pending.delete(agentId);
-      req.reject(new Error(`Agent '${conn.name}' disconnected`));
+    // Reject all pending requests for this agent
+    for (const [requestId, req] of this.pending) {
+      if (req.agentId === agentId) {
+        clearTimeout(req.timer);
+        this.pending.delete(requestId);
+        req.reject(new Error(`Agent '${conn.name}' disconnected`));
+      }
     }
 
     this.broadcastAgentStatus();
@@ -103,17 +112,18 @@ export class AgentDispatcher {
       const requestId = crypto.randomUUID();
 
       const timer = setTimeout(() => {
-        this.pending.delete(agent.id);
+        this.pending.delete(requestId);
         reject(new Error(`Probe '${probe}' timed out after ${DEFAULT_PROBE_TIMEOUT_MS}ms`));
       }, DEFAULT_PROBE_TIMEOUT_MS);
 
-      this.pending.set(agent.id, { resolve, reject, timer });
+      this.pending.set(requestId, { resolve, reject, timer, agentId: agent.id });
 
       const payload = {
         probe,
         params,
         timeout: DEFAULT_PROBE_TIMEOUT_MS,
         requestedBy: 'api',
+        requestId,
       };
 
       const envelope = {
@@ -131,17 +141,31 @@ export class AgentDispatcher {
 
   /** Called when a probe.response or probe.error arrives from an agent */
   handleResponse(agentId: string, response: ProbeResponse): void {
-    const req = this.pending.get(agentId);
-    if (!req) return;
+    let req: PendingRequest | undefined;
+    let key: string | undefined;
+
+    // Prefer requestId correlation (concurrent probes)
+    if (response.requestId) {
+      req = this.pending.get(response.requestId);
+      key = response.requestId;
+    }
+
+    // Fallback for old agents that don't echo requestId: find first pending for this agent
+    if (!req) {
+      for (const [k, v] of this.pending) {
+        if (v.agentId === agentId) {
+          req = v;
+          key = k;
+          break;
+        }
+      }
+    }
+
+    if (!req || !key) return;
 
     clearTimeout(req.timer);
-    this.pending.delete(agentId);
-
-    if (response.status === 'success') {
-      req.resolve(response);
-    } else {
-      req.resolve(response); // Still resolve — caller inspects status
-    }
+    this.pending.delete(key);
+    req.resolve(response);
   }
 
   // --- Dashboard WebSocket broadcast ---

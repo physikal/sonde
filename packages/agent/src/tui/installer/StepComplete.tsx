@@ -29,8 +29,11 @@ export function StepComplete({ hubConfig, selectedPacks }: StepCompleteProps): J
     const executor = new ProbeExecutor();
 
     enrollWithHub(config, executor)
-      .then(({ agentId: id }) => {
+      .then(({ agentId: id, apiKey: mintedKey }) => {
         config.agentId = id;
+        if (mintedKey) {
+          config.apiKey = mintedKey;
+        }
         saveConfig(config);
         setAgentId(id);
         setEnrolling(false);

@@ -51,6 +51,25 @@ describe('AgentDispatcher', () => {
     expect(dispatcher.isAgentOnline('server-1')).toBe(false);
   });
 
+  it('stale socket close does not evict re-registered agent', () => {
+    const dispatcher = new AgentDispatcher();
+    const ws1 = createMockWs();
+    const ws2 = createMockWs();
+
+    // Agent registers with ws1
+    dispatcher.registerAgent('agent-1', 'server-1', ws1);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+
+    // Agent reconnects with ws2 (ws1 hasn't closed yet)
+    dispatcher.registerAgent('agent-1', 'server-1', ws2);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+
+    // Old ws1 finally closes — must NOT remove the live ws2 connection
+    dispatcher.removeBySocket(ws1);
+    expect(dispatcher.getOnlineAgentIds()).toEqual(['agent-1']);
+    expect(dispatcher.isAgentOnline('server-1')).toBe(true);
+  });
+
   it('rejects probe for unknown agent', async () => {
     const dispatcher = new AgentDispatcher();
 
@@ -65,19 +84,21 @@ describe('AgentDispatcher', () => {
     // Start probe but don't await — simulate async
     const probePromise = dispatcher.sendProbe('server-1', 'system.disk.usage', { all: true });
 
-    // Verify message was sent
+    // Verify message was sent with requestId
     expect(ws.send).toHaveBeenCalledOnce();
     const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string);
     expect(sent.type).toBe('probe.request');
     expect(sent.payload.probe).toBe('system.disk.usage');
     expect(sent.payload.params).toEqual({ all: true });
+    expect(sent.payload.requestId).toBeDefined();
 
-    // Simulate response
+    // Simulate response echoing back requestId
     dispatcher.handleResponse('agent-1', {
       probe: 'system.disk.usage',
       status: 'success',
       data: { filesystems: [] },
       durationMs: 42,
+      requestId: sent.payload.requestId,
       metadata: {
         agentVersion: '0.1.0',
         packName: 'system',
@@ -89,6 +110,55 @@ describe('AgentDispatcher', () => {
     const result = await probePromise;
     expect(result.status).toBe('success');
     expect(result.durationMs).toBe(42);
+  });
+
+  it('handles concurrent probes to the same agent', async () => {
+    const dispatcher = new AgentDispatcher();
+    const ws = createMockWs();
+    dispatcher.registerAgent('agent-1', 'server-1', ws);
+
+    // Fire 3 probes concurrently
+    const p1 = dispatcher.sendProbe('server-1', 'system.disk.usage');
+    const p2 = dispatcher.sendProbe('server-1', 'system.memory.usage');
+    const p3 = dispatcher.sendProbe('server-1', 'system.cpu.usage');
+
+    expect(ws.send).toHaveBeenCalledTimes(3);
+
+    // Extract requestIds from sent messages
+    const calls = (ws.send as ReturnType<typeof vi.fn>).mock.calls;
+    const sent1 = JSON.parse(calls[0]?.[0] as string);
+    const sent2 = JSON.parse(calls[1]?.[0] as string);
+    const sent3 = JSON.parse(calls[2]?.[0] as string);
+
+    const makeResponse = (probe: string, requestId: string) => ({
+      probe,
+      status: 'success' as const,
+      data: {},
+      durationMs: 10,
+      requestId,
+      metadata: {
+        agentVersion: '0.1.0',
+        packName: 'system',
+        packVersion: '0.1.0',
+        capabilityLevel: 'observe' as const,
+      },
+    });
+
+    // Respond out of order
+    dispatcher.handleResponse('agent-1', makeResponse('system.cpu.usage', sent3.payload.requestId));
+    dispatcher.handleResponse(
+      'agent-1',
+      makeResponse('system.disk.usage', sent1.payload.requestId),
+    );
+    dispatcher.handleResponse(
+      'agent-1',
+      makeResponse('system.memory.usage', sent2.payload.requestId),
+    );
+
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+    expect(r1.probe).toBe('system.disk.usage');
+    expect(r2.probe).toBe('system.memory.usage');
+    expect(r3.probe).toBe('system.cpu.usage');
   });
 
   it('rejects pending probe when agent disconnects', async () => {

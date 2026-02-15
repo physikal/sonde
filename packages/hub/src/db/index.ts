@@ -415,6 +415,17 @@ export class SondeDb {
     });
   }
 
+  /** Check if an enrollment token is valid without consuming it. */
+  isValidEnrollmentToken(token: string): boolean {
+    const row = this.db.prepare('SELECT * FROM enrollment_tokens WHERE token = ?').get(token) as
+      | { token: string; expires_at: string; used_at: string | null }
+      | undefined;
+    if (!row) return false;
+    if (row.used_at) return false;
+    if (new Date(row.expires_at) < new Date()) return false;
+    return true;
+  }
+
   consumeEnrollmentToken(token: string, agentName: string): { valid: boolean; reason?: string } {
     const row = this.db.prepare('SELECT * FROM enrollment_tokens WHERE token = ?').get(token) as
       | { token: string; expires_at: string; used_at: string | null }

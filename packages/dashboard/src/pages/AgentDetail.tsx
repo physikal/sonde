@@ -79,7 +79,9 @@ export function AgentDetail() {
     return <div className="p-8 text-gray-400">Loading...</div>;
   }
 
-  const isOnline = agentStatus.onlineAgentIds.includes(agent.id);
+  const isOnline =
+    agentStatus.onlineAgentIds.includes(agent.id) ||
+    agentStatus.onlineAgents.some((a) => a.name === agent.name);
   const liveStatus = isOnline ? 'online' : agent.status === 'degraded' ? 'degraded' : 'offline';
 
   return (

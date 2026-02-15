@@ -1,7 +1,7 @@
 {
   "name": "@sonde/agent",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.2.0",
+  "private": false,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

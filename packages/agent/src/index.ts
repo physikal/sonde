@@ -7,6 +7,7 @@ import { AgentConnection, type ConnectionEvents, enrollWithHub } from './runtime
 import { ProbeExecutor } from './runtime/executor.js';
 import { checkNotRoot } from './runtime/privilege.js';
 import { buildPatterns } from './runtime/scrubber.js';
+import { VERSION } from './version.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -28,9 +29,9 @@ function printUsage(): void {
   console.log('');
   console.log('Enroll options:');
   console.log('  --hub <url>      Hub URL (e.g. http://localhost:3000)');
-  console.log('  --key <key>      API key for authentication');
+  console.log('  --key <key>      API key for authentication (or use --token)');
   console.log('  --name <name>    Agent name (default: hostname)');
-  console.log('  --token <token>  Enrollment token for mTLS cert issuance');
+  console.log('  --token <token>  Enrollment token (can be used instead of --key)');
   console.log('');
   console.log('Start options:');
   console.log('  --headless       Run without TUI (for systemd / background)');
@@ -69,13 +70,20 @@ async function cmdEnroll(): Promise<void> {
   const agentName = getArg('--name') ?? os.hostname();
   const enrollmentToken = getArg('--token');
 
-  if (!hubUrl || !apiKey) {
-    console.error('Error: --hub and --key are required');
+  if (!hubUrl) {
+    console.error('Error: --hub is required');
     console.error('  sonde enroll --hub http://localhost:3000 --key your-api-key');
+    console.error('  sonde enroll --hub http://localhost:3000 --token enrollment-token');
+    process.exit(1);
+  }
+  if (!apiKey && !enrollmentToken) {
+    console.error('Error: --key or --token is required');
+    console.error('  sonde enroll --hub http://localhost:3000 --key your-api-key');
+    console.error('  sonde enroll --hub http://localhost:3000 --token enrollment-token');
     process.exit(1);
   }
 
-  const config: AgentConfig = { hubUrl, apiKey, agentName };
+  const config: AgentConfig = { hubUrl, apiKey: apiKey ?? '', agentName };
   if (enrollmentToken) {
     config.enrollmentToken = enrollmentToken;
   }
@@ -84,8 +92,12 @@ async function cmdEnroll(): Promise<void> {
   const executor = new ProbeExecutor();
   console.log(`Enrolling with hub at ${hubUrl}...`);
 
-  const { agentId, certIssued } = await enrollWithHub(config, executor);
+  const { agentId, certIssued, apiKey: mintedKey } = await enrollWithHub(config, executor);
   config.agentId = agentId;
+  // Save the hub-minted API key so the agent can reconnect after the token is consumed
+  if (mintedKey) {
+    config.apiKey = mintedKey;
+  }
   // Clear the one-time token after use
   config.enrollmentToken = undefined;
   saveConfig(config);
@@ -119,7 +131,7 @@ function cmdStart(): void {
     },
   });
 
-  console.log('Sonde Agent v0.1.0');
+  console.log(`Sonde Agent v${VERSION}`);
   console.log(`  Name: ${config.agentName}`);
   console.log(`  Hub:  ${config.hubUrl}`);
   console.log('');
@@ -157,11 +169,17 @@ function cmdStatus(): void {
 }
 
 async function cmdInstall(): Promise<void> {
+  const initialHubUrl = getArg('--hub');
   const { render } = await import('ink');
   const { createElement } = await import('react');
   const { InstallerApp } = await import('./tui/installer/InstallerApp.js');
-  const { waitUntilExit } = render(createElement(InstallerApp));
+  const { waitUntilExit } = render(createElement(InstallerApp, { initialHubUrl }));
   await waitUntilExit();
+}
+
+if (command === '--version' || command === '-v' || hasFlag('--version')) {
+  console.log(VERSION);
+  process.exit(0);
 }
 
 switch (command) {
