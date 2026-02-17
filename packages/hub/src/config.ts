@@ -35,6 +35,8 @@ export function loadConfig(): HubConfig {
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',
     tlsEnabled: process.env.SONDE_TLS === 'true',
     hubUrl: process.env.SONDE_HUB_URL || undefined,
-    ...(adminUser && adminPassword ? { adminUser, adminPassword } : {}),
+    ...(adminUser !== undefined && adminPassword !== undefined
+      ? { adminUser, adminPassword }
+      : {}),
   };
 }

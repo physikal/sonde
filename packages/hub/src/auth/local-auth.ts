@@ -16,8 +16,8 @@ export function createAuthRoutes(sessionManager: SessionManager, config: LocalAu
     const body = await c.req.json<{ username?: string; password?: string }>();
 
     if (
-      !config.adminUser ||
-      !config.adminPassword ||
+      config.adminUser === undefined ||
+      config.adminPassword === undefined ||
       body.username !== config.adminUser ||
       body.password !== config.adminPassword
     ) {

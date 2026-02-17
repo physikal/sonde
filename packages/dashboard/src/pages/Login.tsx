@@ -26,7 +26,8 @@ export function Login() {
         return;
       }
 
-      navigate('/', { replace: true });
+      // Full reload so AuthProvider re-fetches /auth/status with the new cookie
+      window.location.href = '/';
     } catch {
       setError('Network error. Is the hub running?');
     } finally {
