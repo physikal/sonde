@@ -259,23 +259,36 @@ app.get('/api/v1/enrollment-tokens', (c) => {
 
 // API key management endpoints (require legacy key auth)
 app.post('/api/v1/api-keys', async (c) => {
-  const body = await c.req.json<{ name: string; policy?: Record<string, unknown> }>();
+  const body = await c.req.json<{
+    name: string;
+    policy?: Record<string, unknown>;
+    role?: string;
+  }>();
   if (!body.name) {
     return c.json({ error: 'name is required' }, 400);
   }
 
+  const role = body.role ?? 'member';
   const id = crypto.randomUUID();
   const rawKey = crypto.randomUUID();
   const keyHash = hashApiKey(rawKey);
-  const policyJson = JSON.stringify(body.policy ?? {});
+  const policyJson = JSON.stringify({ ...body.policy, role });
 
-  db.createApiKey(id, body.name, keyHash, policyJson);
+  db.createApiKey(id, body.name, keyHash, policyJson, role);
 
-  return c.json({ id, key: rawKey, name: body.name, policy: body.policy ?? {} }, 201);
+  return c.json({ id, key: rawKey, name: body.name, policy: { ...body.policy, role } }, 201);
 });
 
 app.get('/api/v1/api-keys', (c) => {
-  return c.json({ keys: db.listApiKeys() });
+  const keys = db.listApiKeys().map((k) => {
+    let role = 'member';
+    try {
+      const parsed = JSON.parse(k.policyJson);
+      if (parsed.role) role = parsed.role;
+    } catch {}
+    return { ...k, role };
+  });
+  return c.json({ keys });
 });
 
 app.delete('/api/v1/api-keys/:id', (c) => {
@@ -398,12 +411,19 @@ app.post('/api/v1/authorized-users', async (c) => {
 });
 
 app.put('/api/v1/authorized-users/:id', async (c) => {
-  const body = await c.req.json<{ role?: string }>();
-  if (!body.role) {
-    return c.json({ error: 'role is required' }, 400);
+  const body = await c.req.json<{ role?: string; enabled?: boolean }>();
+  if (!body.role && body.enabled === undefined) {
+    return c.json({ error: 'role or enabled is required' }, 400);
   }
 
-  const updated = db.updateAuthorizedUserRole(c.req.param('id'), body.role);
+  const id = c.req.param('id');
+  let updated = false;
+  if (body.role) {
+    updated = db.updateAuthorizedUserRole(id, body.role) || updated;
+  }
+  if (body.enabled !== undefined) {
+    updated = db.updateAuthorizedUserEnabled(id, body.enabled) || updated;
+  }
   if (!updated) {
     return c.json({ error: 'Authorized user not found' }, 404);
   }

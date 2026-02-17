@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 type Role = 'owner' | 'admin' | 'member';
 
@@ -8,16 +9,41 @@ interface NavItem {
   minimumRole?: Role;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Overview' },
-  { to: '/agents', label: 'Agents' },
-  { to: '/enrollment', label: 'Enrollment' },
-  { to: '/api-keys', label: 'API Keys' },
-  { to: '/policies', label: 'Policies', minimumRole: 'admin' },
-  { to: '/integrations', label: 'Integrations' },
-  { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
-  { to: '/try-it', label: 'Try It' },
-  { to: '/settings', label: 'Settings', minimumRole: 'owner' },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'Fleet',
+    items: [
+      { to: '/', label: 'Overview' },
+      { to: '/agents', label: 'Agents' },
+    ],
+  },
+  {
+    title: 'Manage',
+    items: [
+      { to: '/enrollment', label: 'Enrollment' },
+      { to: '/api-keys', label: 'API Keys' },
+      { to: '/users', label: 'Users', minimumRole: 'admin' },
+      { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
+      { to: '/integrations', label: 'Integrations' },
+    ],
+  },
+  {
+    title: 'Diagnostics',
+    items: [
+      { to: '/try-it', label: 'Try It' },
+      { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
+      { to: '/policies', label: 'Policies', minimumRole: 'admin' },
+    ],
+  },
+  {
+    title: 'Settings',
+    items: [{ to: '/settings', label: 'SSO Configuration', minimumRole: 'owner' }],
+  },
 ];
 
 /** Role hierarchy for visibility checks (lower index = more privileged). */
@@ -64,9 +90,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  // Role-based filtering is wired but currently all items are visible
-  // because useAuth is not consumed here yet (Phase 8a.3 will enable it).
-  const userRole: string | undefined = undefined;
+  const { user } = useAuth();
+  const userRole = user?.role;
 
   return (
     <>
@@ -90,10 +115,26 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div className="px-5 py-4">
           <span className="text-lg font-bold text-white tracking-wide">Sonde</span>
         </div>
-        <nav className="mt-2 flex flex-col gap-0.5 px-2">
-          {NAV_ITEMS.map((item) => (
-            <SidebarItem key={item.to} item={item} userRole={userRole} onClose={onClose} />
-          ))}
+        <nav className="mt-2 flex flex-1 flex-col gap-4 px-2 pb-4">
+          {NAV_SECTIONS.map((section) => {
+            const visibleItems = section.items.filter(
+              (item) => !item.minimumRole || hasRole(userRole, item.minimumRole),
+            );
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={section.title}>
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  {section.title}
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {visibleItems.map((item) => (
+                    <SidebarItem key={item.to} item={item} userRole={userRole} onClose={onClose} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
       </aside>
     </>

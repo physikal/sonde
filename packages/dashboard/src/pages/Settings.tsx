@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useToast } from '../components/common/Toast';
 import { apiFetch } from '../lib/api';
 
@@ -8,19 +8,16 @@ interface SsoConfig {
   enabled: boolean;
 }
 
-interface AuthorizedUser {
-  id: string;
-  email: string;
-  roleId: string;
-  createdAt: string;
+interface SsoStatus {
+  configured: boolean;
+  enabled: boolean;
 }
 
 export function Settings() {
   return (
     <div className="space-y-8 p-8">
-      <h1 className="text-2xl font-semibold text-white">Settings</h1>
+      <h1 className="text-2xl font-semibold text-white">SSO Configuration</h1>
       <SsoConfigSection />
-      <AuthorizedUsersSection />
     </div>
   );
 }
@@ -34,20 +31,19 @@ function SsoConfigSection() {
   const [hasExisting, setHasExisting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<SsoStatus | null>(null);
+
+  const hubUrl = window.location.origin;
+  const redirectUri = `${hubUrl}/auth/entra/callback`;
 
   useEffect(() => {
-    fetch('/api/v1/sso/entra', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json() as Promise<SsoConfig>;
-      })
+    apiFetch<SsoConfig>('/sso/entra')
       .then((data) => {
-        if (data) {
-          setTenantId(data.tenantId);
-          setClientId(data.clientId);
-          setEnabled(data.enabled);
-          setHasExisting(true);
-        }
+        setTenantId(data.tenantId);
+        setClientId(data.clientId);
+        setEnabled(data.enabled);
+        setHasExisting(true);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -88,10 +84,31 @@ function SsoConfigSection() {
     }
   };
 
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await apiFetch<SsoStatus>('/sso/status');
+      setTestResult(result);
+      toast(
+        result.configured
+          ? result.enabled
+            ? 'SSO is configured and enabled'
+            : 'SSO is configured but disabled'
+          : 'SSO is not configured',
+        result.configured && result.enabled ? 'success' : 'info',
+      );
+    } catch {
+      toast('Failed to check SSO status', 'error');
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <section className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-        <h2 className="text-lg font-medium text-white">SSO Configuration</h2>
+        <h2 className="text-lg font-medium text-white">Microsoft Entra ID</h2>
         <p className="mt-2 text-sm text-gray-400">Loading...</p>
       </section>
     );
@@ -99,7 +116,24 @@ function SsoConfigSection() {
 
   return (
     <section className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-      <h2 className="text-lg font-medium text-white">SSO Configuration</h2>
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-medium text-white">Microsoft Entra ID</h2>
+        {hasExisting ? (
+          <span className="flex items-center gap-1.5 text-xs">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${enabled ? 'bg-emerald-400' : 'bg-gray-500'}`}
+            />
+            <span className={enabled ? 'text-emerald-400' : 'text-gray-500'}>
+              {enabled ? 'Configured' : 'Disabled'}
+            </span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-xs">
+            <span className="inline-block h-2 w-2 rounded-full bg-gray-600" />
+            <span className="text-gray-500">Not configured</span>
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-sm text-gray-400">
         Configure Microsoft Entra ID (Azure AD) single sign-on for the dashboard.
       </p>
@@ -118,11 +152,14 @@ function SsoConfigSection() {
             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            Azure Portal &rarr; Entra ID &rarr; Overview &rarr; Tenant ID
+          </p>
         </div>
 
         <div>
           <label htmlFor="clientId" className="block text-xs font-medium text-gray-400 uppercase">
-            Client ID
+            Client ID (Application ID)
           </label>
           <input
             id="clientId"
@@ -133,6 +170,9 @@ function SsoConfigSection() {
             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            Azure Portal &rarr; App registrations &rarr; Your app &rarr; Application (client) ID
+          </p>
         </div>
 
         <div>
@@ -150,9 +190,34 @@ function SsoConfigSection() {
             placeholder={hasExisting ? '••••••••' : 'Enter client secret'}
             className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          {hasExisting && (
-            <p className="mt-1 text-xs text-gray-500">Leave blank to keep the existing secret.</p>
-          )}
+          <p className="mt-1 text-xs text-gray-500">
+            {hasExisting
+              ? 'Leave blank to keep the existing secret.'
+              : 'Azure Portal → App registrations → Certificates & secrets → New client secret'}
+          </p>
+        </div>
+
+        <div>
+          <span className="block text-xs font-medium text-gray-400 uppercase">Redirect URI</span>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="flex-1 rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-gray-300 font-mono">
+              {redirectUri}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(redirectUri);
+                toast('Copied to clipboard', 'success');
+              }}
+              className="rounded-md bg-gray-800 px-3 py-2 text-xs text-gray-400 hover:text-gray-200"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Add this URI to your app registration under Authentication &rarr; Platform
+            configurations &rarr; Web &rarr; Redirect URIs
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -170,159 +235,40 @@ function SsoConfigSection() {
           <span className="text-sm text-gray-300">SSO Enabled</span>
         </div>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save SSO Configuration'}
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function AuthorizedUsersSection() {
-  const { toast } = useToast();
-  const [users, setUsers] = useState<AuthorizedUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState('member');
-  const [adding, setAdding] = useState(false);
-
-  const fetchUsers = useCallback(() => {
-    setLoading(true);
-    apiFetch<{ users: AuthorizedUser[] }>('/authorized-users')
-      .then((data) => setUsers(data.users))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  const handleAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!newEmail.trim()) return;
-
-    setAdding(true);
-    try {
-      await apiFetch('/authorized-users', {
-        method: 'POST',
-        body: JSON.stringify({ email: newEmail.trim(), role: newRole }),
-      });
-      setNewEmail('');
-      setNewRole('member');
-      toast('Authorized user added', 'success');
-      fetchUsers();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to add user';
-      toast(msg, 'error');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await apiFetch(`/authorized-users/${id}`, { method: 'DELETE' });
-      toast('User removed', 'success');
-      fetchUsers();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to remove user';
-      toast(msg, 'error');
-    }
-  };
-
-  return (
-    <section className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-      <h2 className="text-lg font-medium text-white">Authorized SSO Users</h2>
-      <p className="mt-1 text-sm text-gray-400">
-        Users in this list can sign in via SSO. Users not listed will be denied access.
-      </p>
-
-      <form onSubmit={handleAdd} className="mt-6 flex items-end gap-3 max-w-lg">
-        <div className="flex-1">
-          <label htmlFor="newEmail" className="block text-xs font-medium text-gray-400 uppercase">
-            Email
-          </label>
-          <input
-            id="newEmail"
-            type="email"
-            required
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="user@example.com"
-            className="mt-1 block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label htmlFor="newRole" className="block text-xs font-medium text-gray-400 uppercase">
-            Role
-          </label>
-          <select
-            id="newRole"
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            className="mt-1 block rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
           >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
-          </select>
+            {saving ? 'Saving...' : 'Save Configuration'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testing}
+            className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+          >
+            {testing ? 'Testing...' : 'Test Connection'}
+          </button>
         </div>
-        <button
-          type="submit"
-          disabled={adding}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          {adding ? 'Adding...' : 'Add'}
-        </button>
-      </form>
 
-      <div className="mt-6">
-        {loading ? (
-          <p className="text-sm text-gray-400">Loading...</p>
-        ) : users.length === 0 ? (
-          <p className="text-sm text-gray-500">No authorized users configured.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 text-left text-xs font-medium text-gray-400 uppercase">
-                <th className="pb-2 pr-4">Email</th>
-                <th className="pb-2 pr-4">Role</th>
-                <th className="pb-2 pr-4">Added</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="py-3 pr-4 text-white">{user.email}</td>
-                  <td className="py-3 pr-4">
-                    <span className="inline-block rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-300">
-                      {user.roleId}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-gray-400">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(user.id)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {testResult && (
+          <div
+            className={`rounded-md border p-3 text-sm ${
+              testResult.configured && testResult.enabled
+                ? 'border-emerald-800 bg-emerald-950/30 text-emerald-300'
+                : 'border-gray-700 bg-gray-800 text-gray-400'
+            }`}
+          >
+            {testResult.configured
+              ? testResult.enabled
+                ? 'SSO is configured and enabled. Users can sign in with Microsoft.'
+                : 'SSO is configured but currently disabled.'
+              : 'SSO is not yet configured.'}
+          </div>
         )}
-      </div>
+      </form>
     </section>
   );
 }

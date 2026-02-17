@@ -10,6 +10,7 @@ interface ApiKey {
   revokedAt: string | null;
   policyJson: string;
   lastUsedAt: string | null;
+  role: string;
 }
 
 export function ApiKeys() {
@@ -19,6 +20,7 @@ export function ApiKeys() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyRole, setNewKeyRole] = useState('member');
   const [newAgentScope, setNewAgentScope] = useState('');
   const [newProbeScope, setNewProbeScope] = useState('');
   const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name?: string } | null>(
@@ -64,12 +66,14 @@ export function ApiKeys() {
       method: 'POST',
       body: JSON.stringify({
         name: newKeyName.trim(),
+        role: newKeyRole,
         ...(Object.keys(policy).length > 0 ? { policy } : {}),
       }),
     })
       .then((data) => {
         setCreatedKey(data);
         setNewKeyName('');
+        setNewKeyRole('member');
         setNewAgentScope('');
         setNewProbeScope('');
         setShowCreate(false);
@@ -150,15 +154,29 @@ export function ApiKeys() {
           onSubmit={handleCreate}
           className="mt-4 space-y-3 rounded-xl border border-gray-800 bg-gray-900 p-4"
         >
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase mb-1">Key Name</p>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g. claude-desktop"
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Key Name</p>
+              <input
+                type="text"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="e.g. claude-desktop"
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Role</p>
+              <select
+                value={newKeyRole}
+                onChange={(e) => setNewKeyRole(e.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              >
+                <option value="member">Member (MCP only)</option>
+                <option value="admin">Admin (MCP + Dashboard)</option>
+                <option value="owner">Owner (Full access)</option>
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -224,6 +242,7 @@ export function ApiKeys() {
           <thead className="bg-gray-900 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Policy</th>
               <th className="px-4 py-3">Created</th>
@@ -234,7 +253,7 @@ export function ApiKeys() {
           <tbody className="divide-y divide-gray-800">
             {keys.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   No API keys created yet.
                 </td>
               </tr>
@@ -245,6 +264,11 @@ export function ApiKeys() {
                 return (
                   <tr key={k.id} className="bg-gray-950">
                     <td className="px-4 py-3 font-medium text-white">{k.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-300">
+                        {k.role}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       {isRevoked ? (
                         <span className="text-red-400">revoked</span>
