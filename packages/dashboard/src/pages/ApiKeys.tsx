@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
 
 interface ApiKey {
   id: string;
@@ -14,10 +13,6 @@ interface ApiKey {
 }
 
 export function ApiKeys() {
-  return <ApiKeyGate>{(apiKey) => <ApiKeysInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function ApiKeysInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +30,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
   const fetchKeys = useCallback(() => {
     setLoading(true);
     setError(null);
-    authFetch<{ keys: ApiKey[] }>('/api-keys', apiKey)
+    apiFetch<{ keys: ApiKey[] }>('/api-keys')
       .then((data) => setKeys(data.keys))
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Failed to load API keys';
@@ -43,7 +38,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
         toast(msg, 'error');
       })
       .finally(() => setLoading(false));
-  }, [apiKey, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchKeys();
@@ -67,7 +62,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
     if (probeList.length > 0) policy.allowedProbes = probeList;
     if (newCapLevel) policy.maxCapabilityLevel = newCapLevel;
 
-    authFetch<{ id: string; key: string; name: string }>('/api-keys', apiKey, {
+    apiFetch<{ id: string; key: string; name: string }>('/api-keys', {
       method: 'POST',
       body: JSON.stringify({
         name: newKeyName.trim(),
@@ -91,7 +86,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
   };
 
   const handleRevoke = (id: string) => {
-    authFetch(`/api-keys/${id}`, apiKey, { method: 'DELETE' })
+    apiFetch(`/api-keys/${id}`, { method: 'DELETE' })
       .then(() => {
         fetchKeys();
         toast('API key revoked', 'success');

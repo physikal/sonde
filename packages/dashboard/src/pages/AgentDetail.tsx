@@ -145,9 +145,8 @@ export function AgentDetail() {
       {agentOutdated && (
         <div className="mt-4 rounded-xl border border-amber-800/50 bg-amber-900/20 p-4">
           <p className="text-sm text-amber-400">
-            Update Available: v{agentOutdated.currentVersion} &rarr; v
-            {agentOutdated.latestVersion}. Run{' '}
-            <code className="rounded bg-amber-900/50 px-1.5 py-0.5">sonde update</code> on the
+            Update Available: v{agentOutdated.currentVersion} &rarr; v{agentOutdated.latestVersion}.
+            Run <code className="rounded bg-amber-900/50 px-1.5 py-0.5">sonde update</code> on the
             agent to upgrade.
           </p>
         </div>

@@ -1,8 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
 
 interface CredentialFieldDef {
   key: string;
@@ -33,7 +32,11 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
       oauth2: [
         { key: 'clientId', label: 'Client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-        { key: 'tokenUrl', label: 'Token URL', placeholder: 'https://instance.service-now.com/oauth_token.do' },
+        {
+          key: 'tokenUrl',
+          label: 'Token URL',
+          placeholder: 'https://instance.service-now.com/oauth_token.do',
+        },
       ],
     },
   },
@@ -100,7 +103,11 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         { key: 'customerId', label: 'Customer ID' },
         { key: 'clientId', label: 'Client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-        { key: 'tokenUrl', label: 'Token URL', placeholder: 'https://api.cloud.com/cctrustoauth2/...' },
+        {
+          key: 'tokenUrl',
+          label: 'Token URL',
+          placeholder: 'https://api.cloud.com/cctrustoauth2/...',
+        },
       ],
     },
   },
@@ -148,10 +155,6 @@ interface Integration {
 }
 
 export function Integrations() {
-  return <ApiKeyGate>{(apiKey) => <IntegrationsInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function IntegrationsInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -176,7 +179,7 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
   const fetchIntegrations = useCallback(() => {
     setLoading(true);
     setError(null);
-    authFetch<{ integrations: Integration[] }>('/integrations', apiKey)
+    apiFetch<{ integrations: Integration[] }>('/integrations')
       .then((data) => setIntegrations(data.integrations))
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Failed to load integrations';
@@ -184,7 +187,7 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
         toast(msg, 'error');
       })
       .finally(() => setLoading(false));
-  }, [apiKey, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchIntegrations();
@@ -238,7 +241,7 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
 
   const saveIntegration = async (): Promise<string> => {
     if (savedId) return savedId;
-    const data = await authFetch<{ id: string }>('/integrations', apiKey, {
+    const data = await apiFetch<{ id: string }>('/integrations', {
       method: 'POST',
       body: JSON.stringify(buildPayload()),
     });
@@ -266,9 +269,8 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
     setTestResult(null);
     try {
       const id = await saveIntegration();
-      const result = await authFetch<{ success: boolean; message?: string }>(
+      const result = await apiFetch<{ success: boolean; message?: string }>(
         `/integrations/${id}/test`,
-        apiKey,
         { method: 'POST' },
       );
       setTestResult(result);
@@ -371,9 +373,7 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
                   {s}
                 </button>
                 {s < 4 && (
-                  <div
-                    className={`h-px w-8 ${s < step ? 'bg-blue-600/50' : 'bg-gray-700'}`}
-                  />
+                  <div className={`h-px w-8 ${s < step ? 'bg-blue-600/50' : 'bg-gray-700'}`} />
                 )}
               </div>
             ))}
@@ -444,7 +444,8 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-                    Headers <span className="text-gray-600">(optional, one per line: Key: Value)</span>
+                    Headers{' '}
+                    <span className="text-gray-600">(optional, one per line: Key: Value)</span>
                   </p>
                   <textarea
                     value={headersText}
@@ -500,10 +501,14 @@ function IntegrationsInner({ apiKey }: { apiKey: string }) {
                 </div>
                 {currentFields.map((field) => (
                   <div key={field.key}>
-                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">{field.label}</p>
+                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">
+                      {field.label}
+                    </p>
                     <div className="relative">
                       <input
-                        type={field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'}
+                        type={
+                          field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'
+                        }
                         value={credentialValues[field.key] ?? ''}
                         onChange={(e) => setCredential(field.key, e.target.value)}
                         placeholder={field.placeholder}

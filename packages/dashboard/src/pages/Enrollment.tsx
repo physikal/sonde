@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { apiFetch } from '../lib/api';
 
 interface EnrollmentToken {
   token: string;
@@ -20,10 +19,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function Enrollment() {
-  return <ApiKeyGate>{(apiKey) => <EnrollmentInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function EnrollmentInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const [tokens, setTokens] = useState<EnrollmentToken[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +30,7 @@ function EnrollmentInner({ apiKey }: { apiKey: string }) {
   const fetchTokens = useCallback(() => {
     setLoading(true);
     setError(null);
-    authFetch<{ tokens: EnrollmentToken[] }>('/enrollment-tokens', apiKey)
+    apiFetch<{ tokens: EnrollmentToken[] }>('/enrollment-tokens')
       .then((data) => setTokens(data.tokens))
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Failed to load tokens';
@@ -43,7 +38,7 @@ function EnrollmentInner({ apiKey }: { apiKey: string }) {
         toast(msg, 'error');
       })
       .finally(() => setLoading(false));
-  }, [apiKey, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchTokens();
@@ -51,7 +46,7 @@ function EnrollmentInner({ apiKey }: { apiKey: string }) {
 
   const handleCreate = () => {
     setCreating(true);
-    authFetch<{ token: string; expiresAt: string }>('/enrollment-tokens', apiKey, {
+    apiFetch<{ token: string; expiresAt: string }>('/enrollment-tokens', {
       method: 'POST',
     })
       .then((data) => {

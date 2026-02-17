@@ -1,8 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
 
 interface CredentialFieldDef {
   key: string;
@@ -140,10 +139,6 @@ interface Integration {
 }
 
 export function IntegrationDetail() {
-  return <ApiKeyGate>{(apiKey) => <IntegrationDetailInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -174,27 +169,24 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
 
   const fetchIntegration = useCallback(() => {
     if (!id) return;
-    authFetch<Integration>(`/integrations/${id}`, apiKey)
+    apiFetch<Integration>(`/integrations/${id}`)
       .then(setIntegration)
       .catch(() => setError('Integration not found'));
-  }, [id, apiKey]);
+  }, [id]);
 
   useEffect(() => {
     fetchIntegration();
   }, [fetchIntegration]);
 
-  const typeDef = integration
-    ? INTEGRATION_TYPES.find((t) => t.value === integration.type)
-    : null;
+  const typeDef = integration ? INTEGRATION_TYPES.find((t) => t.value === integration.type) : null;
 
   const handleTest = async () => {
     if (!id) return;
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await authFetch<{ success: boolean; message?: string }>(
+      const result = await apiFetch<{ success: boolean; message?: string }>(
         `/integrations/${id}/test`,
-        apiKey,
         { method: 'POST' },
       );
       setTestResult(result);
@@ -230,7 +222,7 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
     setSavingConfig(true);
     try {
       const headers = parseHeaders(editHeadersText);
-      await authFetch(`/integrations/${id}`, apiKey, {
+      await apiFetch(`/integrations/${id}`, {
         method: 'PUT',
         body: JSON.stringify({
           config: {
@@ -254,7 +246,7 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
     if (!id || !integration) return;
     setSavingCreds(true);
     try {
-      await authFetch(`/integrations/${id}`, apiKey, {
+      await apiFetch(`/integrations/${id}`, {
         method: 'PUT',
         body: JSON.stringify({
           credentials: {
@@ -280,7 +272,7 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
     if (!id || !integration || deleteConfirmName !== integration.name) return;
     setDeleting(true);
     try {
-      await authFetch(`/integrations/${id}`, apiKey, { method: 'DELETE' });
+      await apiFetch(`/integrations/${id}`, { method: 'DELETE' });
       toast('Integration deleted', 'success');
       navigate('/integrations');
     } catch (err: unknown) {
@@ -357,9 +349,7 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
           <div>
             <dt className="text-xs uppercase text-gray-500">Last Tested</dt>
             <dd className="mt-0.5 text-sm text-gray-300">
-              {integration.lastTestedAt
-                ? relativeTime(integration.lastTestedAt)
-                : 'Never'}
+              {integration.lastTestedAt ? relativeTime(integration.lastTestedAt) : 'Never'}
             </dd>
           </div>
           <div>
@@ -392,9 +382,7 @@ function IntegrationDetailInner({ apiKey }: { apiKey: string }) {
           >
             Last test: {integration.lastTestResult === 'ok' ? 'Passed' : integration.lastTestResult}
             {integration.lastTestedAt && (
-              <span className="ml-2 text-gray-500">
-                ({relativeTime(integration.lastTestedAt)})
-              </span>
+              <span className="ml-2 text-gray-500">({relativeTime(integration.lastTestedAt)})</span>
             )}
           </div>
         )}

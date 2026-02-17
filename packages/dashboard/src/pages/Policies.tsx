@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
 
 interface ApiKey {
   id: string;
@@ -19,10 +18,6 @@ interface Policy {
 }
 
 export function Policies() {
-  return <ApiKeyGate>{(apiKey) => <PoliciesInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function PoliciesInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +27,7 @@ function PoliciesInner({ apiKey }: { apiKey: string }) {
   const fetchKeys = useCallback(() => {
     setLoading(true);
     setError(null);
-    authFetch<{ keys: ApiKey[] }>('/api-keys', apiKey)
+    apiFetch<{ keys: ApiKey[] }>('/api-keys')
       .then((data) => setKeys(data.keys))
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Failed to load policies';
@@ -40,7 +35,7 @@ function PoliciesInner({ apiKey }: { apiKey: string }) {
         toast(msg, 'error');
       })
       .finally(() => setLoading(false));
-  }, [apiKey, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchKeys();
@@ -97,7 +92,6 @@ function PoliciesInner({ apiKey }: { apiKey: string }) {
                 <PolicyEditor
                   keyId={k.id}
                   policyJson={k.policyJson}
-                  apiKey={apiKey}
                   onSaved={() => {
                     setEditingId(null);
                     fetchKeys();
@@ -152,12 +146,10 @@ function PolicySummary({ policyJson }: { policyJson: string }) {
 function PolicyEditor({
   keyId,
   policyJson,
-  apiKey,
   onSaved,
 }: {
   keyId: string;
   policyJson: string;
-  apiKey: string;
   onSaved: () => void;
 }) {
   const policy = safeParse(policyJson);
@@ -215,7 +207,7 @@ function PolicyEditor({
       .filter(Boolean);
     if (clientList.length > 0) newPolicy.allowedClients = clientList;
 
-    authFetch(`/api-keys/${keyId}/policy`, apiKey, {
+    apiFetch(`/api-keys/${keyId}/policy`, {
       method: 'PUT',
       body: JSON.stringify({ policy: newPolicy }),
     })

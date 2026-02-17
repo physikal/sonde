@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
 
 interface AuditEntry {
   id: number;
@@ -31,10 +30,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function Audit() {
-  return <ApiKeyGate>{(apiKey) => <AuditInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function AuditInner({ apiKey }: { apiKey: string }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +46,10 @@ function AuditInner({ apiKey }: { apiKey: string }) {
 
   // Fetch API key list for dropdown
   useEffect(() => {
-    authFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys', apiKey).then((data) =>
+    apiFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys').then((data) =>
       setApiKeys(data.keys.map((k) => ({ id: k.id, name: k.name }))),
     );
-  }, [apiKey]);
+  }, []);
 
   const fetchEntries = useCallback(() => {
     setLoading(true);
@@ -64,13 +59,13 @@ function AuditInner({ apiKey }: { apiKey: string }) {
     if (filterStartDate) params.set('startDate', new Date(filterStartDate).toISOString());
     if (filterEndDate) params.set('endDate', new Date(filterEndDate).toISOString());
 
-    authFetch<{ entries: AuditEntry[] }>(`/audit?${params.toString()}`, apiKey)
+    apiFetch<{ entries: AuditEntry[] }>(`/audit?${params.toString()}`)
       .then((data) => setEntries(data.entries))
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : 'Failed to load audit entries'),
       )
       .finally(() => setLoading(false));
-  }, [apiKey, limit, filterApiKeyId, filterStartDate, filterEndDate]);
+  }, [limit, filterApiKeyId, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     fetchEntries();
@@ -78,7 +73,7 @@ function AuditInner({ apiKey }: { apiKey: string }) {
 
   const handleVerify = () => {
     setVerifying(true);
-    authFetch<ChainStatus>('/audit/verify', apiKey)
+    apiFetch<ChainStatus>('/audit/verify')
       .then(setChain)
       .finally(() => setVerifying(false));
   };
