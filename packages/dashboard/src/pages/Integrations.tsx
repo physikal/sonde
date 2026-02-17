@@ -26,12 +26,28 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
-        { key: 'username', label: 'Username', placeholder: 'admin' },
-        { key: 'password', label: 'Password', sensitive: true },
+        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'ServiceNow account password',
+          sensitive: true,
+        },
       ],
       oauth2: [
-        { key: 'clientId', label: 'Client ID' },
+        {
+          key: 'clientId',
+          label: 'Client ID',
+          placeholder: 'e.g. 0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d',
+        },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
+        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'ServiceNow account password',
+          sensitive: true,
+        },
         {
           key: 'tokenUrl',
           label: 'Token URL',
@@ -47,8 +63,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
-        { key: 'apiKey', label: 'API Key', sensitive: true },
-        { key: 'appKey', label: 'Application Key', sensitive: true },
+        {
+          key: 'apiKey',
+          label: 'API Key',
+          placeholder: 'Datadog API key (32 hex characters)',
+          sensitive: true,
+        },
+        {
+          key: 'appKey',
+          label: 'Application Key',
+          placeholder: 'Datadog Application key (40 characters)',
+          sensitive: true,
+        },
       ],
     },
   },
@@ -58,8 +84,22 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     description: 'Incident management and alerting',
     authMethods: ['api_key', 'bearer_token'],
     credentialFields: {
-      api_key: [{ key: 'apiKey', label: 'API Key', sensitive: true }],
-      bearer_token: [{ key: 'token', label: 'Bearer Token', sensitive: true }],
+      api_key: [
+        {
+          key: 'apiKey',
+          label: 'REST API Key',
+          placeholder: 'e.g. y_NbAkKc66ryYTWUXYEu',
+          sensitive: true,
+        },
+      ],
+      bearer_token: [
+        {
+          key: 'token',
+          label: 'OAuth Token',
+          placeholder: 'e.g. pdus+_0XBPWQQ_39435d07-...',
+          sensitive: true,
+        },
+      ],
     },
   },
   {
@@ -69,22 +109,47 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'bearer_token'],
     credentialFields: {
       api_key: [
-        { key: 'email', label: 'Email', placeholder: 'user@example.com' },
-        { key: 'apiKey', label: 'API Key', sensitive: true },
+        { key: 'email', label: 'Account Email', placeholder: 'user@example.com' },
+        {
+          key: 'apiKey',
+          label: 'Global API Key',
+          placeholder: 'Cloudflare Global API Key (37 hex characters)',
+          sensitive: true,
+        },
       ],
-      bearer_token: [{ key: 'token', label: 'API Token', sensitive: true }],
+      bearer_token: [
+        {
+          key: 'token',
+          label: 'API Token',
+          placeholder: 'Scoped API token from Cloudflare dashboard',
+          sensitive: true,
+        },
+      ],
     },
   },
   {
     value: 'entra_id',
     label: 'Entra ID',
-    description: 'Azure Active Directory identity management',
+    description: 'Azure Active Directory identity and Microsoft Graph',
     authMethods: ['oauth2'],
     credentialFields: {
       oauth2: [
-        { key: 'tenantId', label: 'Tenant ID' },
-        { key: 'clientId', label: 'Client ID' },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
+        {
+          key: 'tenantId',
+          label: 'Tenant ID',
+          placeholder: 'e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47',
+        },
+        {
+          key: 'clientId',
+          label: 'Client ID',
+          placeholder: 'e.g. 535fb089-9ff3-47b6-9bfb-4f1264799865',
+        },
+        {
+          key: 'clientSecret',
+          label: 'Client Secret',
+          placeholder: 'App registration client secret',
+          sensitive: true,
+        },
       ],
     },
   },
@@ -95,18 +160,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
-        { key: 'customerId', label: 'Customer ID' },
-        { key: 'clientId', label: 'Client ID' },
+        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
+        { key: 'clientId', label: 'Client ID', placeholder: 'Service Principal client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
       ],
       oauth2: [
-        { key: 'customerId', label: 'Customer ID' },
-        { key: 'clientId', label: 'Client ID' },
+        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
+        { key: 'clientId', label: 'Client ID', placeholder: 'Service Principal client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
         {
           key: 'tokenUrl',
           label: 'Token URL',
-          placeholder: 'https://api.cloud.com/cctrustoauth2/...',
+          placeholder: 'https://api.cloud.com/cctrustoauth2/{customerId}/tokens/clients',
         },
       ],
     },
@@ -117,16 +182,32 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     description: 'Connect to any REST API',
     authMethods: ['api_key', 'bearer_token', 'oauth2'],
     credentialFields: {
-      api_key: [{ key: 'apiKey', label: 'API Key', sensitive: true }],
-      bearer_token: [{ key: 'token', label: 'Bearer Token', sensitive: true }],
+      api_key: [{ key: 'apiKey', label: 'API Key', placeholder: 'Your API key', sensitive: true }],
+      bearer_token: [
+        { key: 'token', label: 'Bearer Token', placeholder: 'Your bearer token', sensitive: true },
+      ],
       oauth2: [
-        { key: 'clientId', label: 'Client ID' },
+        { key: 'clientId', label: 'Client ID', placeholder: 'OAuth client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-        { key: 'tokenUrl', label: 'Token URL' },
+        {
+          key: 'tokenUrl',
+          label: 'Token URL',
+          placeholder: 'https://auth.example.com/oauth/token',
+        },
       ],
     },
   },
 ];
+
+const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
+  servicenow: 'https://instance.service-now.com',
+  datadog: 'https://api.datadoghq.com',
+  pagerduty: 'https://api.pagerduty.com',
+  cloudflare: 'https://api.cloudflare.com/client/v4',
+  entra_id: 'https://graph.microsoft.com/v1.0',
+  citrix: 'https://api.cloud.com',
+  custom: 'https://api.example.com',
+};
 
 const AUTH_METHOD_LABELS: Record<string, string> = {
   api_key: 'API Key',
@@ -438,7 +519,7 @@ export function Integrations() {
                     type="url"
                     value={endpoint}
                     onChange={(e) => setEndpoint(e.target.value)}
-                    placeholder="https://api.example.com"
+                    placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
                     className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
