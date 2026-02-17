@@ -55,8 +55,19 @@ Agent management TUI (Ink v5), installer TUI, pack management CLI, privilege dro
 ### Phase 4 — Hub Dashboard
 React 19 + Vite + Tailwind v4 SPA served by hub. 5-step setup wizard (Welcome, API Key, AI Tools, Agent Enroll, Complete). App shell with sidebar navigation. Overview dashboard with hub health + agent count. Fleet page with real-time agent status. Agent detail page with probe history. Enrollment page with token generation and one-liner install commands. Try It page for interactive probe execution. Setup state persisted in SQLite `setup` table. Hub serves static assets with SPA fallback for client-side routing.
 
-### Phase 4.5 — Production Hardening (current)
+### Phase 4.5 — Production Hardening
 Agent installer route (`GET /install` — `curl | bash` bootstrap). Token-only enrollment (no master API key required for agents). Hub mints scoped API keys during token enrollment for persistent agent auth. Stable agent identity (reuse UUID on re-enrollment by name). Concurrent probe support via requestId correlation. Dynamic version from package.json. Stale socket cleanup on agent reconnect. Dashboard real-time status via WebSocket broadcast. Changesets wired for versioning/publishing.
+
+### Phase 6 — Docs
+Astro + Starlight docs site (`@sonde/docs`). Getting started guide, hub/agent/pack docs, AI integration guides, architecture/protocol/security/API reference.
+
+### Phase 7 — Integration Framework
+Server-side integration packs (no agent required). Integration types in `@sonde/shared`. `IntegrationExecutor` with retry/timeout, `IntegrationManager` with encrypted credential storage (AES-256-GCM), `ProbeRouter` (routes to agent dispatcher or integration executor). httpbin reference pack with ip/headers/status probes. Pack catalog pattern fixes bootstrapping bug. REST CRUD endpoints for integrations. Dashboard Integrations + IntegrationDetail pages.
+
+### Phase 8a — Session-Based Auth (current)
+Replaced HTTP Basic Auth with session-based authentication (prep for Entra SSO). Sessions table (migration 004) with sliding 8hr window. `SessionManager` class. Cookie-based session middleware + API key auth middleware (combined: session first, API key fallback). Local admin login via `SONDE_ADMIN_USER`/`SONDE_ADMIN_PASSWORD` env vars. Auth routes: `POST /auth/local/login`, `GET /auth/status`, `DELETE /auth/session`. Dashboard: Login page, `AuthProvider`/`useAuth` hook, auth guard in App router, TopBar with user info + role badge + logout, Sidebar `SidebarItem` wrapper with `minimumRole` prop (wired but inactive — role-based hiding comes in 8a.3).
+
+**Next up (Phase 8a.2+):** Entra ID SSO integration, role-based sidebar visibility, RBAC enforcement on API endpoints.
 
 ## Key Architecture Rules
 
@@ -96,17 +107,19 @@ sonde/
 ├── packages/
 │   ├── shared/src/
 │   │   ├── schemas/               # protocol.ts, probes.ts, packs.ts, mcp.ts
-│   │   ├── types/                 # common.ts, agent.ts, hub.ts
+│   │   ├── types/                 # common.ts, agent.ts, hub.ts, integrations.ts
 │   │   ├── crypto/                # signing.ts (RSA-SHA256)
 │   │   └── index.ts
 │   ├── hub/src/
 │   │   ├── index.ts               # Entry: Hono + WS + static serving
+│   │   ├── auth/                  # sessions.ts, session-middleware.ts, local-auth.ts
 │   │   ├── mcp/server.ts          # MCP StreamableHTTP via SDK
 │   │   ├── mcp/tools/             # probe.ts, list-agents.ts, diagnose.ts, agent-overview.ts
 │   │   ├── mcp/auth.ts            # API key + OAuth validation
 │   │   ├── ws/server.ts           # WebSocket for agents (mTLS)
 │   │   ├── ws/dispatcher.ts       # Route probes to agents
-│   │   ├── db/index.ts            # SQLite: agents, audit, api_keys, oauth, setup
+│   │   ├── db/index.ts            # SQLite: agents, audit, api_keys, oauth, setup, sessions
+│   │   ├── integrations/          # executor.ts, manager.ts, probe-router.ts, crypto.ts
 │   │   ├── crypto/                # ca.ts, mtls.ts
 │   │   ├── engine/                # runbooks.ts, policy.ts
 │   │   ├── oauth/                 # provider.ts
@@ -124,7 +137,8 @@ sonde/
 │   │   ├── index.ts               # Pack registry
 │   │   ├── system/                # disk-usage, memory-usage, cpu-usage
 │   │   ├── docker/                # containers-list, images-list, logs-tail, daemon-info
-│   │   └── systemd/               # services-list, service-status, journal-query
+│   │   ├── systemd/               # services-list, service-status, journal-query
+│   │   └── integrations/          # httpbin.ts (server-side integration packs)
 │   └── dashboard/
 │       ├── index.html             # Vite SPA entry
 │       ├── vite.config.ts         # React plugin, dev proxy
@@ -134,7 +148,8 @@ sonde/
 │           ├── App.tsx            # Router: setup wizard vs app shell
 │           ├── index.css          # Tailwind v4 import
 │           ├── lib/api.ts         # Fetch wrapper
-│           ├── hooks/             # useSetupStatus.ts
+│           ├── hooks/             # useSetupStatus.ts, useAuth.tsx
+│           ├── pages/             # Login, Fleet, AgentDetail, Integrations, etc.
 │           └── components/
 │               ├── layout/        # AppShell, Sidebar, TopBar
 │               ├── setup/         # SetupWizard + 5 step components
@@ -155,11 +170,13 @@ sonde/
 - **Hub routing**: Raw Node HTTP server routes `/mcp` → MCP handler, OAuth paths → Express sub-app, rest → Hono via `getRequestListener`. Per-session McpServer instances.
 - **Probe testability**: ExecFn injection — probe handlers accept `(params, exec)` where `exec` is `(cmd, args) => Promise<string>`. Tests mock `exec`.
 - **Dispatcher**: Supports concurrent probes per agent via `requestId` correlation (`Map<requestId, PendingRequest>`). Old agents without `requestId` fall back to first-match by agentId. Stale socket cleanup in `registerAgent` prevents delayed `close` events from evicting live reconnections.
-- **Auth**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param. WS upgrade accepts master API key, scoped API keys (hash lookup), or enrollment tokens. OAuth 2.0 with PKCE for MCP clients.
+- **Auth (dashboard)**: Session-based. `SessionManager` creates sessions (crypto.randomBytes(32) hex), stores in SQLite `sessions` table with 8hr sliding window expiry. Cookie `sonde_session` (httpOnly, secure, sameSite=Lax). Session middleware runs on `/api/*` and `/auth/*`, attaches `UserContext` to Hono context. API key middleware runs after on `/api/v1/*` as fallback. Public paths (`/api/v1/setup/status`, `/api/v1/setup/complete`, `/api/v1/agents`, `/api/v1/packs`) bypass auth. Local admin login validates against `SONDE_ADMIN_USER`/`SONDE_ADMIN_PASSWORD` env vars. Hono app typed with `Env = { Variables: { user: UserContext } }`.
+- **Auth (MCP/WS)**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param. WS upgrade accepts master API key, scoped API keys (hash lookup), or enrollment tokens. OAuth 2.0 with PKCE for MCP clients.
 - **Enrollment flow**: Tokens are one-time-use. Hub auto-detects enrollment tokens from bearer auth (supports both CLI `--token` and TUI). On token enrollment, hub mints a scoped API key (`agent:<name>`) and returns it in the `hub.ack`. Agent saves it for persistent reconnect auth. Stable agent identity: same name → same UUID across re-enrollments.
 - **Agent version**: Read dynamically from `package.json` via `import.meta.url` in `src/version.ts`. Used in CLI output, probe metadata, and registration messages. `sonde --version` flag supported.
 - **Dashboard**: Tailwind v4 via `@tailwindcss/postcss` (not `@tailwindcss/vite`) due to monorepo Vite version conflict (root has v5 from vitest, dashboard needs v6). Hub serves built dashboard assets with SPA fallback.
 - **Setup flow**: First-boot wizard persisted in `setup` table. `GET /api/v1/setup/status` is unauthenticated. `POST /api/v1/setup/complete` is one-time (409 on repeat).
+- **Integrations**: Server-side integration packs (no agent required). `IntegrationExecutor` registers packs and executes probes with injected `fetchFn` (retry on 5xx, configurable timeout). `IntegrationManager` handles CRUD with AES-256-GCM encrypted credential storage in SQLite. `ProbeRouter` dispatches probes — prefixed probes (e.g. `httpbin.ip`) go to executor, others go to agent dispatcher. Pack catalog (`ReadonlyMap<string, IntegrationPack>`) passed to manager constructor to avoid bootstrapping bug where findPack searched empty executor.
 - **Install script**: `GET /install` returns a bash bootstrapper that installs Node.js 22 + `@sonde/agent`, then runs `sonde install --hub <url>` for the TUI. Supports Linux (apt/dnf/yum) and macOS (brew).
 
 ## Deployment
