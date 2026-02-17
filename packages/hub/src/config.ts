@@ -3,7 +3,7 @@ import { DEFAULT_HUB_PORT } from '@sonde/shared';
 export interface HubConfig {
   port: number;
   host: string;
-  apiKey: string;
+  secret: string;
   dbPath: string;
   tlsEnabled: boolean;
   hubUrl?: string;
@@ -12,12 +12,19 @@ export interface HubConfig {
 }
 
 export function loadConfig(): HubConfig {
-  const apiKey = process.env.SONDE_API_KEY;
-  if (!apiKey) {
-    throw new Error('SONDE_API_KEY environment variable is required');
+  let secret = process.env.SONDE_SECRET;
+  if (!secret && process.env.SONDE_API_KEY) {
+    secret = process.env.SONDE_API_KEY;
+    console.warn(
+      'SONDE_API_KEY is deprecated. Please use SONDE_SECRET instead. ' +
+        'SONDE_SECRET is used only for encryption; API keys are now managed via the dashboard.',
+    );
   }
-  if (apiKey.length < 16) {
-    throw new Error('SONDE_API_KEY must be at least 16 characters.');
+  if (!secret) {
+    throw new Error('SONDE_SECRET environment variable is required');
+  }
+  if (secret.length < 16) {
+    throw new Error('SONDE_SECRET must be at least 16 characters.');
   }
 
   const port = Number(process.env.PORT) || DEFAULT_HUB_PORT;
@@ -31,12 +38,10 @@ export function loadConfig(): HubConfig {
   return {
     port,
     host: process.env.HOST ?? '0.0.0.0',
-    apiKey,
+    secret,
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',
     tlsEnabled: process.env.SONDE_TLS === 'true',
     hubUrl: process.env.SONDE_HUB_URL || undefined,
-    ...(adminUser !== undefined && adminPassword !== undefined
-      ? { adminUser, adminPassword }
-      : {}),
+    ...(adminUser !== undefined && adminPassword !== undefined ? { adminUser, adminPassword } : {}),
   };
 }

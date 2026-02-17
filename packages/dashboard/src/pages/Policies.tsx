@@ -12,8 +12,6 @@ interface ApiKey {
 interface Policy {
   allowedAgents?: string[];
   allowedProbes?: string[];
-  maxCapabilityLevel?: string;
-  agentCapabilities?: Record<string, string>;
   allowedClients?: string[];
 }
 
@@ -111,8 +109,6 @@ function PolicySummary({ policyJson }: { policyJson: string }) {
   const policy = safeParse(policyJson);
   const agents = (policy.allowedAgents as string[] | undefined) ?? [];
   const probes = (policy.allowedProbes as string[] | undefined) ?? [];
-  const cap = (policy.maxCapabilityLevel as string | undefined) ?? null;
-  const agentCaps = (policy.agentCapabilities as Record<string, string> | undefined) ?? {};
   const clients = (policy.allowedClients as string[] | undefined) ?? [];
 
   return (
@@ -123,17 +119,6 @@ function PolicySummary({ policyJson }: { policyJson: string }) {
       <span className="rounded bg-gray-800 px-2 py-1 text-gray-400">
         Probes: {probes.length > 0 ? probes.join(', ') : 'all'}
       </span>
-      <span className="rounded bg-gray-800 px-2 py-1 text-gray-400">
-        Max capability: {cap ?? 'unlimited'}
-      </span>
-      {Object.keys(agentCaps).length > 0 && (
-        <span className="rounded bg-gray-800 px-2 py-1 text-gray-400">
-          Per-agent caps:{' '}
-          {Object.entries(agentCaps)
-            .map(([agent, level]) => `${agent}=${level}`)
-            .join(', ')}
-        </span>
-      )}
       {clients.length > 0 && (
         <span className="rounded bg-blue-900/30 border border-blue-800 px-2 py-1 text-blue-400">
           Clients: {clients.join(', ')}
@@ -155,14 +140,6 @@ function PolicyEditor({
   const policy = safeParse(policyJson);
   const [agents, setAgents] = useState((policy.allowedAgents as string[])?.join(', ') ?? '');
   const [probes, setProbes] = useState((policy.allowedProbes as string[])?.join(', ') ?? '');
-  const [capLevel, setCapLevel] = useState((policy.maxCapabilityLevel as string) ?? '');
-  const [agentCaps, setAgentCaps] = useState(() => {
-    const caps = policy.agentCapabilities as Record<string, string> | undefined;
-    if (!caps || Object.keys(caps).length === 0) return '';
-    return Object.entries(caps)
-      .map(([agent, level]) => `${agent}=${level}`)
-      .join('\n');
-  });
   const [allowedClients, setAllowedClients] = useState(
     ((policy.allowedClients as string[]) ?? []).join(', '),
   );
@@ -186,19 +163,6 @@ function PolicyEditor({
 
     if (agentList.length > 0) newPolicy.allowedAgents = agentList;
     if (probeList.length > 0) newPolicy.allowedProbes = probeList;
-    if (capLevel) newPolicy.maxCapabilityLevel = capLevel;
-
-    // Parse per-agent capabilities (agentName=level per line)
-    const capsMap: Record<string, string> = {};
-    for (const line of agentCaps.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx > 0) {
-        capsMap[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
-      }
-    }
-    if (Object.keys(capsMap).length > 0) newPolicy.agentCapabilities = capsMap;
 
     // Parse client allowlist
     const clientList = allowedClients
@@ -242,31 +206,6 @@ function PolicyEditor({
           onChange={(e) => setProbes(e.target.value)}
           placeholder="e.g. system.*, docker.container.*"
           className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-        />
-      </div>
-      <div>
-        <p className="text-xs font-medium text-gray-500 uppercase mb-1">Max Capability Level</p>
-        <select
-          value={capLevel}
-          onChange={(e) => setCapLevel(e.target.value)}
-          className="rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-        >
-          <option value="">Unlimited</option>
-          <option value="observe">Observe (read-only)</option>
-          <option value="interact">Interact</option>
-          <option value="manage">Manage (full)</option>
-        </select>
-      </div>
-      <div>
-        <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-          Per-Agent Capabilities (one per line: agentName=level)
-        </p>
-        <textarea
-          value={agentCaps}
-          onChange={(e) => setAgentCaps(e.target.value)}
-          placeholder={'e.g.\nprod-server=observe\nstaging-web=interact'}
-          rows={3}
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none font-mono"
         />
       </div>
       <div>

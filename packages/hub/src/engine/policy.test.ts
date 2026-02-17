@@ -13,48 +13,30 @@ function makeAuth(overrides: Partial<AuthContext> = {}): AuthContext {
 describe('evaluateProbeAccess', () => {
   it('empty policy allows all', () => {
     const auth = makeAuth();
-    const result = evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage', 'observe');
+    const result = evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage');
     expect(result.allowed).toBe(true);
   });
 
   it('allowedAgents restricts to listed agents', () => {
     const auth = makeAuth({ policy: { allowedAgents: ['agent-a', 'agent-b'] } });
 
-    expect(evaluateProbeAccess(auth, 'agent-a', 'system.disk.usage', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'agent-c', 'system.disk.usage', 'observe').allowed).toBe(
-      false,
-    );
+    expect(evaluateProbeAccess(auth, 'agent-a', 'system.disk.usage').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'agent-c', 'system.disk.usage').allowed).toBe(false);
   });
 
   it('allowedProbes with exact match', () => {
     const auth = makeAuth({ policy: { allowedProbes: ['system.disk.usage'] } });
 
-    expect(evaluateProbeAccess(auth, 'a', 'system.disk.usage', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'system.memory.usage', 'observe').allowed).toBe(false);
+    expect(evaluateProbeAccess(auth, 'a', 'system.disk.usage').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'a', 'system.memory.usage').allowed).toBe(false);
   });
 
   it('allowedProbes with glob pattern', () => {
     const auth = makeAuth({ policy: { allowedProbes: ['system.*'] } });
 
-    expect(evaluateProbeAccess(auth, 'a', 'system.disk.usage', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'system.memory.usage', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'docker.containers.list', 'observe').allowed).toBe(false);
-  });
-
-  it('maxCapabilityLevel observe blocks interact and manage', () => {
-    const auth = makeAuth({ policy: { maxCapabilityLevel: 'observe' } });
-
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'interact').allowed).toBe(false);
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'manage').allowed).toBe(false);
-  });
-
-  it('maxCapabilityLevel interact allows observe and interact', () => {
-    const auth = makeAuth({ policy: { maxCapabilityLevel: 'interact' } });
-
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'interact').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'a', 'p', 'manage').allowed).toBe(false);
+    expect(evaluateProbeAccess(auth, 'a', 'system.disk.usage').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'a', 'system.memory.usage').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'a', 'docker.containers.list').allowed).toBe(false);
   });
 
   it('combined constraints: all must pass', () => {
@@ -62,63 +44,26 @@ describe('evaluateProbeAccess', () => {
       policy: {
         allowedAgents: ['agent-1'],
         allowedProbes: ['system.*'],
-        maxCapabilityLevel: 'observe',
       },
     });
 
     // All pass
-    expect(evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage', 'observe').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage').allowed).toBe(true);
     // Wrong agent
-    expect(evaluateProbeAccess(auth, 'agent-2', 'system.disk.usage', 'observe').allowed).toBe(
-      false,
-    );
+    expect(evaluateProbeAccess(auth, 'agent-2', 'system.disk.usage').allowed).toBe(false);
     // Wrong probe
-    expect(evaluateProbeAccess(auth, 'agent-1', 'docker.info', 'observe').allowed).toBe(false);
-    // Wrong capability
-    expect(evaluateProbeAccess(auth, 'agent-1', 'system.disk.usage', 'manage').allowed).toBe(false);
+    expect(evaluateProbeAccess(auth, 'agent-1', 'docker.info').allowed).toBe(false);
   });
 
-  it('per-agent cap restricts specific agent', () => {
-    const auth = makeAuth({
-      policy: { agentCapabilities: { 'agent-1': 'observe' } },
-    });
+  it('empty policy key has full access', () => {
+    const auth: AuthContext = { type: 'api_key', keyId: 'default', policy: {} };
 
-    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'interact').allowed).toBe(false);
-    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'manage').allowed).toBe(false);
-  });
-
-  it('per-agent cap does not affect other agents', () => {
-    const auth = makeAuth({
-      policy: { agentCapabilities: { 'agent-1': 'observe' } },
-    });
-
-    // agent-2 is not in agentCapabilities, so no per-agent restriction
-    expect(evaluateProbeAccess(auth, 'agent-2', 'p', 'manage').allowed).toBe(true);
-  });
-
-  it('global maxCapabilityLevel still blocks even if per-agent allows higher', () => {
-    const auth = makeAuth({
-      policy: {
-        maxCapabilityLevel: 'observe',
-        agentCapabilities: { 'agent-1': 'manage' },
-      },
-    });
-
-    // Global cap is observe, so even though per-agent says manage, observe is the ceiling
-    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'observe').allowed).toBe(true);
-    expect(evaluateProbeAccess(auth, 'agent-1', 'p', 'interact').allowed).toBe(false);
-  });
-
-  it('legacy key (empty policy) has full access', () => {
-    const auth: AuthContext = { type: 'api_key', keyId: 'legacy', policy: {} };
-
-    expect(evaluateProbeAccess(auth, 'any-agent', 'any.probe', 'manage').allowed).toBe(true);
+    expect(evaluateProbeAccess(auth, 'any-agent', 'any.probe').allowed).toBe(true);
   });
 
   it('denied result includes reason', () => {
     const auth = makeAuth({ policy: { allowedAgents: ['agent-1'] } });
-    const result = evaluateProbeAccess(auth, 'agent-2', 'p', 'observe');
+    const result = evaluateProbeAccess(auth, 'agent-2', 'p');
 
     expect(result.allowed).toBe(false);
     expect(result.reason).toContain('agent-2');

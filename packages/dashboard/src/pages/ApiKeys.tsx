@@ -21,8 +21,7 @@ export function ApiKeys() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newAgentScope, setNewAgentScope] = useState('');
   const [newProbeScope, setNewProbeScope] = useState('');
-  const [newCapLevel, setNewCapLevel] = useState('');
-  const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name: string } | null>(
+  const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name?: string } | null>(
     null,
   );
   const [creating, setCreating] = useState(false);
@@ -60,7 +59,6 @@ export function ApiKeys() {
       .filter(Boolean);
     if (agentList.length > 0) policy.allowedAgents = agentList;
     if (probeList.length > 0) policy.allowedProbes = probeList;
-    if (newCapLevel) policy.maxCapabilityLevel = newCapLevel;
 
     apiFetch<{ id: string; key: string; name: string }>('/api-keys', {
       method: 'POST',
@@ -74,7 +72,6 @@ export function ApiKeys() {
         setNewKeyName('');
         setNewAgentScope('');
         setNewProbeScope('');
-        setNewCapLevel('');
         setShowCreate(false);
         fetchKeys();
         toast(`API key "${data.name}" created`, 'success');
@@ -93,6 +90,18 @@ export function ApiKeys() {
       })
       .catch((err: unknown) =>
         toast(err instanceof Error ? err.message : 'Failed to revoke key', 'error'),
+      );
+  };
+
+  const handleRotate = (id: string) => {
+    apiFetch<{ id: string; key: string }>(`/api-keys/${id}/rotate`, { method: 'POST' })
+      .then((data) => {
+        setCreatedKey(data);
+        fetchKeys();
+        toast('API key rotated', 'success');
+      })
+      .catch((err: unknown) =>
+        toast(err instanceof Error ? err.message : 'Failed to rotate key', 'error'),
       );
   };
 
@@ -151,7 +160,7 @@ export function ApiKeys() {
               className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
             />
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase mb-1">
                 Agent Scope (comma-separated)
@@ -176,19 +185,6 @@ export function ApiKeys() {
                 className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Max Capability</p>
-              <select
-                value={newCapLevel}
-                onChange={(e) => setNewCapLevel(e.target.value)}
-                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">Unlimited</option>
-                <option value="observe">Observe</option>
-                <option value="interact">Interact</option>
-                <option value="manage">Manage</option>
-              </select>
-            </div>
           </div>
           <button
             type="submit"
@@ -200,12 +196,14 @@ export function ApiKeys() {
         </form>
       )}
 
-      {/* Newly created key (shown once) */}
+      {/* Newly created / rotated key (shown once) */}
       {createdKey && (
         <div className="mt-4 rounded-xl border border-amber-800 bg-amber-950/30 p-5">
-          <p className="text-sm font-medium text-amber-300">Key created: {createdKey.name}</p>
+          <p className="text-sm font-medium text-amber-300">
+            {createdKey.name ? `Key created: ${createdKey.name}` : 'Key rotated'}
+          </p>
           <p className="mt-1 text-xs text-amber-400/70">
-            Copy this key now. It will not be shown again.
+            Save this key now. You won't be able to see it again.
           </p>
           <code className="mt-2 block rounded-lg bg-gray-800 px-4 py-2.5 text-sm text-gray-200 font-mono break-all">
             {createdKey.key}
@@ -263,15 +261,24 @@ export function ApiKeys() {
                     <td className="px-4 py-3 text-gray-400 text-xs">
                       {k.lastUsedAt ? relativeTime(k.lastUsedAt) : 'Never'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 space-x-2">
                       {!isRevoked && (
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(k.id)}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          Revoke
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleRotate(k.id)}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Rotate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRevoke(k.id)}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Revoke
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -312,9 +319,6 @@ function describePolicyBrief(policy: Record<string, unknown>): string {
   }
   if (Array.isArray(policy.allowedProbes) && policy.allowedProbes.length > 0) {
     parts.push(`${policy.allowedProbes.length} probe pattern(s)`);
-  }
-  if (policy.maxCapabilityLevel) {
-    parts.push(`cap: ${policy.maxCapabilityLevel}`);
   }
   return parts.length > 0 ? parts.join(' \u00B7 ') : 'No restrictions';
 }

@@ -351,12 +351,32 @@ export class SondeDb {
 
   // --- API Key management ---
 
-  createApiKey(id: string, name: string, keyHash: string, policyJson: string): void {
+  countApiKeys(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM api_keys WHERE revoked_at IS NULL')
+      .get() as { count: number };
+    return row.count;
+  }
+
+  createApiKey(
+    id: string,
+    name: string,
+    keyHash: string,
+    policyJson: string,
+    roleId?: string,
+  ): void {
     this.db
       .prepare(
-        'INSERT INTO api_keys (id, name, key_hash, policy_json, created_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO api_keys (id, name, key_hash, policy_json, role_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
-      .run(id, name, keyHash, policyJson, new Date().toISOString());
+      .run(id, name, keyHash, policyJson, roleId ?? 'member', new Date().toISOString());
+  }
+
+  rotateApiKey(id: string, newKeyHash: string): boolean {
+    const result = this.db
+      .prepare('UPDATE api_keys SET key_hash = ? WHERE id = ? AND revoked_at IS NULL')
+      .run(newKeyHash, id);
+    return result.changes > 0;
   }
 
   getApiKeyByHash(keyHash: string):
@@ -625,9 +645,9 @@ export class SondeDb {
   }
 
   getIntegration(id: string): IntegrationRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM integrations WHERE id = ?')
-      .get(id) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM integrations WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return undefined;
     return {
       id: row.id as string,
@@ -643,7 +663,9 @@ export class SondeDb {
   }
 
   listIntegrations(): IntegrationRow[] {
-    const rows = this.db.prepare('SELECT * FROM integrations').all() as Array<Record<string, unknown>>;
+    const rows = this.db.prepare('SELECT * FROM integrations').all() as Array<
+      Record<string, unknown>
+    >;
     return rows.map((row) => ({
       id: row.id as string,
       type: row.type as string,
@@ -730,9 +752,9 @@ export class SondeDb {
   }
 
   getSession(id: string): SessionRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM sessions WHERE id = ?')
-      .get(id) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return undefined;
     return {
       id: row.id as string,

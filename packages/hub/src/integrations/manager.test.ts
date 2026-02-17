@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const API_KEY = 'test-api-key-1234567890';
+const SECRET = 'test-api-key-1234567890';
 
 const testConfig: IntegrationConfig = {
   endpoint: 'https://api.cloudflare.com/v4',
@@ -57,7 +57,7 @@ describe('IntegrationManager', () => {
     executor = new IntegrationExecutor(vi.fn());
     const testPack = createTestPack();
     catalog = new Map([['cloudflare', testPack]]);
-    manager = new IntegrationManager(db, executor, API_KEY, catalog);
+    manager = new IntegrationManager(db, executor, SECRET, catalog);
   });
 
   it('creates an integration and stores encrypted config in DB', () => {
@@ -81,7 +81,7 @@ describe('IntegrationManager', () => {
     expect(row!.configEncrypted).not.toContain('cf-secret-key-123');
 
     // Verify decryption works
-    const decrypted = JSON.parse(decrypt(row!.configEncrypted, API_KEY));
+    const decrypted = JSON.parse(decrypt(row!.configEncrypted, SECRET));
     expect(decrypted.config.endpoint).toBe('https://api.cloudflare.com/v4');
     expect(decrypted.credentials.credentials.apiKey).toBe('cf-secret-key-123');
   });
@@ -216,7 +216,7 @@ describe('IntegrationManager', () => {
 
     // Simulate restart: fresh executor with no registered packs
     const freshExecutor = new IntegrationExecutor(vi.fn());
-    const freshManager = new IntegrationManager(db, freshExecutor, API_KEY, catalog);
+    const freshManager = new IntegrationManager(db, freshExecutor, SECRET, catalog);
     freshManager.loadAll();
 
     // The executor should have the pack registered from loadAll via catalog lookup

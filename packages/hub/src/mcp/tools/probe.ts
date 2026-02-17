@@ -18,7 +18,7 @@ export async function handleProbe(
 
     // Policy check
     if (auth) {
-      const decision = evaluateProbeAccess(auth, agentOrSource, args.probe, 'observe');
+      const decision = evaluateProbeAccess(auth, agentOrSource, args.probe);
       if (!decision.allowed) {
         return {
           content: [{ type: 'text', text: `Access denied: ${decision.reason}` }],

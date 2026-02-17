@@ -22,7 +22,6 @@ export function createMcpHandler(
   probeRouter: ProbeRouter,
   dispatcher: AgentDispatcher,
   db: SondeDb,
-  apiKey: string,
   runbookEngine: RunbookEngine,
   oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
@@ -69,7 +68,9 @@ export function createMcpHandler(
           agent: z
             .string()
             .optional()
-            .describe('Agent name or ID (required for agent runbooks, omit for integration runbooks)'),
+            .describe(
+              'Agent name or ID (required for agent runbooks, omit for integration runbooks)',
+            ),
           category: z.string().describe('Runbook category, e.g. "docker", "system", "systemd"'),
           description: z
             .string()
@@ -122,8 +123,8 @@ export function createMcpHandler(
   }
 
   async function resolveAuth(req: http.IncomingMessage): Promise<AuthContext | undefined> {
-    // Try API key auth first (legacy + scoped)
-    const apiKeyAuth = validateAuth(req, db, apiKey);
+    // Try API key auth first (scoped keys from DB)
+    const apiKeyAuth = validateAuth(req, db);
     if (apiKeyAuth) return apiKeyAuth;
 
     // Try OAuth if provider is configured

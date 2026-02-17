@@ -56,7 +56,7 @@ export async function handleDiagnose(
     // Log each probe result to audit, skip probes denied by policy
     for (const [probe, finding] of Object.entries(result.findings)) {
       if (auth) {
-        const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe, 'observe');
+        const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe);
         if (!probeDecision.allowed) continue;
       }
 

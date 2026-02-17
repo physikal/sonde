@@ -43,7 +43,7 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
 const integrationManager = new IntegrationManager(
   db,
   integrationExecutor,
-  config.apiKey,
+  config.secret,
   integrationCatalog,
 );
 integrationManager.loadAll();
@@ -192,18 +192,7 @@ app.use('/api/v1/*', async (c, next) => {
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
 
-  // Legacy master key
-  if (token === config.apiKey) {
-    c.set('user', {
-      id: 'apikey:legacy',
-      displayName: 'Legacy API Key',
-      role: 'owner',
-      authMethod: 'apikey',
-    });
-    return next();
-  }
-
-  // Scoped key lookup
+  // DB key lookup
   const keyHash = hashApiKey(token);
   const record = db.getApiKeyByHash(keyHash);
   if (!record || record.revokedAt) return c.json({ error: 'Unauthorized' }, 401);
@@ -265,6 +254,17 @@ app.get('/api/v1/api-keys', (c) => {
 app.delete('/api/v1/api-keys/:id', (c) => {
   db.revokeApiKey(c.req.param('id'));
   return c.json({ ok: true });
+});
+
+app.post('/api/v1/api-keys/:id/rotate', (c) => {
+  const id = c.req.param('id');
+  const rawKey = crypto.randomBytes(32).toString('hex');
+  const newKeyHash = hashApiKey(rawKey);
+  const rotated = db.rotateApiKey(id, newKeyHash);
+  if (!rotated) {
+    return c.json({ error: 'API key not found or already revoked' }, 404);
+  }
+  return c.json({ id, key: rawKey });
 });
 
 app.put('/api/v1/api-keys/:id/policy', async (c) => {
@@ -553,7 +553,18 @@ app.post('/api/v1/setup/complete', (c) => {
     return c.json({ error: 'Setup already completed' }, 409);
   }
   db.setSetupValue('setup_complete', 'true');
-  return c.json({ ok: true });
+
+  // Auto-generate a default admin API key if none exist
+  let apiKey: string | undefined;
+  if (db.countApiKeys() === 0) {
+    const id = crypto.randomUUID();
+    const rawKey = crypto.randomBytes(32).toString('hex');
+    const keyHash = hashApiKey(rawKey);
+    db.createApiKey(id, 'default', keyHash, '{}', 'admin');
+    apiKey = rawKey;
+  }
+
+  return c.json({ ok: true, ...(apiKey ? { apiKey } : {}) });
 });
 
 // Agent installer script (curl -fsSL https://hub.example.com/install | bash)
@@ -628,7 +639,6 @@ const mcpHandler = createMcpHandler(
   probeRouter,
   dispatcher,
   db,
-  config.apiKey,
   runbookEngine,
   oauthProvider,
 );
@@ -676,7 +686,6 @@ setupWsServer(
   dispatcher,
   db,
   (key) => {
-    if (key === config.apiKey) return true;
     const record = db.getApiKeyByHash(hashApiKey(key));
     return !!record && !record.revokedAt;
   },

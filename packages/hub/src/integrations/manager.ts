@@ -30,7 +30,7 @@ export class IntegrationManager {
   constructor(
     private db: SondeDb,
     private executor: IntegrationExecutor,
-    private apiKey: string,
+    private secret: string,
     private packCatalog: ReadonlyMap<string, IntegrationPack> = new Map(),
   ) {}
 
@@ -38,7 +38,7 @@ export class IntegrationManager {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const blob = JSON.stringify({ config: input.config, credentials: input.credentials });
-    const configEncrypted = encrypt(blob, this.apiKey);
+    const configEncrypted = encrypt(blob, this.secret);
 
     this.db.createIntegration({
       id,
@@ -100,7 +100,7 @@ export class IntegrationManager {
     };
 
     const blob = JSON.stringify(merged);
-    const configEncrypted = encrypt(blob, this.apiKey);
+    const configEncrypted = encrypt(blob, this.secret);
 
     this.db.updateIntegration(id, { configEncrypted });
 
@@ -180,7 +180,7 @@ export class IntegrationManager {
     const row = this.db.getIntegration(id);
     if (!row) return undefined;
 
-    const blob = decrypt(row.configEncrypted, this.apiKey);
+    const blob = decrypt(row.configEncrypted, this.secret);
     return JSON.parse(blob) as { config: IntegrationConfig; credentials: IntegrationCredentials };
   }
 

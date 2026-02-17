@@ -6,12 +6,12 @@ const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const SCRYPT_COST = 16384;
 
-function deriveKey(apiKey: string): Buffer {
-  return crypto.scryptSync(apiKey, SALT, KEY_LENGTH, { N: SCRYPT_COST });
+function deriveKey(secret: string): Buffer {
+  return crypto.scryptSync(secret, SALT, KEY_LENGTH, { N: SCRYPT_COST });
 }
 
-export function encrypt(plaintext: string, apiKey: string): string {
-  const key = deriveKey(apiKey);
+export function encrypt(plaintext: string, secret: string): string {
+  const key = deriveKey(secret);
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
@@ -21,8 +21,8 @@ export function encrypt(plaintext: string, apiKey: string): string {
   return Buffer.concat([iv, encrypted, authTag]).toString('base64');
 }
 
-export function decrypt(encrypted: string, apiKey: string): string {
-  const key = deriveKey(apiKey);
+export function decrypt(encrypted: string, secret: string): string {
+  const key = deriveKey(secret);
   const buf = Buffer.from(encrypted, 'base64');
 
   const iv = buf.subarray(0, IV_LENGTH);
