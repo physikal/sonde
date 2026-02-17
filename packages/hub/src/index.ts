@@ -9,7 +9,14 @@ import { httpbinPack, packRegistry } from '@sonde/packs';
 import type { IntegrationPack } from '@sonde/shared';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
+import {
+  filterAgentsByAccess,
+  filterIntegrationsByAccess,
+  isAgentVisible,
+} from './auth/access-groups.js';
+import { createEntraRoutes } from './auth/entra.js';
 import { createAuthRoutes } from './auth/local-auth.js';
+import { requireRole } from './auth/rbac.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
 import { SessionManager } from './auth/sessions.js';
 import type { UserContext } from './auth/sessions.js';
@@ -17,6 +24,7 @@ import { loadConfig } from './config.js';
 import { generateCaCert } from './crypto/ca.js';
 import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
+import { encrypt } from './integrations/crypto.js';
 import { IntegrationExecutor } from './integrations/executor.js';
 import { IntegrationManager } from './integrations/manager.js';
 import { ProbeRouter } from './integrations/probe-router.js';
@@ -166,12 +174,22 @@ app.route(
   }),
 );
 
+// Entra ID SSO routes (/auth/entra/login, /auth/entra/callback)
+app.route(
+  '/auth',
+  createEntraRoutes(sessionManager, db, {
+    secret: config.secret,
+    hubUrl: config.hubUrl ?? `http://localhost:${config.port}`,
+  }),
+);
+
 // Public API endpoints that don't require auth
 const PUBLIC_API_PATHS = new Set([
   '/api/v1/setup/status',
   '/api/v1/setup/complete',
   '/api/v1/agents',
   '/api/v1/packs',
+  '/api/v1/sso/status',
 ]);
 
 /**
@@ -208,6 +226,15 @@ app.use('/api/v1/*', async (c, next) => {
   });
   return next();
 });
+
+// --- RBAC guards ---
+app.use('/api/v1/enrollment-tokens/*', requireRole('admin'));
+app.use('/api/v1/api-keys/*', requireRole('admin'));
+app.use('/api/v1/authorized-users/*', requireRole('admin'));
+app.use('/api/v1/authorized-groups/*', requireRole('admin'));
+app.use('/api/v1/access-groups/*', requireRole('admin'));
+app.use('/api/v1/audit/*', requireRole('admin'));
+app.use('/api/v1/sso/entra', requireRole('owner'));
 
 app.get('/health', (c) =>
   c.json({
@@ -276,6 +303,284 @@ app.put('/api/v1/api-keys/:id/policy', async (c) => {
   return c.json({ ok: true });
 });
 
+// --- SSO configuration endpoints ---
+
+// Public: check if SSO is enabled (needed by login page)
+app.get('/api/v1/sso/status', (c) => {
+  const ssoConfig = db.getSsoConfig();
+  return c.json({
+    configured: !!ssoConfig,
+    enabled: ssoConfig?.enabled ?? false,
+  });
+});
+
+// Admin: get SSO config (without decrypted secret)
+app.get('/api/v1/sso/entra', (c) => {
+  const ssoConfig = db.getSsoConfig();
+  if (!ssoConfig) {
+    return c.json({ error: 'SSO not configured' }, 404);
+  }
+  return c.json({
+    tenantId: ssoConfig.tenantId,
+    clientId: ssoConfig.clientId,
+    enabled: ssoConfig.enabled,
+  });
+});
+
+// Admin: create/update SSO config
+app.post('/api/v1/sso/entra', async (c) => {
+  const body = await c.req.json<{
+    tenantId?: string;
+    clientId?: string;
+    clientSecret?: string;
+    enabled?: boolean;
+  }>();
+
+  if (!body.tenantId || !body.clientId || !body.clientSecret) {
+    return c.json({ error: 'tenantId, clientId, and clientSecret are required' }, 400);
+  }
+
+  const clientSecretEnc = encrypt(body.clientSecret, config.secret);
+  db.upsertSsoConfig(body.tenantId, body.clientId, clientSecretEnc, body.enabled !== false);
+  return c.json({ ok: true });
+});
+
+// Admin: update SSO config
+app.put('/api/v1/sso/entra', async (c) => {
+  const body = await c.req.json<{
+    tenantId?: string;
+    clientId?: string;
+    clientSecret?: string;
+    enabled?: boolean;
+  }>();
+
+  const existing = db.getSsoConfig();
+  if (!existing) {
+    return c.json({ error: 'SSO not configured. Use POST to create.' }, 404);
+  }
+
+  const tenantId = body.tenantId ?? existing.tenantId;
+  const clientId = body.clientId ?? existing.clientId;
+  const clientSecretEnc = body.clientSecret
+    ? encrypt(body.clientSecret, config.secret)
+    : existing.clientSecretEnc;
+  const enabled = body.enabled ?? existing.enabled;
+
+  db.upsertSsoConfig(tenantId, clientId, clientSecretEnc, enabled);
+  return c.json({ ok: true });
+});
+
+// --- Authorized users endpoints ---
+
+app.get('/api/v1/authorized-users', (c) => {
+  return c.json({ users: db.listAuthorizedUsers() });
+});
+
+app.post('/api/v1/authorized-users', async (c) => {
+  const body = await c.req.json<{ email?: string; role?: string }>();
+  if (!body.email) {
+    return c.json({ error: 'email is required' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const role = body.role ?? 'member';
+
+  try {
+    db.createAuthorizedUser(id, body.email, role);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'User with this email already exists' }, 409);
+    }
+    throw error;
+  }
+
+  return c.json({ id, email: body.email, roleId: role }, 201);
+});
+
+app.put('/api/v1/authorized-users/:id', async (c) => {
+  const body = await c.req.json<{ role?: string }>();
+  if (!body.role) {
+    return c.json({ error: 'role is required' }, 400);
+  }
+
+  const updated = db.updateAuthorizedUserRole(c.req.param('id'), body.role);
+  if (!updated) {
+    return c.json({ error: 'Authorized user not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+app.delete('/api/v1/authorized-users/:id', (c) => {
+  const deleted = db.deleteAuthorizedUser(c.req.param('id'));
+  if (!deleted) {
+    return c.json({ error: 'Authorized user not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+// --- Authorized groups endpoints ---
+
+app.get('/api/v1/authorized-groups', (c) => {
+  return c.json({ groups: db.listAuthorizedGroups() });
+});
+
+app.post('/api/v1/authorized-groups', async (c) => {
+  const body = await c.req.json<{
+    entraGroupId?: string;
+    entraGroupName?: string;
+    role?: string;
+  }>();
+  if (!body.entraGroupId) {
+    return c.json({ error: 'entraGroupId is required' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const role = body.role ?? 'member';
+
+  try {
+    db.createAuthorizedGroup(id, body.entraGroupId, body.entraGroupName ?? '', role);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Group with this Entra group ID already exists' }, 409);
+    }
+    throw error;
+  }
+
+  return c.json({ id, entraGroupId: body.entraGroupId, roleId: role }, 201);
+});
+
+app.put('/api/v1/authorized-groups/:id', async (c) => {
+  const body = await c.req.json<{ role?: string }>();
+  if (!body.role) {
+    return c.json({ error: 'role is required' }, 400);
+  }
+
+  const updated = db.updateAuthorizedGroupRole(c.req.param('id'), body.role);
+  if (!updated) {
+    return c.json({ error: 'Authorized group not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+app.delete('/api/v1/authorized-groups/:id', (c) => {
+  const deleted = db.deleteAuthorizedGroup(c.req.param('id'));
+  if (!deleted) {
+    return c.json({ error: 'Authorized group not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+// --- Access groups endpoints ---
+
+app.get('/api/v1/access-groups', (c) => {
+  const groups = db.listAccessGroups().map((g) => ({
+    ...g,
+    agents: db.getAccessGroupAgents(g.id),
+    integrations: db.getAccessGroupIntegrations(g.id),
+    users: db.getAccessGroupUsers(g.id),
+  }));
+  return c.json({ groups });
+});
+
+app.post('/api/v1/access-groups', async (c) => {
+  const body = await c.req.json<{ name?: string; description?: string }>();
+  if (!body.name) {
+    return c.json({ error: 'name is required' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  try {
+    db.createAccessGroup(id, body.name, body.description ?? '');
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Access group with this name already exists' }, 409);
+    }
+    throw error;
+  }
+
+  return c.json({ id, name: body.name }, 201);
+});
+
+app.put('/api/v1/access-groups/:id', async (c) => {
+  const body = await c.req.json<{ name?: string; description?: string }>();
+  const updated = db.updateAccessGroup(c.req.param('id'), body);
+  if (!updated) {
+    return c.json({ error: 'Access group not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+app.delete('/api/v1/access-groups/:id', (c) => {
+  const deleted = db.deleteAccessGroup(c.req.param('id'));
+  if (!deleted) {
+    return c.json({ error: 'Access group not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+// Access group sub-resources: agents
+app.post('/api/v1/access-groups/:id/agents', async (c) => {
+  const group = db.getAccessGroup(c.req.param('id'));
+  if (!group) return c.json({ error: 'Access group not found' }, 404);
+
+  const body = await c.req.json<{ pattern?: string }>();
+  if (!body.pattern) return c.json({ error: 'pattern is required' }, 400);
+
+  db.addAccessGroupAgent(group.id, body.pattern);
+  return c.json({ ok: true }, 201);
+});
+
+app.delete('/api/v1/access-groups/:id/agents', async (c) => {
+  const body = await c.req.json<{ pattern?: string }>();
+  if (!body.pattern) return c.json({ error: 'pattern is required' }, 400);
+
+  const deleted = db.removeAccessGroupAgent(c.req.param('id'), body.pattern);
+  if (!deleted) return c.json({ error: 'Pattern not found in access group' }, 404);
+  return c.json({ ok: true });
+});
+
+// Access group sub-resources: integrations
+app.post('/api/v1/access-groups/:id/integrations', async (c) => {
+  const group = db.getAccessGroup(c.req.param('id'));
+  if (!group) return c.json({ error: 'Access group not found' }, 404);
+
+  const body = await c.req.json<{ integrationId?: string }>();
+  if (!body.integrationId) return c.json({ error: 'integrationId is required' }, 400);
+
+  db.addAccessGroupIntegration(group.id, body.integrationId);
+  return c.json({ ok: true }, 201);
+});
+
+app.delete('/api/v1/access-groups/:id/integrations', async (c) => {
+  const body = await c.req.json<{ integrationId?: string }>();
+  if (!body.integrationId) return c.json({ error: 'integrationId is required' }, 400);
+
+  const deleted = db.removeAccessGroupIntegration(c.req.param('id'), body.integrationId);
+  if (!deleted) return c.json({ error: 'Integration not found in access group' }, 404);
+  return c.json({ ok: true });
+});
+
+// Access group sub-resources: users
+app.post('/api/v1/access-groups/:id/users', async (c) => {
+  const group = db.getAccessGroup(c.req.param('id'));
+  if (!group) return c.json({ error: 'Access group not found' }, 404);
+
+  const body = await c.req.json<{ userId?: string }>();
+  if (!body.userId) return c.json({ error: 'userId is required' }, 400);
+
+  db.addAccessGroupUser(group.id, body.userId);
+  return c.json({ ok: true }, 201);
+});
+
+app.delete('/api/v1/access-groups/:id/users', async (c) => {
+  const body = await c.req.json<{ userId?: string }>();
+  if (!body.userId) return c.json({ error: 'userId is required' }, 400);
+
+  const deleted = db.removeAccessGroupUser(c.req.param('id'), body.userId);
+  if (!deleted) return c.json({ error: 'User not found in access group' }, 404);
+  return c.json({ ok: true });
+});
+
 // --- Integration management endpoints (require master API key) ---
 
 app.post('/api/v1/integrations', async (c) => {
@@ -312,7 +617,14 @@ app.post('/api/v1/integrations', async (c) => {
 });
 
 app.get('/api/v1/integrations', (c) => {
-  return c.json({ integrations: integrationManager.list() });
+  let integrations = integrationManager.list();
+
+  const user = getUser(c);
+  if (user) {
+    integrations = filterIntegrationsByAccess(db, user.id, integrations);
+  }
+
+  return c.json({ integrations });
 });
 
 app.get('/api/v1/integrations/:id', (c) => {
@@ -362,9 +674,9 @@ app.post('/api/v1/integrations/:id/test', async (c) => {
   return c.json(result);
 });
 
-// Agent list endpoint (unauthenticated — dashboard needs it)
+// Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)
 app.get('/api/v1/agents', (c) => {
-  const agents = db.getAllAgents().map((a) => ({
+  let agents = db.getAllAgents().map((a) => ({
     ...a,
     status: dispatcher.isAgentOnline(a.id)
       ? 'online'
@@ -372,6 +684,12 @@ app.get('/api/v1/agents', (c) => {
         ? 'degraded'
         : 'offline',
   }));
+
+  const user = getUser(c);
+  if (user) {
+    agents = filterAgentsByAccess(db, user.id, agents);
+  }
+
   return c.json({ agents });
 });
 
@@ -492,6 +810,14 @@ app.post('/api/v1/probe', async (c) => {
   }>();
   if (!body.probe) {
     return c.json({ error: 'probe is required' }, 400);
+  }
+
+  // Access group check: if targeting a specific agent, verify visibility
+  const user = getUser(c);
+  if (user && body.agent) {
+    if (!isAgentVisible(db, user.id, body.agent)) {
+      return c.json({ error: 'Agent not accessible' }, 403);
+    }
   }
 
   const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
@@ -635,13 +961,7 @@ if (config.hubUrl) {
 }
 
 // MCP handler for /mcp/* routes
-const mcpHandler = createMcpHandler(
-  probeRouter,
-  dispatcher,
-  db,
-  runbookEngine,
-  oauthProvider,
-);
+const mcpHandler = createMcpHandler(probeRouter, dispatcher, db, runbookEngine, oauthProvider);
 
 // Node HTTP server — routes /mcp to MCP handler, OAuth paths to Express, everything else to Hono
 const honoListener = getRequestListener(app.fetch);

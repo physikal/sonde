@@ -1,41 +1,37 @@
-# Phase 7: Integration Pack Framework + httpbin End-to-End Proof
+# Current Status
 
-## Part 1: Encrypted Credential Storage (complete)
+**Branch:** `dev`
+**Last session:** 2026-02-17
 
-- [x] Step 1: Encryption module — `packages/hub/src/integrations/crypto.ts`
-- [x] Step 2: Migration 003 — integrations table
-- [x] Step 3: DB CRUD methods
-- [x] Step 4: IntegrationManager class
-- [x] Step 5: REST API endpoints — 6 endpoints under `/api/v1/integrations`
-- [x] Step 6: Startup wiring
-- [x] Step 7: `unregisterPack()` method on IntegrationExecutor
-- [x] Step 8: Tests — crypto + manager + migrator
+## Completed
 
-## Part 2: httpbin Integration Pack + End-to-End Proof (complete)
+- [x] Phase 7 — Integration framework + httpbin pack + end-to-end tests
+- [x] Phase 8a — Session-based auth (local login, session middleware, dashboard auth guard)
+- [x] ApiKeyGate removal — all 7 dashboard pages use `apiFetch()` with session cookie, deleted `ApiKeyGate.tsx` + `useApiKey.ts`
+- [x] Login bug fixes — falsy password check, post-login SPA redirect (`window.location.href`)
+- [x] Docs site — Astro + Starlight (`@sonde/docs`)
+- [x] CLAUDE.md updated with phase 8a completion
+- [x] Phase 8b.1 — Entra ID SSO integration
 
-- [x] Step 1: Move integration types to `@sonde/shared` — created `types/integrations.ts`, hub re-exports
-- [x] Step 2: Create httpbin integration pack — `packages/packs/src/integrations/httpbin.ts` (ip/headers/status probes + runbook)
-- [x] Step 3: Fix IntegrationManager `findPack()` bug — added `packCatalog` constructor param, replaced executor lookup
-- [x] Step 4: httpbin integration test — 7 tests (probe execution, testConnection, ProbeRouter routing)
-- [x] Step 5: Mixed routing test — 2 tests (agent+integration mixed routing, RunbookEngine integration)
-- [x] Step 6: Lint fixes — import ordering, formatting, biome-ignore for test assertions
+### Phase 8b.1 Details
+- [x] Migration 005: `sso_config` + `authorized_users` tables
+- [x] DB methods: SSO config CRUD, authorized users CRUD
+- [x] Entra OIDC auth flow: `/auth/entra/login` (redirect), `/auth/entra/callback` (token exchange + session)
+- [x] REST endpoints: SSO config (`/api/v1/sso/*`), authorized users (`/api/v1/authorized-users/*`)
+- [x] Dashboard Login page: SSO button with Microsoft logo, error handling for SSO redirects
+- [x] Dashboard Settings page: SSO configuration form + authorized users management table
+- [x] Unit tests: 8 tests for Entra auth (login redirect, callback flows, error cases)
+- [x] All 173 tests passing, build clean, biome clean
 
-## Verification
+## Up Next — Phase 8b.2: RBAC
 
-- [x] `npm run build` — all 6 packages compile
-- [x] `npm run test` — 140 hub tests (21 files), 85 packs, 81 agent, 11 shared — all pass
-- [x] `npm run lint` — no new lint errors in changed files
+### 8b.2 — Role-Based Access Control (RBAC)
+- [ ] Activate `minimumRole` filtering on Sidebar items (already wired)
+- [ ] Enforce roles on API endpoints (admin-only: API Keys, Policies, Enrollment)
+- [ ] Role assignment from Entra ID groups or local config
 
-## Files Created
-- `packages/shared/src/types/integrations.ts` — integration type definitions (moved from hub)
-- `packages/packs/src/integrations/httpbin.ts` — httpbin integration pack
-- `packages/hub/src/integrations/httpbin.test.ts` — 7 tests
-- `packages/hub/src/integrations/mixed-routing.test.ts` — 2 tests
-
-## Files Modified
-- `packages/shared/src/index.ts` — export integration types
-- `packages/hub/src/integrations/types.ts` — re-export from shared (was definitions)
-- `packages/packs/src/index.ts` — export httpbinPack
-- `packages/hub/src/integrations/manager.ts` — added packCatalog param, fixed findPack()
-- `packages/hub/src/integrations/manager.test.ts` — updated for catalog constructor
-- `packages/hub/src/index.ts` — build integration catalog, pass to manager, import httpbinPack
+### Other Backlog
+- [ ] Deploy updated hub to Dokploy (includes session auth + integration framework + SSO)
+- [ ] Test live with gmtek01 agent after deploy
+- [ ] Playwright e2e tests for login flow
+- [ ] Update CLAUDE.md with phase 8b.1 completion

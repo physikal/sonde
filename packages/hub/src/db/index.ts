@@ -38,6 +38,53 @@ export interface SessionRow {
   createdAt: string;
 }
 
+export interface SsoConfigRow {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  clientSecretEnc: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthorizedUserRow {
+  id: string;
+  email: string;
+  roleId: string;
+  displayName: string;
+  entraObjectId: string | null;
+  enabled: boolean;
+  createdBy: string;
+  lastLoginAt: string | null;
+  loginCount: number;
+  createdAt: string;
+}
+
+export interface AuthorizedGroupRow {
+  id: string;
+  entraGroupId: string;
+  entraGroupName: string;
+  roleId: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface RoleRow {
+  id: string;
+  displayName: string;
+  level: number;
+  permissionsJson: string;
+}
+
+export interface AccessGroupRow {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface AuditEntry {
   apiKeyId?: string;
   agentId: string;
@@ -785,6 +832,385 @@ export class SondeDb {
       .prepare('DELETE FROM sessions WHERE expires_at < ?')
       .run(new Date().toISOString());
     return result.changes;
+  }
+
+  // --- SSO Config ---
+
+  getSsoConfig(): SsoConfigRow | undefined {
+    const row = this.db.prepare('SELECT * FROM sso_config WHERE id = ?').get('entra') as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      tenantId: row.tenant_id as string,
+      clientId: row.client_id as string,
+      clientSecretEnc: row.client_secret_enc as string,
+      enabled: (row.enabled as number) === 1,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  upsertSsoConfig(
+    tenantId: string,
+    clientId: string,
+    clientSecretEnc: string,
+    enabled: boolean,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO sso_config (id, tenant_id, client_id, client_secret_enc, enabled, created_at, updated_at)
+         VALUES ('entra', ?, ?, ?, ?, datetime('now'), datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           tenant_id = excluded.tenant_id,
+           client_id = excluded.client_id,
+           client_secret_enc = excluded.client_secret_enc,
+           enabled = excluded.enabled,
+           updated_at = datetime('now')`,
+      )
+      .run(tenantId, clientId, clientSecretEnc, enabled ? 1 : 0);
+  }
+
+  // --- Authorized Users ---
+
+  getAuthorizedUserByEmail(email: string): AuthorizedUserRow | undefined {
+    const row = this.db.prepare('SELECT * FROM authorized_users WHERE email = ?').get(email) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedUserRow(row);
+  }
+
+  getAuthorizedUserByOid(oid: string): AuthorizedUserRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM authorized_users WHERE entra_object_id = ?')
+      .get(oid) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedUserRow(row);
+  }
+
+  listAuthorizedUsers(): AuthorizedUserRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM authorized_users ORDER BY created_at DESC')
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((row) => this.mapAuthorizedUserRow(row));
+  }
+
+  createAuthorizedUser(
+    id: string,
+    email: string,
+    roleId: string,
+    opts?: {
+      displayName?: string;
+      entraObjectId?: string;
+      createdBy?: string;
+    },
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO authorized_users (id, email, role_id, display_name, entra_object_id, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        id,
+        email,
+        roleId,
+        opts?.displayName ?? '',
+        opts?.entraObjectId ?? null,
+        opts?.createdBy ?? 'manual',
+      );
+  }
+
+  updateAuthorizedUserRole(id: string, roleId: string): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_users SET role_id = ? WHERE id = ?')
+      .run(roleId, id);
+    return result.changes > 0;
+  }
+
+  updateAuthorizedUserLogin(
+    id: string,
+    fields: {
+      displayName?: string;
+      entraObjectId?: string;
+    },
+  ): void {
+    const sets: string[] = ['last_login_at = ?', 'login_count = login_count + 1'];
+    const params: unknown[] = [new Date().toISOString()];
+
+    if (fields.displayName !== undefined) {
+      sets.push('display_name = ?');
+      params.push(fields.displayName);
+    }
+    if (fields.entraObjectId !== undefined) {
+      sets.push('entra_object_id = ?');
+      params.push(fields.entraObjectId);
+    }
+
+    params.push(id);
+    this.db.prepare(`UPDATE authorized_users SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+  }
+
+  updateAuthorizedUserEnabled(id: string, enabled: boolean): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_users SET enabled = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, id);
+    return result.changes > 0;
+  }
+
+  deleteAuthorizedUser(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM authorized_users WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  private mapAuthorizedUserRow(row: Record<string, unknown>): AuthorizedUserRow {
+    return {
+      id: row.id as string,
+      email: row.email as string,
+      roleId: row.role_id as string,
+      displayName: (row.display_name as string) ?? '',
+      entraObjectId: (row.entra_object_id as string) ?? null,
+      enabled: (row.enabled as number) !== 0,
+      createdBy: (row.created_by as string) ?? 'manual',
+      lastLoginAt: (row.last_login_at as string) ?? null,
+      loginCount: (row.login_count as number) ?? 0,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  // --- Roles ---
+
+  getRole(id: string): RoleRow | undefined {
+    const row = this.db.prepare('SELECT * FROM roles WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      displayName: row.display_name as string,
+      level: row.level as number,
+      permissionsJson: row.permissions_json as string,
+    };
+  }
+
+  listRoles(): RoleRow[] {
+    const rows = this.db.prepare('SELECT * FROM roles ORDER BY level ASC').all() as Array<
+      Record<string, unknown>
+    >;
+    return rows.map((row) => ({
+      id: row.id as string,
+      displayName: row.display_name as string,
+      level: row.level as number,
+      permissionsJson: row.permissions_json as string,
+    }));
+  }
+
+  // --- Authorized Groups ---
+
+  createAuthorizedGroup(
+    id: string,
+    entraGroupId: string,
+    entraGroupName: string,
+    roleId: string,
+    createdBy?: string,
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO authorized_groups (id, entra_group_id, entra_group_name, role_id, created_by) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(id, entraGroupId, entraGroupName, roleId, createdBy ?? 'manual');
+  }
+
+  getAuthorizedGroupByEntraId(entraGroupId: string): AuthorizedGroupRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM authorized_groups WHERE entra_group_id = ?')
+      .get(entraGroupId) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedGroupRow(row);
+  }
+
+  listAuthorizedGroups(): AuthorizedGroupRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM authorized_groups ORDER BY created_at DESC')
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((row) => this.mapAuthorizedGroupRow(row));
+  }
+
+  updateAuthorizedGroupRole(id: string, roleId: string): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_groups SET role_id = ? WHERE id = ?')
+      .run(roleId, id);
+    return result.changes > 0;
+  }
+
+  deleteAuthorizedGroup(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM authorized_groups WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  countAuthorizedGroups(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM authorized_groups').get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
+  private mapAuthorizedGroupRow(row: Record<string, unknown>): AuthorizedGroupRow {
+    return {
+      id: row.id as string,
+      entraGroupId: row.entra_group_id as string,
+      entraGroupName: row.entra_group_name as string,
+      roleId: row.role_id as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    };
+  }
+
+  // --- Access Groups ---
+
+  createAccessGroup(id: string, name: string, description: string, createdBy?: string): void {
+    this.db
+      .prepare('INSERT INTO access_groups (id, name, description, created_by) VALUES (?, ?, ?, ?)')
+      .run(id, name, description, createdBy ?? 'manual');
+  }
+
+  getAccessGroup(id: string): AccessGroupRow | undefined {
+    const row = this.db.prepare('SELECT * FROM access_groups WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    };
+  }
+
+  listAccessGroups(): AccessGroupRow[] {
+    const rows = this.db.prepare('SELECT * FROM access_groups ORDER BY name ASC').all() as Array<
+      Record<string, unknown>
+    >;
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    }));
+  }
+
+  updateAccessGroup(id: string, fields: { name?: string; description?: string }): boolean {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (fields.name !== undefined) {
+      sets.push('name = ?');
+      params.push(fields.name);
+    }
+    if (fields.description !== undefined) {
+      sets.push('description = ?');
+      params.push(fields.description);
+    }
+    if (sets.length === 0) return false;
+
+    params.push(id);
+    const result = this.db
+      .prepare(`UPDATE access_groups SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+    return result.changes > 0;
+  }
+
+  deleteAccessGroup(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM access_groups WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  // Access group sub-resources
+
+  addAccessGroupAgent(accessGroupId: string, agentPattern: string): void {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO access_group_agents (access_group_id, agent_pattern) VALUES (?, ?)',
+      )
+      .run(accessGroupId, agentPattern);
+  }
+
+  removeAccessGroupAgent(accessGroupId: string, agentPattern: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM access_group_agents WHERE access_group_id = ? AND agent_pattern = ?')
+      .run(accessGroupId, agentPattern);
+    return result.changes > 0;
+  }
+
+  getAccessGroupAgents(accessGroupId: string): Array<{ agentPattern: string }> {
+    const rows = this.db
+      .prepare('SELECT agent_pattern FROM access_group_agents WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ agent_pattern: string }>;
+    return rows.map((r) => ({ agentPattern: r.agent_pattern }));
+  }
+
+  addAccessGroupIntegration(accessGroupId: string, integrationId: string): void {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO access_group_integrations (access_group_id, integration_id) VALUES (?, ?)',
+      )
+      .run(accessGroupId, integrationId);
+  }
+
+  removeAccessGroupIntegration(accessGroupId: string, integrationId: string): boolean {
+    const result = this.db
+      .prepare(
+        'DELETE FROM access_group_integrations WHERE access_group_id = ? AND integration_id = ?',
+      )
+      .run(accessGroupId, integrationId);
+    return result.changes > 0;
+  }
+
+  getAccessGroupIntegrations(accessGroupId: string): Array<{ integrationId: string }> {
+    const rows = this.db
+      .prepare('SELECT integration_id FROM access_group_integrations WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ integration_id: string }>;
+    return rows.map((r) => ({ integrationId: r.integration_id }));
+  }
+
+  addAccessGroupUser(accessGroupId: string, userId: string): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO access_group_users (access_group_id, user_id) VALUES (?, ?)')
+      .run(accessGroupId, userId);
+  }
+
+  removeAccessGroupUser(accessGroupId: string, userId: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM access_group_users WHERE access_group_id = ? AND user_id = ?')
+      .run(accessGroupId, userId);
+    return result.changes > 0;
+  }
+
+  getAccessGroupUsers(accessGroupId: string): Array<{ userId: string }> {
+    const rows = this.db
+      .prepare('SELECT user_id FROM access_group_users WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ user_id: string }>;
+    return rows.map((r) => ({ userId: r.user_id }));
+  }
+
+  /** Get all access groups a user is assigned to. */
+  getAccessGroupsForUser(userId: string): AccessGroupRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT ag.* FROM access_groups ag
+         INNER JOIN access_group_users agu ON ag.id = agu.access_group_id
+         WHERE agu.user_id = ?`,
+      )
+      .all(userId) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    }));
   }
 
   close(): void {

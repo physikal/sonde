@@ -14,6 +14,7 @@ import { IntegrationDetail } from './pages/IntegrationDetail';
 import { Integrations } from './pages/Integrations';
 import { Login } from './pages/Login';
 import { Policies } from './pages/Policies';
+import { Settings } from './pages/Settings';
 import { TryIt } from './pages/TryIt';
 
 function AppRoutes() {
@@ -51,7 +52,7 @@ function AppRoutes() {
           <Route path="integrations/:id" element={<IntegrationDetail />} />
           <Route path="audit" element={<Audit />} />
           <Route path="try-it" element={<TryIt />} />
-          <Route path="settings" element={<PlaceholderPage title="Settings" />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}
@@ -68,14 +69,5 @@ export function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
-  );
-}
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-semibold text-white">{title}</h1>
-      <p className="mt-2 text-gray-400">Coming soon.</p>
-    </div>
   );
 }
