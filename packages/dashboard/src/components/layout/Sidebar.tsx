@@ -1,15 +1,62 @@
 import { NavLink } from 'react-router-dom';
 
-const NAV_ITEMS = [
+type Role = 'owner' | 'admin' | 'member';
+
+interface NavItem {
+  to: string;
+  label: string;
+  minimumRole?: Role;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Overview' },
   { to: '/agents', label: 'Agents' },
   { to: '/enrollment', label: 'Enrollment' },
   { to: '/api-keys', label: 'API Keys' },
-  { to: '/policies', label: 'Policies' },
-  { to: '/audit', label: 'Audit Log' },
+  { to: '/policies', label: 'Policies', minimumRole: 'admin' },
+  { to: '/integrations', label: 'Integrations' },
+  { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
   { to: '/try-it', label: 'Try It' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/settings', label: 'Settings', minimumRole: 'owner' },
 ];
+
+/** Role hierarchy for visibility checks (lower index = more privileged). */
+const ROLE_RANK: Record<Role, number> = { owner: 0, admin: 1, member: 2 };
+
+function hasRole(userRole: string | undefined, minimum: Role): boolean {
+  const rank = ROLE_RANK[userRole as Role];
+  return rank !== undefined && rank <= ROLE_RANK[minimum];
+}
+
+interface SidebarItemProps {
+  item: NavItem;
+  userRole?: string;
+  onClose: () => void;
+}
+
+/** Renders a sidebar nav link. Hidden if the user's role is below minimumRole. */
+function SidebarItem({ item, userRole, onClose }: SidebarItemProps) {
+  if (item.minimumRole && !hasRole(userRole, item.minimumRole)) {
+    return null;
+  }
+
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      onClick={onClose}
+      className={({ isActive }) =>
+        `rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-gray-800 text-white'
+            : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'
+        }`
+      }
+    >
+      {item.label}
+    </NavLink>
+  );
+}
 
 interface SidebarProps {
   open: boolean;
@@ -17,6 +64,10 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  // Role-based filtering is wired but currently all items are visible
+  // because useAuth is not consumed here yet (Phase 8a.3 will enable it).
+  const userRole: string | undefined = undefined;
+
   return (
     <>
       {/* Mobile overlay backdrop */}
@@ -41,21 +92,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </div>
         <nav className="mt-2 flex flex-col gap-0.5 px-2">
           {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-gray-800 text-white'
-                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
+            <SidebarItem key={item.to} item={item} userRole={userRole} onClose={onClose} />
           ))}
         </nav>
       </aside>

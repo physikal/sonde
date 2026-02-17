@@ -74,6 +74,8 @@ export type DetectRules = z.infer<typeof DetectRules>;
 export const PackManifest = z.object({
   /** Pack name, e.g. "docker" */
   name: z.string(),
+  /** Pack type: 'agent' runs on target machines, 'integration' runs on the hub calling external APIs. Defaults to 'agent' if omitted. */
+  type: z.enum(['agent', 'integration']).optional(),
   /** Semver version */
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   /** Human-readable description */

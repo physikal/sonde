@@ -19,6 +19,7 @@ export { postgresPack } from './postgres/index.js';
 export { redisPack } from './redis/index.js';
 export { mysqlPack } from './mysql/index.js';
 export { createPackRegistry, PackValidationError, validatePack } from './validation.js';
+export { httpbinPack } from './integrations/httpbin.js';
 
 /** Inject stored signatures into pack manifests */
 function injectSignatures(packs: Pack[]): Pack[] {

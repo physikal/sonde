@@ -17,13 +17,13 @@ describe('runMigrations', () => {
 
     const applied = runMigrations(db);
 
-    expect(applied).toBe(2);
+    expect(applied).toBe(4);
 
-    // Verify schema_version is at 2
+    // Verify schema_version is at 4
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(2);
+    expect(row.version).toBe(4);
 
     // Verify tables from migration 001 exist
     const tables = db
@@ -37,6 +37,12 @@ describe('runMigrations', () => {
 
     // Verify table from migration 002 exists
     expect(tableNames).toContain('hub_settings');
+
+    // Verify table from migration 003 exists
+    expect(tableNames).toContain('integrations');
+
+    // Verify table from migration 004 exists
+    expect(tableNames).toContain('sessions');
   });
 
   it('should be idempotent — running again applies 0 migrations', () => {
@@ -45,7 +51,7 @@ describe('runMigrations', () => {
     db.pragma('foreign_keys = ON');
 
     const first = runMigrations(db);
-    expect(first).toBe(2);
+    expect(first).toBe(4);
 
     const second = runMigrations(db);
     expect(second).toBe(0);
@@ -53,7 +59,7 @@ describe('runMigrations', () => {
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(2);
+    expect(row.version).toBe(4);
   });
 
   it('should apply only new migrations when a new one is added', async () => {
@@ -64,11 +70,11 @@ describe('runMigrations', () => {
     // Run initial migrations
     runMigrations(db);
 
-    // Simulate adding migration 003 by manually importing and modifying the module
+    // Simulate adding a new migration by manually importing and modifying the module
     const { migrations } = await import('./migrations/index.js');
 
     const fakeMigration: Migration = {
-      version: 3,
+      version: 5,
       up: (database) => {
         database.exec(
           'CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, data TEXT NOT NULL)',
@@ -85,7 +91,7 @@ describe('runMigrations', () => {
       const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
         version: number;
       };
-      expect(row.version).toBe(3);
+      expect(row.version).toBe(5);
 
       // Verify test_table was created
       const tables = db

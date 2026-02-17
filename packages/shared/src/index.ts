@@ -11,6 +11,15 @@ export {
 } from './types/common.js';
 export { AgentPackInfo, AgentInfo } from './types/agent.js';
 export { HubConfig } from './types/hub.js';
+export type {
+  FetchFn,
+  AuthMethod,
+  OAuth2Credentials,
+  IntegrationCredentials,
+  IntegrationConfig,
+  IntegrationProbeHandler,
+  IntegrationPack,
+} from './types/integrations.js';
 
 // Schemas — Protocol
 export { MessageEnvelope } from './schemas/protocol.js';

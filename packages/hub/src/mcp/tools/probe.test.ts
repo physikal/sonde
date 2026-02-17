@@ -1,24 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SondeDb } from '../../db/index.js';
-import type { AgentDispatcher } from '../../ws/dispatcher.js';
+import type { ProbeRouter } from '../../integrations/probe-router.js';
 import { handleProbe } from './probe.js';
 
-function createMockDispatcher(overrides: Partial<AgentDispatcher> = {}): AgentDispatcher {
+function createMockProbeRouter(overrides: Partial<ProbeRouter> = {}): ProbeRouter {
   return {
-    registerAgent: vi.fn(),
-    removeAgent: vi.fn(),
-    removeBySocket: vi.fn(),
-    isAgentOnline: vi.fn().mockReturnValue(true),
-    getOnlineAgentIds: vi.fn().mockReturnValue([]),
-    sendProbe: vi.fn(),
-    handleResponse: vi.fn(),
+    execute: vi.fn(),
     ...overrides,
-  } as unknown as AgentDispatcher;
+  } as unknown as ProbeRouter;
 }
 
 function createMockDb(): SondeDb {
   return {
     logAudit: vi.fn(),
+    updateApiKeyLastUsed: vi.fn(),
   } as unknown as SondeDb;
 }
 
@@ -37,14 +32,14 @@ describe('handleProbe', () => {
       },
     };
 
-    const dispatcher = createMockDispatcher({
-      sendProbe: vi.fn().mockResolvedValue(mockResponse),
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockResolvedValue(mockResponse),
     });
     const db = createMockDb();
 
     const result = await handleProbe(
       { agent: 'test-agent', probe: 'system.disk.usage' },
-      dispatcher,
+      probeRouter,
       db,
     );
 
@@ -56,12 +51,12 @@ describe('handleProbe', () => {
     expect(parsed.status).toBe('success');
     expect(parsed.data.filesystems).toHaveLength(1);
 
-    expect(dispatcher.sendProbe).toHaveBeenCalledWith('test-agent', 'system.disk.usage', undefined);
+    expect(probeRouter.execute).toHaveBeenCalledWith('system.disk.usage', undefined, 'test-agent');
   });
 
   it('logs audit entry on success', async () => {
-    const dispatcher = createMockDispatcher({
-      sendProbe: vi.fn().mockResolvedValue({
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockResolvedValue({
         probe: 'system.cpu.usage',
         status: 'success',
         data: {},
@@ -76,7 +71,7 @@ describe('handleProbe', () => {
     });
     const db = createMockDb();
 
-    await handleProbe({ agent: 'srv1', probe: 'system.cpu.usage' }, dispatcher, db);
+    await handleProbe({ agent: 'srv1', probe: 'system.cpu.usage' }, probeRouter, db);
 
     expect(db.logAudit).toHaveBeenCalledOnce();
     const auditCall = (db.logAudit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
@@ -85,14 +80,14 @@ describe('handleProbe', () => {
   });
 
   it('returns error when agent not found', async () => {
-    const dispatcher = createMockDispatcher({
-      sendProbe: vi.fn().mockRejectedValue(new Error("Agent 'unknown' not found or offline")),
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockRejectedValue(new Error("Agent 'unknown' not found or offline")),
     });
     const db = createMockDb();
 
     const result = await handleProbe(
       { agent: 'unknown', probe: 'system.disk.usage' },
-      dispatcher,
+      probeRouter,
       db,
     );
 
@@ -101,14 +96,64 @@ describe('handleProbe', () => {
   });
 
   it('returns error on timeout', async () => {
-    const dispatcher = createMockDispatcher({
-      sendProbe: vi.fn().mockRejectedValue(new Error('Probe timed out')),
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockRejectedValue(new Error('Probe timed out')),
     });
     const db = createMockDb();
 
-    const result = await handleProbe({ agent: 'srv1', probe: 'system.disk.usage' }, dispatcher, db);
+    const result = await handleProbe({ agent: 'srv1', probe: 'system.disk.usage' }, probeRouter, db);
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('timed out');
+  });
+
+  it('handles integration probe without agent', async () => {
+    const mockResponse = {
+      probe: 'cloudflare.zones.list',
+      status: 'success' as const,
+      data: { zones: [] },
+      durationMs: 100,
+      metadata: {
+        agentVersion: 'hub',
+        packName: 'cloudflare',
+        packVersion: '0.1.0',
+        capabilityLevel: 'observe' as const,
+      },
+    };
+
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockResolvedValue(mockResponse),
+    });
+    const db = createMockDb();
+
+    const result = await handleProbe(
+      { probe: 'cloudflare.zones.list' },
+      probeRouter,
+      db,
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(probeRouter.execute).toHaveBeenCalledWith('cloudflare.zones.list', undefined, undefined);
+
+    const auditCall = (db.logAudit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(auditCall.agentId).toBe('cloudflare');
+  });
+
+  it('returns error for agent probe without agent', async () => {
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockRejectedValue(
+        new Error("Agent name or ID is required for agent probe 'system.disk.usage'"),
+      ),
+    });
+    const db = createMockDb();
+
+    const result = await handleProbe(
+      { probe: 'system.disk.usage' },
+      probeRouter,
+      db,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('required');
   });
 });

@@ -1,5 +1,5 @@
 import type { PackManifest, ProbeResponse, RunbookDefinition } from '@sonde/shared';
-import type { AgentDispatcher } from '../ws/dispatcher.js';
+import type { ProbeRouter } from '../integrations/probe-router.js';
 
 export interface ProbeResult {
   probe: string;
@@ -48,11 +48,11 @@ export class RunbookEngine {
     return [...this.runbooks.keys()];
   }
 
-  /** Execute a runbook's probes against an agent */
+  /** Execute a runbook's probes, optionally targeting an agent */
   async execute(
     category: string,
-    agentNameOrId: string,
-    dispatcher: AgentDispatcher,
+    agentNameOrId: string | undefined,
+    probeRouter: ProbeRouter,
   ): Promise<DiagnoseResult> {
     const runbook = this.runbooks.get(category);
     if (!runbook) {
@@ -67,12 +67,12 @@ export class RunbookEngine {
 
     if (definition.parallel) {
       results = await Promise.all(
-        qualifiedProbes.map((probe) => this.executeProbe(probe, agentNameOrId, dispatcher)),
+        qualifiedProbes.map((probe) => this.executeProbe(probe, agentNameOrId, probeRouter)),
       );
     } else {
       results = [];
       for (const probe of qualifiedProbes) {
-        results.push(await this.executeProbe(probe, agentNameOrId, dispatcher));
+        results.push(await this.executeProbe(probe, agentNameOrId, probeRouter));
       }
     }
 
@@ -104,11 +104,11 @@ export class RunbookEngine {
 
   private async executeProbe(
     probe: string,
-    agentNameOrId: string,
-    dispatcher: AgentDispatcher,
+    agentNameOrId: string | undefined,
+    probeRouter: ProbeRouter,
   ): Promise<ProbeResult> {
     try {
-      const response: ProbeResponse = await dispatcher.sendProbe(agentNameOrId, probe);
+      const response: ProbeResponse = await probeRouter.execute(probe, undefined, agentNameOrId);
       return {
         probe,
         status: response.status === 'success' ? 'success' : 'error',

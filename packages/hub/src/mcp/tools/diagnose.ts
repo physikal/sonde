@@ -2,11 +2,11 @@ import type { SondeDb } from '../../db/index.js';
 import type { AuthContext } from '../../engine/policy.js';
 import { evaluateAgentAccess, evaluateProbeAccess } from '../../engine/policy.js';
 import type { RunbookEngine } from '../../engine/runbooks.js';
-import type { AgentDispatcher } from '../../ws/dispatcher.js';
+import type { ProbeRouter } from '../../integrations/probe-router.js';
 
 export async function handleDiagnose(
-  args: { agent: string; category: string; description?: string },
-  dispatcher: AgentDispatcher,
+  args: { agent?: string; category: string; description?: string },
+  probeRouter: ProbeRouter,
   runbookEngine: RunbookEngine,
   db: SondeDb,
   auth?: AuthContext,
@@ -16,8 +16,8 @@ export async function handleDiagnose(
   [key: string]: unknown;
 }> {
   try {
-    // Check agent access
-    if (auth) {
+    // Check agent access only when an agent is specified
+    if (auth && args.agent) {
       const agentDecision = evaluateAgentAccess(auth, args.agent);
       if (!agentDecision.allowed) {
         return {
@@ -41,10 +41,11 @@ export async function handleDiagnose(
       };
     }
 
-    const result = await runbookEngine.execute(args.category, args.agent, dispatcher);
+    const result = await runbookEngine.execute(args.category, args.agent, probeRouter);
 
+    const agentOrSource = args.agent ?? args.category;
     const output = {
-      agent: args.agent,
+      agent: agentOrSource,
       timestamp: new Date().toISOString(),
       category: args.category,
       runbookId: `${args.category}-runbook`,
@@ -55,13 +56,13 @@ export async function handleDiagnose(
     // Log each probe result to audit, skip probes denied by policy
     for (const [probe, finding] of Object.entries(result.findings)) {
       if (auth) {
-        const probeDecision = evaluateProbeAccess(auth, args.agent, probe, 'observe');
+        const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe, 'observe');
         if (!probeDecision.allowed) continue;
       }
 
       db.logAudit({
         apiKeyId: auth?.keyId,
-        agentId: args.agent,
+        agentId: agentOrSource,
         probe,
         status: finding.status,
         durationMs: finding.durationMs,

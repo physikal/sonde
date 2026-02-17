@@ -6,8 +6,8 @@ import { AgentInfo } from '../types/agent.js';
  * MVP's primary MCP tool — sends a single probe to an agent.
  */
 export const ProbeInput = z.object({
-  /** Agent name or ID */
-  agent: z.string(),
+  /** Agent name or ID (required for agent probes, omit for integration probes) */
+  agent: z.string().optional(),
   /** Full probe name, e.g. "system.disk.usage" */
   probe: z.string(),
   /** Probe-specific parameters */
@@ -19,8 +19,8 @@ export type ProbeInput = z.infer<typeof ProbeInput>;
  * Input schema for the `diagnose` MCP tool (post-MVP).
  */
 export const DiagnoseInput = z.object({
-  /** Agent name or ID */
-  agent: z.string(),
+  /** Agent name or ID (required for agent probes, omit for integration probes) */
+  agent: z.string().optional(),
   /** Pack category, e.g. "docker", "system" */
   category: z.string(),
   /** Natural language problem description */

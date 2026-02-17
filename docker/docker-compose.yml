@@ -6,6 +6,8 @@ services:
     environment:
       SONDE_API_KEY: test-key-123
       SONDE_DB_PATH: /data/sonde.db
+      # SONDE_ADMIN_USER: admin
+      # SONDE_ADMIN_PASSWORD: changeme
     volumes:
       - hub-data:/data
     ports:

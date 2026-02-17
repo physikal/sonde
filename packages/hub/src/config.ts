@@ -7,6 +7,8 @@ export interface HubConfig {
   dbPath: string;
   tlsEnabled: boolean;
   hubUrl?: string;
+  adminUser?: string;
+  adminPassword?: string;
 }
 
 export function loadConfig(): HubConfig {
@@ -23,6 +25,9 @@ export function loadConfig(): HubConfig {
     throw new Error('PORT must be between 1 and 65535.');
   }
 
+  const adminUser = process.env.SONDE_ADMIN_USER;
+  const adminPassword = process.env.SONDE_ADMIN_PASSWORD;
+
   return {
     port,
     host: process.env.HOST ?? '0.0.0.0',
@@ -30,5 +35,6 @@ export function loadConfig(): HubConfig {
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',
     tlsEnabled: process.env.SONDE_TLS === 'true',
     hubUrl: process.env.SONDE_HUB_URL || undefined,
+    ...(adminUser && adminPassword ? { adminUser, adminPassword } : {}),
   };
 }

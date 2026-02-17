@@ -1,11 +1,11 @@
 import type { SondeDb } from '../../db/index.js';
 import type { AuthContext } from '../../engine/policy.js';
 import { evaluateProbeAccess } from '../../engine/policy.js';
-import type { AgentDispatcher } from '../../ws/dispatcher.js';
+import type { ProbeRouter } from '../../integrations/probe-router.js';
 
 export async function handleProbe(
-  args: { agent: string; probe: string; params?: Record<string, unknown> },
-  dispatcher: AgentDispatcher,
+  args: { agent?: string; probe: string; params?: Record<string, unknown> },
+  probeRouter: ProbeRouter,
   db: SondeDb,
   auth?: AuthContext,
 ): Promise<{
@@ -14,9 +14,11 @@ export async function handleProbe(
   [key: string]: unknown;
 }> {
   try {
+    const agentOrSource = args.agent ?? args.probe.split('.')[0]!;
+
     // Policy check
     if (auth) {
-      const decision = evaluateProbeAccess(auth, args.agent, args.probe, 'observe');
+      const decision = evaluateProbeAccess(auth, agentOrSource, args.probe, 'observe');
       if (!decision.allowed) {
         return {
           content: [{ type: 'text', text: `Access denied: ${decision.reason}` }],
@@ -25,11 +27,11 @@ export async function handleProbe(
       }
     }
 
-    const response = await dispatcher.sendProbe(args.agent, args.probe, args.params);
+    const response = await probeRouter.execute(args.probe, args.params, args.agent);
 
     db.logAudit({
       apiKeyId: auth?.keyId,
-      agentId: args.agent,
+      agentId: agentOrSource,
       probe: args.probe,
       status: response.status,
       durationMs: response.durationMs,

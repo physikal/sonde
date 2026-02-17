@@ -15,6 +15,29 @@ export interface AgentRow {
   certPem?: string;
 }
 
+export interface IntegrationRow {
+  id: string;
+  type: string;
+  name: string;
+  configEncrypted: string;
+  status: string;
+  lastTestedAt: string | null;
+  lastTestResult: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionRow {
+  id: string;
+  authMethod: string;
+  userId: string;
+  email: string | null;
+  displayName: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface AuditEntry {
   apiKeyId?: string;
   agentId: string;
@@ -343,11 +366,12 @@ export class SondeDb {
         policyJson: string;
         expiresAt: string | null;
         revokedAt: string | null;
+        roleId: string;
       }
     | undefined {
     const row = this.db
       .prepare(
-        'SELECT id, name, policy_json, expires_at, revoked_at FROM api_keys WHERE key_hash = ?',
+        'SELECT id, name, policy_json, expires_at, revoked_at, role_id FROM api_keys WHERE key_hash = ?',
       )
       .get(keyHash) as
       | {
@@ -356,6 +380,7 @@ export class SondeDb {
           policy_json: string;
           expires_at: string | null;
           revoked_at: string | null;
+          role_id: string | null;
         }
       | undefined;
     if (!row) return undefined;
@@ -365,6 +390,7 @@ export class SondeDb {
       policyJson: row.policy_json,
       expiresAt: row.expires_at,
       revokedAt: row.revoked_at,
+      roleId: row.role_id ?? 'member',
     };
   }
 
@@ -576,6 +602,167 @@ export class SondeDb {
         'INSERT INTO hub_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
       )
       .run(key, value, new Date().toISOString());
+  }
+
+  // --- Integrations ---
+
+  createIntegration(row: IntegrationRow): void {
+    this.db
+      .prepare(
+        'INSERT INTO integrations (id, type, name, config_encrypted, status, last_tested_at, last_test_result, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        row.id,
+        row.type,
+        row.name,
+        row.configEncrypted,
+        row.status,
+        row.lastTestedAt,
+        row.lastTestResult,
+        row.createdAt,
+        row.updatedAt,
+      );
+  }
+
+  getIntegration(id: string): IntegrationRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM integrations WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      type: row.type as string,
+      name: row.name as string,
+      configEncrypted: row.config_encrypted as string,
+      status: row.status as string,
+      lastTestedAt: row.last_tested_at as string | null,
+      lastTestResult: row.last_test_result as string | null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  listIntegrations(): IntegrationRow[] {
+    const rows = this.db.prepare('SELECT * FROM integrations').all() as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as string,
+      type: row.type as string,
+      name: row.name as string,
+      configEncrypted: row.config_encrypted as string,
+      status: row.status as string,
+      lastTestedAt: row.last_tested_at as string | null,
+      lastTestResult: row.last_test_result as string | null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    }));
+  }
+
+  updateIntegration(
+    id: string,
+    fields: {
+      configEncrypted?: string;
+      status?: string;
+      lastTestedAt?: string;
+      lastTestResult?: string;
+    },
+  ): boolean {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (fields.configEncrypted !== undefined) {
+      sets.push('config_encrypted = ?');
+      params.push(fields.configEncrypted);
+    }
+    if (fields.status !== undefined) {
+      sets.push('status = ?');
+      params.push(fields.status);
+    }
+    if (fields.lastTestedAt !== undefined) {
+      sets.push('last_tested_at = ?');
+      params.push(fields.lastTestedAt);
+    }
+    if (fields.lastTestResult !== undefined) {
+      sets.push('last_test_result = ?');
+      params.push(fields.lastTestResult);
+    }
+
+    if (sets.length === 0) return false;
+
+    sets.push('updated_at = ?');
+    params.push(new Date().toISOString());
+    params.push(id);
+
+    const result = this.db
+      .prepare(`UPDATE integrations SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+    return result.changes > 0;
+  }
+
+  deleteIntegration(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM integrations WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  // --- Sessions ---
+
+  createSession(session: {
+    id: string;
+    authMethod: string;
+    userId: string;
+    email?: string | null;
+    displayName: string;
+    role: string;
+    expiresAt: string;
+  }): void {
+    this.db
+      .prepare(
+        'INSERT INTO sessions (id, auth_method, user_id, email, display_name, role, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        session.id,
+        session.authMethod,
+        session.userId,
+        session.email ?? null,
+        session.displayName,
+        session.role,
+        session.expiresAt,
+      );
+  }
+
+  getSession(id: string): SessionRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM sessions WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      authMethod: row.auth_method as string,
+      userId: row.user_id as string,
+      email: row.email as string | null,
+      displayName: row.display_name as string,
+      role: row.role as string,
+      expiresAt: row.expires_at as string,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  deleteSession(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  touchSession(id: string, newExpiresAt: string): boolean {
+    const result = this.db
+      .prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
+      .run(newExpiresAt, id);
+    return result.changes > 0;
+  }
+
+  cleanExpiredSessions(): number {
+    const result = this.db
+      .prepare('DELETE FROM sessions WHERE expires_at < ?')
+      .run(new Date().toISOString());
+    return result.changes;
   }
 
   close(): void {

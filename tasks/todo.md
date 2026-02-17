@@ -1,72 +1,41 @@
-# Phase 6: Launch Prep
+# Phase 7: Integration Pack Framework + httpbin End-to-End Proof
 
-## Implementation
+## Part 1: Encrypted Credential Storage (complete)
 
-- [x] **Database migration system**
-  - [x] `packages/hub/src/db/migrations/001-initial-schema.ts` — captures full existing schema
-  - [x] `packages/hub/src/db/migrations/002-hub-settings.ts` — new hub_settings table
-  - [x] `packages/hub/src/db/migrations/index.ts` — sorted migrations array
-  - [x] `packages/hub/src/db/migrator.ts` — `runMigrations()` with per-migration transactions
-  - [x] `packages/hub/src/db/migrator.test.ts` — in-memory SQLite tests (fresh, idempotent, incremental)
-  - [x] `packages/hub/src/db/index.ts` — replaced `migrate()` with `runMigrations()`, added `getHubSetting()`/`setHubSetting()`
+- [x] Step 1: Encryption module — `packages/hub/src/integrations/crypto.ts`
+- [x] Step 2: Migration 003 — integrations table
+- [x] Step 3: DB CRUD methods
+- [x] Step 4: IntegrationManager class
+- [x] Step 5: REST API endpoints — 6 endpoints under `/api/v1/integrations`
+- [x] Step 6: Startup wiring
+- [x] Step 7: `unregisterPack()` method on IntegrationExecutor
+- [x] Step 8: Tests — crypto + manager + migrator
 
-- [x] **Signed pack system**
-  - [x] `packages/shared/src/crypto/pack-signing.ts` — `signPackManifest()`, `verifyPackManifest()`, `PACK_SIGNING_PUBLIC_KEY`
-  - [x] `packages/shared/src/crypto/pack-signing.test.ts` — sign/verify/tamper/missing tests
-  - [x] `packages/shared/src/index.ts` — exported pack signing functions
-  - [x] `packages/packs/src/signatures.ts` — generated signatures map (starts empty)
-  - [x] `packages/packs/src/validation.ts` — `createPackRegistry()` gains `PackRegistryOptions` with `allowUnsignedPacks`
-  - [x] `packages/packs/src/index.ts` — injects signatures, passes options
-  - [x] `packages/agent/src/config.ts` — added `allowUnsignedPacks` to `AgentConfig`
-  - [x] `packages/agent/src/runtime/executor.ts` — added `ProbeExecutorOptions`, exported `PackRegistryOptions`
-  - [x] `scripts/generate-pack-keypair.ts` — one-time RSA 4096-bit keypair generator
-  - [x] `scripts/sign-packs.ts` — signs all pack manifests, writes signatures.ts
+## Part 2: httpbin Integration Pack + End-to-End Proof (complete)
 
-- [x] **Hub upgrade notifications**
-  - [x] `packages/shared/src/types/common.ts` — added `hub.update_available` to `MessageType` enum
-  - [x] `packages/hub/src/version-check.ts` — `checkLatestAgentVersion()`, `startVersionCheckLoop()`, `semverLt()`
-  - [x] `packages/hub/src/version-check.test.ts` — npm registry mock tests, semver comparison
-  - [x] `packages/hub/src/ws/server.ts` — sends `hub.update_available` to outdated agents, version-aware attestation
-  - [x] `packages/hub/src/index.ts` — starts version check loop, added `/api/v1/agents/outdated` endpoint
-  - [x] `packages/agent/src/runtime/connection.ts` — handles `hub.update_available`, added `onUpdateAvailable` event
-  - [x] `packages/agent/src/index.ts` — logs update available message in `cmdStart()`
-  - [x] `packages/dashboard/src/pages/Fleet.tsx` — amber "update available" badge in version column
-  - [x] `packages/dashboard/src/pages/AgentDetail.tsx` — update available banner
-
-- [x] **Agent self-update**
-  - [x] `packages/agent/src/cli/update.ts` — `checkForUpdate()`, `performUpdate()`, `semverLt()`
-  - [x] `packages/agent/src/cli/update.test.ts` — npm registry mock, semver, error handling tests
-  - [x] `packages/agent/src/index.ts` — `sonde update` command, added to usage
-
-- [x] **Build and test**
-  - [x] `scripts/publish.sh` — added pack signing step before publish
-  - [x] `npm run build` — all 5 packages pass
-  - [x] `npm run test` — all tests pass (221 tests across 37 test files)
-  - [x] `npm run typecheck` — 4/4 core packages pass (dashboard has pre-existing error)
+- [x] Step 1: Move integration types to `@sonde/shared` — created `types/integrations.ts`, hub re-exports
+- [x] Step 2: Create httpbin integration pack — `packages/packs/src/integrations/httpbin.ts` (ip/headers/status probes + runbook)
+- [x] Step 3: Fix IntegrationManager `findPack()` bug — added `packCatalog` constructor param, replaced executor lookup
+- [x] Step 4: httpbin integration test — 7 tests (probe execution, testConnection, ProbeRouter routing)
+- [x] Step 5: Mixed routing test — 2 tests (agent+integration mixed routing, RunbookEngine integration)
+- [x] Step 6: Lint fixes — import ordering, formatting, biome-ignore for test assertions
 
 ## Verification
 
-| Check | Status |
-|-------|--------|
-| `npm run build` | Pass (5/5 packages) |
-| `npm run test` | Pass (221 tests) |
-| `npm run typecheck` (shared/packs/hub/agent) | Pass |
-| `npm run typecheck` (dashboard) | Pre-existing error in useWebSocket.ts |
-| Migrator test: fresh DB | Pass — applies 2 migrations |
-| Migrator test: idempotent | Pass — 0 migrations on re-run |
-| Migrator test: incremental | Pass — applies only new migration 3 |
-| Pack signing test: sign/verify | Pass |
-| Pack signing test: tamper detection | Pass |
-| Version check test: npm registry | Pass |
-| Version check test: semverLt | Pass |
-| Agent update test: checkForUpdate | Pass |
+- [x] `npm run build` — all 6 packages compile
+- [x] `npm run test` — 140 hub tests (21 files), 85 packs, 81 agent, 11 shared — all pass
+- [x] `npm run lint` — no new lint errors in changed files
 
-## Review
+## Files Created
+- `packages/shared/src/types/integrations.ts` — integration type definitions (moved from hub)
+- `packages/packs/src/integrations/httpbin.ts` — httpbin integration pack
+- `packages/hub/src/integrations/httpbin.test.ts` — 7 tests
+- `packages/hub/src/integrations/mixed-routing.test.ts` — 2 tests
 
-**Database migration system**: Replaced inline `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN` in `SondeDb.migrate()` with versioned migration files. `runMigrations()` creates a `schema_version` table, applies pending migrations per-transaction, and logs each. Migration 001 captures the full existing schema (idempotent for existing DBs), migration 002 adds `hub_settings` table. `SondeDb` gains `getHubSetting()`/`setHubSetting()` for key-value storage.
-
-**Signed pack system**: Uses existing `signPayload`/`verifyPayload` from `@sonde/shared`. Build-time signing script generates `signatures.ts` map. Pack registry injects signatures into manifests at import. `createPackRegistry()` gains `allowUnsignedPacks` option (default `true` for transition). Agent config supports `allowUnsignedPacks`. Keypair generation and signing are separate scripts for CI integration.
-
-**Hub upgrade notifications**: Hub periodically polls npm registry for latest `@sonde/agent` version (every 6h), stores in `hub_settings`. On agent registration, compares versions and sends `hub.update_available` message. Agent connection handles the new message type and fires `onUpdateAvailable` event. Dashboard shows amber badge on Fleet page and banner on AgentDetail page. Attestation logic now accepts new baselines when agent version changes (expected after self-update).
-
-**Agent self-update**: New `sonde update` command checks npm registry, compares versions, runs `npm install -g @sonde/agent@{version}`, verifies installed version, and attempts systemd service restart (best-effort). Clean error handling for network failures and version mismatches.
+## Files Modified
+- `packages/shared/src/index.ts` — export integration types
+- `packages/hub/src/integrations/types.ts` — re-export from shared (was definitions)
+- `packages/packs/src/index.ts` — export httpbinPack
+- `packages/hub/src/integrations/manager.ts` — added packCatalog param, fixed findPack()
+- `packages/hub/src/integrations/manager.test.ts` — updated for catalog constructor
+- `packages/hub/src/index.ts` — build integration catalog, pass to manager, import httpbinPack

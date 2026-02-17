@@ -5,13 +5,21 @@ import https from 'node:https';
 import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { packRegistry } from '@sonde/packs';
+import { httpbinPack, packRegistry } from '@sonde/packs';
+import type { IntegrationPack } from '@sonde/shared';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
+import { createAuthRoutes } from './auth/local-auth.js';
+import { getUser, sessionMiddleware } from './auth/session-middleware.js';
+import { SessionManager } from './auth/sessions.js';
+import type { UserContext } from './auth/sessions.js';
 import { loadConfig } from './config.js';
 import { generateCaCert } from './crypto/ca.js';
 import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
+import { IntegrationExecutor } from './integrations/executor.js';
+import { IntegrationManager } from './integrations/manager.js';
+import { ProbeRouter } from './integrations/probe-router.js';
 import { createMcpHandler } from './mcp/server.js';
 import { handleDiagnose } from './mcp/tools/diagnose.js';
 import { handleProbe } from './mcp/tools/probe.js';
@@ -22,8 +30,23 @@ import { setupWsServer } from './ws/server.js';
 
 const config = loadConfig();
 const db = new SondeDb(config.dbPath);
+const sessionManager = new SessionManager(db);
+sessionManager.startCleanupLoop();
 const dispatcher = new AgentDispatcher();
+const integrationExecutor = new IntegrationExecutor();
+const probeRouter = new ProbeRouter(dispatcher, integrationExecutor);
 const runbookEngine = new RunbookEngine();
+
+const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
+  [httpbinPack.manifest.name, httpbinPack],
+]);
+const integrationManager = new IntegrationManager(
+  db,
+  integrationExecutor,
+  config.apiKey,
+  integrationCatalog,
+);
+integrationManager.loadAll();
 
 // Start periodic version check for agent updates
 startVersionCheckLoop(db);
@@ -127,7 +150,75 @@ exec sonde install --hub ${hubUrl}
 }
 
 // Hono app for REST routes
-const app = new Hono();
+type Env = { Variables: { user: UserContext } };
+const app = new Hono<Env>();
+
+// Session middleware on dashboard and API routes
+app.use('/api/*', sessionMiddleware(sessionManager));
+app.use('/auth/*', sessionMiddleware(sessionManager));
+
+// Auth routes (login/logout/status)
+app.route(
+  '/auth',
+  createAuthRoutes(sessionManager, {
+    adminUser: config.adminUser,
+    adminPassword: config.adminPassword,
+  }),
+);
+
+// Public API endpoints that don't require auth
+const PUBLIC_API_PATHS = new Set([
+  '/api/v1/setup/status',
+  '/api/v1/setup/complete',
+  '/api/v1/agents',
+  '/api/v1/packs',
+]);
+
+/**
+ * API key auth middleware for /api/v1/* routes.
+ * If a session already authenticated the user, skip.
+ * Otherwise check Bearer token for legacy API key or scoped key.
+ * Public endpoints pass through without auth.
+ */
+app.use('/api/v1/*', async (c, next) => {
+  // Public endpoints pass through
+  if (PUBLIC_API_PATHS.has(c.req.path)) return next();
+
+  // Already authenticated by session middleware?
+  if (getUser(c)) return next();
+
+  // Check Bearer token
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) return c.json({ error: 'Unauthorized' }, 401);
+
+  // Legacy master key
+  if (token === config.apiKey) {
+    c.set('user', {
+      id: 'apikey:legacy',
+      displayName: 'Legacy API Key',
+      role: 'owner',
+      authMethod: 'apikey',
+    });
+    return next();
+  }
+
+  // Scoped key lookup
+  const keyHash = hashApiKey(token);
+  const record = db.getApiKeyByHash(keyHash);
+  if (!record || record.revokedAt) return c.json({ error: 'Unauthorized' }, 401);
+  if (record.expiresAt && new Date(record.expiresAt) < new Date()) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  c.set('user', {
+    id: `apikey:${record.id}`,
+    displayName: record.name,
+    role: record.roleId,
+    authMethod: 'apikey',
+  });
+  return next();
+});
 
 app.get('/health', (c) =>
   c.json({
@@ -139,12 +230,6 @@ app.get('/health', (c) =>
 
 // Enrollment token creation endpoint
 app.post('/api/v1/enrollment-tokens', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   db.createEnrollmentToken(token, expiresAt);
@@ -153,23 +238,11 @@ app.post('/api/v1/enrollment-tokens', async (c) => {
 });
 
 app.get('/api/v1/enrollment-tokens', (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   return c.json({ tokens: db.listEnrollmentTokens() });
 });
 
 // API key management endpoints (require legacy key auth)
 app.post('/api/v1/api-keys', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const body = await c.req.json<{ name: string; policy?: Record<string, unknown> }>();
   if (!body.name) {
     return c.json({ error: 'name is required' }, 400);
@@ -186,39 +259,107 @@ app.post('/api/v1/api-keys', async (c) => {
 });
 
 app.get('/api/v1/api-keys', (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   return c.json({ keys: db.listApiKeys() });
 });
 
 app.delete('/api/v1/api-keys/:id', (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   db.revokeApiKey(c.req.param('id'));
   return c.json({ ok: true });
 });
 
 app.put('/api/v1/api-keys/:id/policy', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const body = await c.req.json<{ policy: Record<string, unknown> }>();
   const updated = db.updateApiKeyPolicy(c.req.param('id'), JSON.stringify(body.policy ?? {}));
   if (!updated) {
     return c.json({ error: 'API key not found' }, 404);
   }
   return c.json({ ok: true });
+});
+
+// --- Integration management endpoints (require master API key) ---
+
+app.post('/api/v1/integrations', async (c) => {
+  const body = await c.req.json<{
+    type?: string;
+    name?: string;
+    config?: { endpoint: string; headers?: Record<string, string> };
+    credentials?: {
+      packName?: string;
+      authMethod?: string;
+      credentials?: Record<string, string>;
+      oauth2?: Record<string, unknown>;
+    };
+  }>();
+
+  if (!body.type || !body.name || !body.config || !body.credentials) {
+    return c.json({ error: 'type, name, config, and credentials are required' }, 400);
+  }
+
+  try {
+    const result = integrationManager.create({
+      type: body.type,
+      name: body.name,
+      config: body.config as import('./integrations/types.js').IntegrationConfig,
+      credentials: body.credentials as import('./integrations/types.js').IntegrationCredentials,
+    });
+    return c.json(result, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Integration with this name already exists' }, 409);
+    }
+    throw error;
+  }
+});
+
+app.get('/api/v1/integrations', (c) => {
+  return c.json({ integrations: integrationManager.list() });
+});
+
+app.get('/api/v1/integrations/:id', (c) => {
+  const integration = integrationManager.get(c.req.param('id'));
+  if (!integration) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+  return c.json(integration);
+});
+
+app.put('/api/v1/integrations/:id', async (c) => {
+  const body = await c.req.json<{
+    config?: { endpoint: string; headers?: Record<string, string> };
+    credentials?: {
+      packName?: string;
+      authMethod?: string;
+      credentials?: Record<string, string>;
+      oauth2?: Record<string, unknown>;
+    };
+  }>();
+
+  const updated = integrationManager.update(c.req.param('id'), {
+    config: body.config as import('./integrations/types.js').IntegrationConfig | undefined,
+    credentials: body.credentials as
+      | import('./integrations/types.js').IntegrationCredentials
+      | undefined,
+  });
+
+  if (!updated) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+app.delete('/api/v1/integrations/:id', (c) => {
+  integrationManager.delete(c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.post('/api/v1/integrations/:id/test', async (c) => {
+  const integration = integrationManager.get(c.req.param('id'));
+  if (!integration) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+
+  const result = await integrationManager.testConnection(c.req.param('id'));
+  return c.json(result);
 });
 
 // Agent list endpoint (unauthenticated — dashboard needs it)
@@ -300,47 +441,61 @@ app.get('/api/v1/audit/verify', (c) => {
 
 // Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
 app.get('/api/v1/packs', (c) => {
-  const packs = [...packRegistry.values()].map((p) => ({
-    name: p.manifest.name,
-    version: p.manifest.version,
-    description: p.manifest.description,
-    probes: p.manifest.probes.map((probe) => ({
+  const mapManifest = (manifest: {
+    name: string;
+    type?: string;
+    version: string;
+    description: string;
+    probes: Array<{
+      name: string;
+      description: string;
+      capability: string;
+      params?: Record<string, unknown>;
+      timeout: number;
+    }>;
+    runbook?: { category: string; probes: string[]; parallel: boolean };
+  }) => ({
+    name: manifest.name,
+    type: manifest.type ?? 'agent',
+    version: manifest.version,
+    description: manifest.description,
+    probes: manifest.probes.map((probe) => ({
       name: probe.name,
       description: probe.description,
       capability: probe.capability,
       params: probe.params,
       timeout: probe.timeout,
     })),
-    runbook: p.manifest.runbook
+    runbook: manifest.runbook
       ? {
-          category: p.manifest.runbook.category,
-          probes: p.manifest.runbook.probes,
-          parallel: p.manifest.runbook.parallel,
+          category: manifest.runbook.category,
+          probes: manifest.runbook.probes,
+          parallel: manifest.runbook.parallel,
         }
       : null,
-  }));
-  return c.json({ packs });
+  });
+
+  const agentPacks = [...packRegistry.values()].map((p) => mapManifest(p.manifest));
+  const integrationPacks = integrationExecutor
+    .getRegisteredPacks()
+    .map((p) => mapManifest(p.manifest));
+
+  return c.json({ packs: [...agentPacks, ...integrationPacks] });
 });
 
 // Execute single probe via REST (authenticated — used by Try It page)
 app.post('/api/v1/probe', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const body = await c.req.json<{
-    agent: string;
+    agent?: string;
     probe: string;
     params?: Record<string, unknown>;
   }>();
-  if (!body.agent || !body.probe) {
-    return c.json({ error: 'agent and probe are required' }, 400);
+  if (!body.probe) {
+    return c.json({ error: 'probe is required' }, 400);
   }
 
   const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
-  const result = await handleProbe(body, dispatcher, db, auth);
+  const result = await handleProbe(body, probeRouter, db, auth);
   const text = result.content[0]?.text ?? '';
 
   if (result.isError) {
@@ -356,19 +511,13 @@ app.post('/api/v1/probe', async (c) => {
 
 // Execute diagnostic runbook via REST (authenticated — used by Try It page)
 app.post('/api/v1/diagnose', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (key !== config.apiKey) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  const body = await c.req.json<{ agent: string; category: string }>();
-  if (!body.agent || !body.category) {
-    return c.json({ error: 'agent and category are required' }, 400);
+  const body = await c.req.json<{ agent?: string; category: string }>();
+  if (!body.category) {
+    return c.json({ error: 'category is required' }, 400);
   }
 
   const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
-  const result = await handleDiagnose(body, dispatcher, runbookEngine, db, auth);
+  const result = await handleDiagnose(body, probeRouter, runbookEngine, db, auth);
   const text = result.content[0]?.text ?? '';
 
   if (result.isError) {
@@ -475,7 +624,14 @@ if (config.hubUrl) {
 }
 
 // MCP handler for /mcp/* routes
-const mcpHandler = createMcpHandler(dispatcher, db, config.apiKey, runbookEngine, oauthProvider);
+const mcpHandler = createMcpHandler(
+  probeRouter,
+  dispatcher,
+  db,
+  config.apiKey,
+  runbookEngine,
+  oauthProvider,
+);
 
 // Node HTTP server — routes /mcp to MCP handler, OAuth paths to Express, everything else to Hono
 const honoListener = getRequestListener(app.fetch);
@@ -538,15 +694,26 @@ server.listen(config.port, config.host, () => {
   console.log(`  Health:    ${protocol}://${config.host}:${config.port}/health`);
   console.log(`  Database:  ${config.dbPath}`);
   if (config.tlsEnabled) console.log('  TLS:       enabled (mTLS)');
+  if (config.adminUser) console.log('  Admin auth: enabled');
   if (config.hubUrl) console.log(`  OAuth:     ${config.hubUrl}`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down...');
+  sessionManager.stopCleanupLoop();
   server.close();
   db.close();
   process.exit(0);
 });
 
-export { app, config, db, dispatcher };
+export {
+  app,
+  config,
+  db,
+  dispatcher,
+  integrationExecutor,
+  integrationManager,
+  probeRouter,
+  sessionManager,
+};

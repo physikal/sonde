@@ -1,19 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SondeDb } from '../../db/index.js';
 import type { RunbookEngine } from '../../engine/runbooks.js';
-import type { AgentDispatcher } from '../../ws/dispatcher.js';
+import type { ProbeRouter } from '../../integrations/probe-router.js';
 import { handleDiagnose } from './diagnose.js';
 
-function createMockDispatcher(): AgentDispatcher {
+function createMockProbeRouter(): ProbeRouter {
   return {
-    registerAgent: vi.fn(),
-    removeAgent: vi.fn(),
-    removeBySocket: vi.fn(),
-    isAgentOnline: vi.fn().mockReturnValue(true),
-    getOnlineAgentIds: vi.fn().mockReturnValue([]),
-    sendProbe: vi.fn(),
-    handleResponse: vi.fn(),
-  } as unknown as AgentDispatcher;
+    execute: vi.fn(),
+  } as unknown as ProbeRouter;
 }
 
 function createMockDb(): SondeDb {
@@ -43,13 +37,13 @@ function createMockEngine(overrides: Partial<RunbookEngine> = {}): RunbookEngine
 
 describe('handleDiagnose', () => {
   it('executes runbook and returns consolidated output', async () => {
-    const dispatcher = createMockDispatcher();
+    const probeRouter = createMockProbeRouter();
     const db = createMockDb();
     const engine = createMockEngine();
 
     const result = await handleDiagnose(
       { agent: 'test-agent', category: 'docker' },
-      dispatcher,
+      probeRouter,
       engine,
       db,
     );
@@ -66,7 +60,7 @@ describe('handleDiagnose', () => {
     const db = createMockDb();
     const engine = createMockEngine();
 
-    await handleDiagnose({ agent: 'srv1', category: 'docker' }, createMockDispatcher(), engine, db);
+    await handleDiagnose({ agent: 'srv1', category: 'docker' }, createMockProbeRouter(), engine, db);
 
     expect(db.logAudit).toHaveBeenCalledOnce();
     const auditCall = (db.logAudit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
@@ -82,7 +76,7 @@ describe('handleDiagnose', () => {
 
     const result = await handleDiagnose(
       { agent: 'srv1', category: 'unknown' },
-      createMockDispatcher(),
+      createMockProbeRouter(),
       engine,
       createMockDb(),
     );
@@ -99,12 +93,31 @@ describe('handleDiagnose', () => {
 
     const result = await handleDiagnose(
       { agent: 'ghost', category: 'docker' },
-      createMockDispatcher(),
+      createMockProbeRouter(),
       engine,
       createMockDb(),
     );
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('not found');
+  });
+
+  it('works without agent for integration probes', async () => {
+    const probeRouter = createMockProbeRouter();
+    const db = createMockDb();
+    const engine = createMockEngine();
+
+    const result = await handleDiagnose(
+      { category: 'docker' },
+      probeRouter,
+      engine,
+      db,
+    );
+
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(result.content[0]?.text ?? '');
+    expect(parsed.agent).toBe('docker');
+
+    expect(engine.execute).toHaveBeenCalledWith('docker', undefined, probeRouter);
   });
 });

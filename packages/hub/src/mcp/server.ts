@@ -6,6 +6,7 @@ import { validateAuth } from '../auth.js';
 import type { SondeDb } from '../db/index.js';
 import type { AuthContext } from '../engine/policy.js';
 import type { RunbookEngine } from '../engine/runbooks.js';
+import type { ProbeRouter } from '../integrations/probe-router.js';
 import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
 import { handleAgentOverview } from './tools/agent-overview.js';
@@ -18,6 +19,7 @@ import { handleProbe } from './tools/probe.js';
  * Returns a request handler function for the /mcp path.
  */
 export function createMcpHandler(
+  probeRouter: ProbeRouter,
   dispatcher: AgentDispatcher,
   db: SondeDb,
   apiKey: string,
@@ -43,15 +45,18 @@ export function createMcpHandler(
       'probe',
       {
         description:
-          'Execute a probe on a connected agent. Returns structured data from the agent.',
+          'Execute a probe on a connected agent or integration. For agent probes, specify the agent name/ID. For integration probes (external APIs), the agent parameter can be omitted.',
         inputSchema: z.object({
-          agent: z.string().describe('Agent name or ID'),
+          agent: z
+            .string()
+            .optional()
+            .describe('Agent name or ID (required for agent probes, omit for integration probes)'),
           probe: z.string().describe('Full probe name, e.g. "system.disk.usage"'),
           params: z.record(z.unknown()).optional().describe('Probe-specific parameters'),
         }),
       },
       async (args) => {
-        return handleProbe(args, dispatcher, db, auth);
+        return handleProbe(args, probeRouter, db, auth);
       },
     );
 
@@ -59,9 +64,12 @@ export function createMcpHandler(
       'diagnose',
       {
         description:
-          'Run a diagnostic runbook against an agent. Executes all probes in the runbook and returns consolidated findings.',
+          'Run a diagnostic runbook. For agent runbooks, specify the agent. For integration runbooks, the agent can be omitted.',
         inputSchema: z.object({
-          agent: z.string().describe('Agent name or ID'),
+          agent: z
+            .string()
+            .optional()
+            .describe('Agent name or ID (required for agent runbooks, omit for integration runbooks)'),
           category: z.string().describe('Runbook category, e.g. "docker", "system", "systemd"'),
           description: z
             .string()
@@ -70,7 +78,7 @@ export function createMcpHandler(
         }),
       },
       async (args) => {
-        return handleDiagnose(args, dispatcher, runbookEngine, db, auth);
+        return handleDiagnose(args, probeRouter, runbookEngine, db, auth);
       },
     );
 

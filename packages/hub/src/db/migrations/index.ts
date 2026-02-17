@@ -7,8 +7,12 @@ export interface Migration {
 
 import { up as up001, version as v001 } from './001-initial-schema.js';
 import { up as up002, version as v002 } from './002-hub-settings.js';
+import { up as up003, version as v003 } from './003-integrations.js';
+import { up as up004, version as v004 } from './004-sessions-and-roles.js';
 
 export const migrations: Migration[] = [
   { version: v001, up: up001 },
   { version: v002, up: up002 },
+  { version: v003, up: up003 },
+  { version: v004, up: up004 },
 ].sort((a, b) => a.version - b.version);
