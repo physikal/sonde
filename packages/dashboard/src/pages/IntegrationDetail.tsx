@@ -193,6 +193,8 @@ export function IntegrationDetail() {
       fetchIntegration();
       if (result.success) {
         toast('Connection test passed', 'success');
+      } else if (result.message?.includes('No pack definition')) {
+        toast('Integration pack not yet available — credentials saved', 'info');
       } else {
         toast(result.message || 'Connection test failed', 'error');
       }
@@ -391,12 +393,16 @@ export function IntegrationDetail() {
             className={`mt-3 rounded-lg border p-3 text-sm ${
               testResult.success
                 ? 'border-emerald-800 bg-emerald-950/30 text-emerald-300'
-                : 'border-red-800 bg-red-950/30 text-red-300'
+                : testResult.message?.includes('No pack definition')
+                  ? 'border-amber-800 bg-amber-950/30 text-amber-300'
+                  : 'border-red-800 bg-red-950/30 text-red-300'
             }`}
           >
             {testResult.success
               ? 'Connection test passed'
-              : `Connection test failed: ${testResult.message || 'Unknown error'}`}
+              : testResult.message?.includes('No pack definition')
+                ? 'The server-side integration pack for this type is not yet available. Your credentials have been saved and will be used once the pack is installed.'
+                : `Connection test failed: ${testResult.message || 'Unknown error'}`}
           </div>
         )}
       </div>
