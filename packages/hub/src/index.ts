@@ -16,6 +16,7 @@ import { createMcpHandler } from './mcp/server.js';
 import { handleDiagnose } from './mcp/tools/diagnose.js';
 import { handleProbe } from './mcp/tools/probe.js';
 import type { SondeOAuthProvider } from './oauth/provider.js';
+import { semverLt, startVersionCheckLoop } from './version-check.js';
 import { AgentDispatcher } from './ws/dispatcher.js';
 import { setupWsServer } from './ws/server.js';
 
@@ -23,6 +24,9 @@ const config = loadConfig();
 const db = new SondeDb(config.dbPath);
 const dispatcher = new AgentDispatcher();
 const runbookEngine = new RunbookEngine();
+
+// Start periodic version check for agent updates
+startVersionCheckLoop(db);
 runbookEngine.loadFromManifests([...packRegistry.values()].map((p) => p.manifest));
 
 function generateInstallScript(hubUrl: string): string {
@@ -258,6 +262,24 @@ app.get('/api/v1/agents/:id/audit', (c) => {
   const endDate = c.req.query('endDate') || undefined;
   const entries = db.getAuditEntries({ agentId: agent.id, apiKeyId, startDate, endDate, limit });
   return c.json({ entries });
+});
+
+// Outdated agents endpoint
+app.get('/api/v1/agents/outdated', (c) => {
+  const latestVersion = db.getHubSetting('latest_agent_version');
+  if (!latestVersion) {
+    return c.json({ latestVersion: null, outdated: [] });
+  }
+  const agents = db.getAllAgents();
+  const outdated = agents
+    .filter((a) => a.agentVersion && semverLt(a.agentVersion, latestVersion))
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      currentVersion: a.agentVersion,
+      latestVersion,
+    }));
+  return c.json({ latestVersion, outdated });
 });
 
 // Global audit log

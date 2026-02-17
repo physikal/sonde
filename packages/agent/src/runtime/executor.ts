@@ -1,6 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { type ExecFn, type Pack, packRegistry } from '@sonde/packs';
+import {
+  type ExecFn,
+  type Pack,
+  type PackRegistryOptions,
+  createPackRegistry,
+  packRegistry,
+} from '@sonde/packs';
 import type { ProbeRequest, ProbeResponse } from '@sonde/shared';
 import { VERSION } from '../version.js';
 import { type ScrubPattern, buildPatterns, scrubData } from './scrubber.js';
@@ -14,6 +20,13 @@ async function defaultExec(command: string, args: string[]): Promise<string> {
     maxBuffer: 1024 * 1024,
   });
   return stdout;
+}
+
+export interface ProbeExecutorOptions {
+  packs?: ReadonlyMap<string, Pack>;
+  exec?: ExecFn;
+  scrubPatterns?: ScrubPattern[];
+  allowUnsignedPacks?: boolean;
 }
 
 export class ProbeExecutor {

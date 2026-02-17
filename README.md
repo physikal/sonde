@@ -1,159 +1,120 @@
 # Sonde
 
-AI infrastructure agent system. AI assistants (Claude, etc.) gather info from remote servers for troubleshooting via MCP.
+[![CI](https://github.com/sonde-dev/sonde/actions/workflows/ci.yml/badge.svg)](https://github.com/sonde-dev/sonde/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@sonde/agent)](https://www.npmjs.com/package/@sonde/agent)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Hub** = central MCP server. **Agents** = lightweight daemons on target machines connecting outbound via WebSocket. **Packs** = capability plugins defining available probes.
+**AI infrastructure agent.** Give Claude eyes into your servers.
 
-> Phase 0 — MVP. End-to-end proof of concept.
-
-## Architecture
+Sonde is a hub-and-spoke system that lets AI assistants gather information from remote infrastructure for troubleshooting. The hub serves an MCP endpoint that Claude (or any MCP client) connects to. Lightweight agents run on target machines, connecting outbound via WebSocket. Packs define the available probes — structured, read-only operations that return JSON.
 
 ```
-Claude / AI ──MCP──▸ Hub ──WebSocket──▸ Agent ──probe──▸ OS
-                      │                    │
-                   SQLite              Pack: system
-                   (audit)          (disk, memory, cpu)
+Claude ──MCP──▸ Hub ──WebSocket──▸ Agent ──probe──▸ Server
+                 │                    │
+              SQLite              7 Packs
+              (audit)        (25 built-in probes)
 ```
-
-- Agents connect **outbound** to the hub — never listen on a port
-- Agents never execute raw shell commands — structured probe descriptors only
-- All protocol messages validated with Zod schemas
-
-## Prerequisites
-
-- Node.js 22+
-- npm 10+
 
 ## Quick Start
 
-```bash
-# Install dependencies
-npm install
+### 1. Deploy the Hub
 
-# Build all packages
-npm run build
+```bash
+docker run -d --name sonde-hub \
+  -p 3000:3000 \
+  -e SONDE_API_KEY=your-secret-key-min-16-chars \
+  -v sonde-data:/data \
+  ghcr.io/sonde-dev/hub:latest
 ```
 
-### 1. Start the Hub
+### 2. Install an Agent
 
 ```bash
-SONDE_API_KEY=test-key-123 node packages/hub/dist/index.js
+curl -fsSL https://sondeapp.com/install | bash
 ```
 
-The hub starts on `http://localhost:3000` with:
-- `/health` — health check
-- `/mcp` — MCP endpoint (StreamableHTTP)
-- `/ws/agent` — WebSocket for agent connections
-
-### 2. Enroll and Start an Agent
-
-In a second terminal:
+Or with npm:
 
 ```bash
-node packages/agent/dist/index.js enroll \
-  --hub http://localhost:3000 \
-  --key test-key-123 \
-  --name my-server
-
-node packages/agent/dist/index.js start
+npm install -g @sonde/agent
+sonde enroll --hub https://your-hub:3000 --token <enrollment-token>
+sonde start --headless
 ```
 
-The agent connects to the hub, registers its packs (system), and waits for probe requests.
+### 3. Connect Claude
 
-### 3. Test the MCP Endpoint
-
-With the hub and agent running, test via curl:
+**Claude Code:**
 
 ```bash
-# Initialize an MCP session
-curl -X POST http://localhost:3000/mcp \
-  -H "Authorization: Bearer test-key-123" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {},
-      "clientInfo": { "name": "test", "version": "0.1.0" }
+claude mcp add sonde --transport http https://your-hub:3000/mcp \
+  --header "Authorization: Bearer your-api-key"
+```
+
+**Claude Desktop** — add to config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "sonde": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://your-hub:3000/mcp",
+        "--header",
+        "Authorization: Bearer your-api-key"
+      ]
     }
-  }'
+  }
+}
 ```
-
-Note the `mcp-session-id` header in the response, then call a probe:
-
-```bash
-curl -X POST http://localhost:3000/mcp \
-  -H "Authorization: Bearer test-key-123" \
-  -H "Content-Type: application/json" \
-  -H "Mcp-Session-Id: <session-id-from-above>" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/call",
-    "params": {
-      "name": "probe",
-      "arguments": {
-        "agent": "my-server",
-        "probe": "system.disk.usage"
-      }
-    }
-  }'
-```
-
-### 4. Use with Claude
-
-Add the MCP endpoint in Claude's settings:
-
-- **URL:** `http://localhost:3000/mcp`
-- **Auth header:** `Bearer test-key-123`
 
 Then ask: *"What's the disk usage on my-server?"*
 
-## Docker
+## Available Packs
 
-```bash
-docker compose -f docker/docker-compose.yml up -d --build
-```
+| Pack | Probes | Description |
+|------|--------|-------------|
+| **system** | `disk.usage`, `memory.usage`, `cpu.usage` | OS metrics |
+| **docker** | `containers.list`, `logs.tail`, `images.list`, `daemon.info` | Docker containers and images |
+| **systemd** | `services.list`, `service.status`, `journal.query` | systemd services and journals |
+| **nginx** | `config.test`, `access.log.tail`, `error.log.tail` | Nginx config and logs |
+| **postgres** | `databases.list`, `connections.active`, `query.slow` | PostgreSQL databases and queries |
+| **redis** | `info`, `keys.count`, `memory.usage` | Redis server stats |
+| **mysql** | `databases.list`, `processlist`, `status` | MySQL databases and processes |
 
-This starts the hub on port 3000 with API key `test-key-123`. Then enroll an agent from the host as shown above.
+7 packs, 25 probes. Agents auto-detect installed software and suggest relevant packs.
+
+## Security
+
+Nine-layer defense-in-depth: dedicated unprivileged user, no raw shell execution, capability ceilings, mTLS, payload signing, output scrubbing, pack signing, agent attestation, and tamper-evident audit logging. See the [Security Model](https://sondeapp.com/reference/security/) docs.
+
+## Monorepo
+
+| Package | Description |
+|---------|-------------|
+| [`@sonde/shared`](packages/shared) | Protocol Zod schemas, types, crypto utils |
+| [`@sonde/packs`](packages/packs) | Pack definitions (7 built-in packs) |
+| [`@sonde/hub`](packages/hub) | MCP server, WebSocket, DB, dashboard serving |
+| [`@sonde/agent`](packages/agent) | WebSocket client, probe executor, CLI, TUI |
+| [`@sonde/dashboard`](packages/dashboard) | React 19 SPA (setup wizard + dashboard) |
+| [`@sonde/docs`](packages/docs) | Documentation site (Starlight) |
 
 ## Development
 
 ```bash
-# Type-check, lint, and test all packages
-npm run typecheck
-npm run lint
-npm run test
-
-# Run everything via Turborepo
-npm run build
-
-# Integration tests (requires Docker)
-npm run test:integration
-
-# Format code
-npm run format
+npm install          # Install all workspace dependencies
+npm run build        # Build all packages
+npm run test         # Run tests
+npm run typecheck    # Type-check
+npm run lint         # Lint with Biome
 ```
 
-## Monorepo Packages
+Requires Node.js 22+ and npm 10+. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 
-| Package | Description |
-|---------|-------------|
-| `@sonde/shared` | Protocol Zod schemas, types, constants |
-| `@sonde/packs` | Probe capability plugins (system pack) |
-| `@sonde/hub` | MCP server, WebSocket server, SQLite |
-| `@sonde/agent` | WebSocket client, probe executor, CLI |
-| `@sonde/dashboard` | React frontend (Phase 4+) |
+## Documentation
 
-## Available Probes
-
-**System pack** (`system`):
-- `system.disk.usage` — filesystem usage (df)
-- `system.memory.usage` — memory stats (free)
-- `system.cpu.usage` — CPU load averages + core count
+Full documentation at [sondeapp.com](https://sondeapp.com).
 
 ## License
 
-Private — all rights reserved.
+[MIT](LICENSE)

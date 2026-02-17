@@ -8,26 +8,15 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
 
-    # TODO (Phase 6): Full release pipeline
-    # See docs/CICD.md for the complete spec.
-    #
-    # Steps to implement:
-    # 1. Checkout + Node setup + npm ci (same as CI)
-    # 2. Full CI checks (typecheck, lint, test, build)
-    # 3. Changesets version bump → create "Version Packages" PR
-    #    - uses: changesets/action@v1
-    #      with:
-    #        publish: npx changeset publish
-    # 4. Docker build + push to ghcr.io/sonde-dev/hub
-    #    - Tags: :latest, :sha-${{ github.sha }}, :v<version>
-    #    - Dashboard bundled as static assets inside hub image
-    # 5. npm publish @sonde/* packages
-    # 6. GitHub Release with auto-generated changelog
+jobs:
+  ci:
+    name: Typecheck · Lint · Test · Build
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -39,35 +28,85 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-
+            turbo-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Typecheck, lint, and test
+        run: npx turbo run typecheck lint test
+
+      - name: Build all packages
         run: npx turbo run build
 
-      # TODO: Uncomment when changesets is configured with repo tokens
-      # - name: Create Release Pull Request or Publish
-      #   uses: changesets/action@v1
-      #   with:
-      #     publish: npx changeset publish
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  release:
+    name: Release
+    needs: ci
+    runs-on: ubuntu-latest
 
-      # TODO: Docker build + push
-      # - name: Login to GHCR
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
-      #
-      # - name: Build and push hub image
-      #   uses: docker/build-push-action@v6
-      #   with:
-      #     context: .
-      #     file: docker/hub.Dockerfile
-      #     push: true
-      #     tags: |
-      #       ghcr.io/sonde-dev/hub:latest
-      #       ghcr.io/sonde-dev/hub:sha-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        run: npx turbo run build
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: npx changeset publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Login to GHCR
+        if: steps.changesets.outputs.published == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract hub version
+        if: steps.changesets.outputs.published == 'true'
+        id: hub-version
+        run: echo "version=$(node -p "require('./packages/hub/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push hub image
+        if: steps.changesets.outputs.published == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/hub.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/sonde-dev/hub:latest
+            ghcr.io/sonde-dev/hub:sha-${{ github.sha }}
+            ghcr.io/sonde-dev/hub:v${{ steps.hub-version.outputs.version }}
+
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.hub-version.outputs.version }}
+          generate_release_notes: true

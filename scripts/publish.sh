@@ -13,6 +13,9 @@ npm run test
 echo "==> Versioning..."
 npx changeset version
 
+echo "==> Signing packs..."
+npx tsx scripts/sign-packs.ts
+
 echo "==> Publishing..."
 npx changeset publish
 

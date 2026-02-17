@@ -1,0 +1,75 @@
+---
+title: Sonde
+description: AI infrastructure agent. Give Claude eyes into your servers.
+template: splash
+hero:
+  tagline: AI infrastructure agent. Give Claude eyes into your servers.
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/sonde-dev/sonde
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## How It Works
+
+<CardGrid>
+  <Card title="Deploy a Hub" icon="rocket">
+    Run the hub with Docker or from source. It serves the MCP endpoint that AI assistants connect to, plus a dashboard for management.
+  </Card>
+  <Card title="Enroll Agents" icon="laptop">
+    Install lightweight agents on your servers. They connect outbound to the hub via WebSocket — no inbound ports needed.
+  </Card>
+  <Card title="Ask Claude" icon="magnifier">
+    Claude calls Sonde tools to check disk usage, list containers, query logs, and diagnose issues across your fleet.
+  </Card>
+</CardGrid>
+
+## Features
+
+<CardGrid>
+  <Card title="Read-Only by Default" icon="approve-check">
+    Agents execute structured probe descriptors, never raw shell commands. All probes are read-only at the default capability level.
+  </Card>
+  <Card title="7 Built-in Packs" icon="puzzle">
+    System metrics, Docker, systemd, Nginx, PostgreSQL, Redis, and MySQL. Auto-detection finds what's installed and suggests relevant packs.
+  </Card>
+  <Card title="Defense in Depth" icon="shield">
+    Nine security layers: privilege dropping, mTLS, payload signing, output scrubbing, pack signing, capability ceilings, attestation, policy engine, and audit logging.
+  </Card>
+  <Card title="MCP Native" icon="setting">
+    Built on the Model Context Protocol. Works with Claude Desktop, Claude Code, and any MCP-compatible client.
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+Deploy the hub:
+
+```bash
+docker run -d --name sonde-hub \
+  -p 3000:3000 \
+  -e SONDE_API_KEY=your-secret-key-min-16-chars \
+  -v sonde-data:/data \
+  ghcr.io/sonde-dev/hub:latest
+```
+
+Install an agent on a target machine:
+
+```bash
+curl -fsSL https://sondeapp.com/install | bash
+```
+
+Add Sonde to Claude Code:
+
+```bash
+claude mcp add sonde --transport http https://your-hub:3000/mcp \
+  --header "Authorization: Bearer your-api-key"
+```
+
+Then ask: *"What's the disk usage on my-server?"*

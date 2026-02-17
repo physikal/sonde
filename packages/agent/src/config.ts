@@ -12,6 +12,7 @@ export interface AgentConfig {
   keyPath?: string;
   caCertPath?: string;
   scrubPatterns?: string[];
+  allowUnsignedPacks?: boolean;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.sonde');
@@ -22,11 +23,24 @@ export function getConfigPath(): string {
 }
 
 export function loadConfig(): AgentConfig | undefined {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
+    raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOENT') return undefined;
+    if (code === 'EACCES') {
+      console.error(`Cannot read config at ${CONFIG_FILE}. Check file permissions.`);
+      process.exit(1);
+    }
+    return undefined;
+  }
+
+  try {
     return JSON.parse(raw) as AgentConfig;
   } catch {
-    return undefined;
+    console.error(`Config file corrupted at ${CONFIG_FILE}. Re-enroll with "sonde enroll".`);
+    process.exit(1);
   }
 }
 

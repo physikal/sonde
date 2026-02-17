@@ -10,6 +10,7 @@ import { type WebSocket, WebSocketServer } from 'ws';
 import { extractApiKey, hashApiKey } from '../auth.js';
 import { getCertFingerprint, issueAgentCert } from '../crypto/ca.js';
 import type { SondeDb } from '../db/index.js';
+import { semverLt } from '../version-check.js';
 import type { AgentDispatcher } from './dispatcher.js';
 
 interface RegisterPayload {
@@ -244,9 +245,18 @@ function handleRegister(
     if (parsed.success) {
       const newJson = JSON.stringify(parsed.data);
       // Check for mismatch on re-registration (existing agent by name)
-      const existing = db.getAgent(payload.name);
-      const storedJson = existing?.attestationJson;
-      const mismatch = !!(storedJson && storedJson !== '{}' && storedJson !== newJson);
+      const existingAgent = db.getAgent(payload.name);
+      const storedJson = existingAgent?.attestationJson;
+      // Accept new attestation baseline if agent version changed (expected after self-update)
+      const versionChanged =
+        existingAgent?.agentVersion &&
+        existingAgent.agentVersion !== payload.agentVersion;
+      const mismatch = !!(
+        storedJson &&
+        storedJson !== '{}' &&
+        storedJson !== newJson &&
+        !versionChanged
+      );
       if (mismatch) {
         db.updateAgentStatus(agentId, 'degraded', now);
         console.warn(`Attestation mismatch for agent ${payload.name} (${agentId})`);
@@ -281,6 +291,23 @@ function handleRegister(
       ? 'token → API key minted'
       : 'API key';
   console.log(`Agent registered: ${payload.name} (${agentId}) [${authMethod}]`);
+
+  // Send update notification if agent is outdated
+  const latestVersion = db.getHubSetting('latest_agent_version');
+  if (latestVersion && payload.agentVersion && semverLt(payload.agentVersion, latestVersion)) {
+    const updateMsg = {
+      id: crypto.randomUUID(),
+      type: 'hub.update_available' as const,
+      timestamp: now,
+      agentId,
+      signature: '',
+      payload: {
+        latestVersion,
+        currentVersion: payload.agentVersion,
+      },
+    };
+    ws.send(JSON.stringify(updateMsg));
+  }
 }
 
 function handleHeartbeat(

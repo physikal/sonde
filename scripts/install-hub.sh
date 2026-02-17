@@ -779,6 +779,24 @@ print_summary() {
 
   echo "${RED}${BOLD}IMPORTANT:${RESET} Save the API key above securely. It cannot be recovered."
   echo ""
+
+  # Offer to install the agent on this same machine
+  if confirm "Install @sonde/agent on this machine too?"; then
+    if command -v sonde >/dev/null 2>&1; then
+      info "sonde CLI already installed, skipping npm install."
+    elif command -v npm >/dev/null 2>&1; then
+      info "Installing @sonde/agent globally via npm..."
+      npm install -g @sonde/agent
+    else
+      warn "npm not found. Install the agent manually:"
+      echo "  npm install -g @sonde/agent"
+      echo ""
+      return
+    fi
+    echo ""
+    info "Launching agent installer TUI..."
+    sonde install --hub "${SONDE_HUB_URL}"
+  fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────

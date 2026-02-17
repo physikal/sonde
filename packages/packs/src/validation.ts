@@ -1,3 +1,4 @@
+import { verifyPackManifest } from '@sonde/shared';
 import type { Pack } from './types.js';
 
 export class PackValidationError extends Error {
@@ -5,6 +6,11 @@ export class PackValidationError extends Error {
     super(message);
     this.name = 'PackValidationError';
   }
+}
+
+export interface PackRegistryOptions {
+  /** When false, packs with invalid or missing signatures are rejected. Default: true */
+  allowUnsignedPacks?: boolean;
 }
 
 /**
@@ -35,12 +41,26 @@ export function validatePack(pack: Pack): void {
 /**
  * Validates all packs and builds a frozen registry map.
  * Throws on duplicate pack names or invalid packs.
+ * When allowUnsignedPacks is false, verifies pack manifest signatures.
  */
-export function createPackRegistry(packs: Pack[]): ReadonlyMap<string, Pack> {
+export function createPackRegistry(
+  packs: Pack[],
+  options?: PackRegistryOptions,
+): ReadonlyMap<string, Pack> {
+  const allowUnsigned = options?.allowUnsignedPacks ?? true;
   const registry = new Map<string, Pack>();
 
   for (const pack of packs) {
     validatePack(pack);
+
+    if (!allowUnsigned) {
+      const valid = verifyPackManifest(pack.manifest as unknown as Record<string, unknown>);
+      if (!valid) {
+        throw new PackValidationError(
+          `Pack "${pack.manifest.name}": signature verification failed`,
+        );
+      }
+    }
 
     if (registry.has(pack.manifest.name)) {
       throw new PackValidationError(`Duplicate pack name: "${pack.manifest.name}"`);

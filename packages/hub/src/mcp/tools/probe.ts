@@ -46,8 +46,14 @@ export async function handleProbe(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    let hint = '';
+    if (message.includes('not found or offline')) {
+      hint = ' Check that the agent is running and connected to the hub.';
+    } else if (message.includes('timed out')) {
+      hint = ' The agent may be overloaded or the probe may be slow.';
+    }
     return {
-      content: [{ type: 'text', text: `Error: ${message}` }],
+      content: [{ type: 'text', text: `Error: ${message}${hint}` }],
       isError: true,
     };
   }

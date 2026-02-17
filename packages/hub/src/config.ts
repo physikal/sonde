@@ -14,9 +14,17 @@ export function loadConfig(): HubConfig {
   if (!apiKey) {
     throw new Error('SONDE_API_KEY environment variable is required');
   }
+  if (apiKey.length < 16) {
+    throw new Error('SONDE_API_KEY must be at least 16 characters.');
+  }
+
+  const port = Number(process.env.PORT) || DEFAULT_HUB_PORT;
+  if (process.env.PORT && (port < 1 || port > 65535 || !Number.isInteger(port))) {
+    throw new Error('PORT must be between 1 and 65535.');
+  }
 
   return {
-    port: Number(process.env.PORT) || DEFAULT_HUB_PORT,
+    port,
     host: process.env.HOST ?? '0.0.0.0',
     apiKey,
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',

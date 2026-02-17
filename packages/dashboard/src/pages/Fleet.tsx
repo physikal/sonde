@@ -37,8 +37,17 @@ function timeAgo(isoString: string): string {
   return `${days}d ago`;
 }
 
+interface OutdatedInfo {
+  latestVersion: string | null;
+  outdated: Array<{ id: string; name: string; currentVersion: string; latestVersion: string }>;
+}
+
 export function Fleet() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [outdatedInfo, setOutdatedInfo] = useState<OutdatedInfo>({
+    latestVersion: null,
+    outdated: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { agentStatus } = useWebSocket();
@@ -47,8 +56,17 @@ export function Fleet() {
   const fetchAgents = useCallback(() => {
     setLoading(true);
     setError(null);
-    apiFetch<{ agents: Agent[] }>('/agents')
-      .then((data) => setAgents(data.agents))
+    Promise.all([
+      apiFetch<{ agents: Agent[] }>('/agents'),
+      apiFetch<OutdatedInfo>('/agents/outdated').catch(() => ({
+        latestVersion: null,
+        outdated: [],
+      })),
+    ])
+      .then(([agentsData, outdatedData]) => {
+        setAgents(agentsData.agents);
+        setOutdatedInfo(outdatedData);
+      })
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : 'Failed to load agents'),
       )
@@ -58,6 +76,9 @@ export function Fleet() {
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
+
+  // Build set of outdated agent IDs for quick lookup
+  const outdatedIds = new Set(outdatedInfo.outdated.map((o) => o.id));
 
   // Merge real-time online status from WebSocket (match by ID or name)
   const onlineIds = new Set(agentStatus.onlineAgentIds);
@@ -149,7 +170,14 @@ export function Fleet() {
                     {agent.packs.map((p) => p.name).join(', ') || '\u2014'}
                   </td>
                   <td className="px-4 py-3 text-gray-400">{timeAgo(agent.lastSeen)}</td>
-                  <td className="px-4 py-3 text-gray-400">{agent.agentVersion || '\u2014'}</td>
+                  <td className="px-4 py-3 text-gray-400">
+                    {agent.agentVersion || '\u2014'}
+                    {outdatedIds.has(agent.id) && (
+                      <span className="ml-1.5 rounded bg-amber-900/50 px-1.5 py-0.5 text-xs text-amber-400">
+                        update available
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-400">{agent.os || '\u2014'}</td>
                 </tr>
               ))

@@ -42,6 +42,11 @@ const PROBE_STATUS_COLORS: Record<string, string> = {
   timeout: 'text-amber-400',
 };
 
+interface OutdatedInfo {
+  latestVersion: string | null;
+  outdated: Array<{ id: string; name: string; currentVersion: string; latestVersion: string }>;
+}
+
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,6 +54,10 @@ export function AgentDetail() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [outdatedInfo, setOutdatedInfo] = useState<OutdatedInfo>({
+    latestVersion: null,
+    outdated: [],
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -58,6 +67,9 @@ export function AgentDetail() {
     apiFetch<{ entries: AuditEntry[] }>(`/agents/${id}/audit?limit=50`).then((data) =>
       setAudit(data.entries),
     );
+    apiFetch<OutdatedInfo>('/agents/outdated')
+      .then(setOutdatedInfo)
+      .catch(() => {});
   }, [id]);
 
   if (error) {
@@ -83,6 +95,7 @@ export function AgentDetail() {
     agentStatus.onlineAgentIds.includes(agent.id) ||
     agentStatus.onlineAgents.some((a) => a.name === agent.name);
   const liveStatus = isOnline ? 'online' : agent.status === 'degraded' ? 'degraded' : 'offline';
+  const agentOutdated = outdatedInfo.outdated.find((o) => o.id === agent.id);
 
   return (
     <div className="p-8">
@@ -127,6 +140,18 @@ export function AgentDetail() {
           </div>
         </dl>
       </div>
+
+      {/* Update available banner */}
+      {agentOutdated && (
+        <div className="mt-4 rounded-xl border border-amber-800/50 bg-amber-900/20 p-4">
+          <p className="text-sm text-amber-400">
+            Update Available: v{agentOutdated.currentVersion} &rarr; v
+            {agentOutdated.latestVersion}. Run{' '}
+            <code className="rounded bg-amber-900/50 px-1.5 py-0.5">sonde update</code> on the
+            agent to upgrade.
+          </p>
+        </div>
+      )}
 
       {/* Installed packs */}
       <div className="mt-6">

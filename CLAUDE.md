@@ -52,8 +52,11 @@ mTLS (hub CA, agent certs), payload signing (RSA-SHA256), output scrubbing, agen
 ### Phase 3 — Agent TUI & Management
 Agent management TUI (Ink v5), installer TUI, pack management CLI, privilege dropping, enrollment tokens.
 
-### Phase 4 — Hub Dashboard (current)
-React 19 + Vite + Tailwind v4 SPA served by hub. 5-step setup wizard (Welcome, API Key, AI Tools, Agent Enroll, Complete). App shell with sidebar navigation. Overview dashboard with hub health + agent count. Setup state persisted in SQLite `setup` table. Hub serves static assets with SPA fallback for client-side routing.
+### Phase 4 — Hub Dashboard
+React 19 + Vite + Tailwind v4 SPA served by hub. 5-step setup wizard (Welcome, API Key, AI Tools, Agent Enroll, Complete). App shell with sidebar navigation. Overview dashboard with hub health + agent count. Fleet page with real-time agent status. Agent detail page with probe history. Enrollment page with token generation and one-liner install commands. Try It page for interactive probe execution. Setup state persisted in SQLite `setup` table. Hub serves static assets with SPA fallback for client-side routing.
+
+### Phase 4.5 — Production Hardening (current)
+Agent installer route (`GET /install` — `curl | bash` bootstrap). Token-only enrollment (no master API key required for agents). Hub mints scoped API keys during token enrollment for persistent agent auth. Stable agent identity (reuse UUID on re-enrollment by name). Concurrent probe support via requestId correlation. Dynamic version from package.json. Stale socket cleanup on agent reconnect. Dashboard real-time status via WebSocket broadcast. Changesets wired for versioning/publishing.
 
 ## Key Architecture Rules
 
@@ -109,8 +112,10 @@ sonde/
 │   │   ├── oauth/                 # provider.ts
 │   │   └── config.ts
 │   ├── agent/src/
-│   │   ├── index.ts               # CLI entry (enroll, start, status, packs)
+│   │   ├── index.ts               # CLI entry (enroll, start, status, packs, install)
+│   │   ├── version.ts             # Dynamic version from package.json
 │   │   ├── runtime/               # connection.ts, executor.ts, scrubber.ts, attestation.ts, privilege.ts, audit.ts
+│   │   ├── tui/                   # installer/ (InstallerApp, StepHub, etc.), manager/ (ManagerApp)
 │   │   ├── system/                # scanner.ts
 │   │   ├── cli/                   # packs.ts
 │   │   └── config.ts
@@ -149,7 +154,23 @@ sonde/
 - **MCP transport**: Using `StreamableHTTPServerTransport` + `McpServer.registerTool()` from MCP SDK (not deprecated SSE/`.tool()` APIs)
 - **Hub routing**: Raw Node HTTP server routes `/mcp` → MCP handler, OAuth paths → Express sub-app, rest → Hono via `getRequestListener`. Per-session McpServer instances.
 - **Probe testability**: ExecFn injection — probe handlers accept `(params, exec)` where `exec` is `(cmd, args) => Promise<string>`. Tests mock `exec`.
-- **Dispatcher**: MVP uses one pending probe per agent (`Map<agentId, PendingRequest>`). Will need request-ID correlation for concurrent probes.
-- **Auth**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param. OAuth 2.0 with PKCE for MCP clients.
+- **Dispatcher**: Supports concurrent probes per agent via `requestId` correlation (`Map<requestId, PendingRequest>`). Old agents without `requestId` fall back to first-match by agentId. Stale socket cleanup in `registerAgent` prevents delayed `close` events from evicting live reconnections.
+- **Auth**: `extractApiKey()` checks Bearer header first, falls back to `?apiKey` query param. WS upgrade accepts master API key, scoped API keys (hash lookup), or enrollment tokens. OAuth 2.0 with PKCE for MCP clients.
+- **Enrollment flow**: Tokens are one-time-use. Hub auto-detects enrollment tokens from bearer auth (supports both CLI `--token` and TUI). On token enrollment, hub mints a scoped API key (`agent:<name>`) and returns it in the `hub.ack`. Agent saves it for persistent reconnect auth. Stable agent identity: same name → same UUID across re-enrollments.
+- **Agent version**: Read dynamically from `package.json` via `import.meta.url` in `src/version.ts`. Used in CLI output, probe metadata, and registration messages. `sonde --version` flag supported.
 - **Dashboard**: Tailwind v4 via `@tailwindcss/postcss` (not `@tailwindcss/vite`) due to monorepo Vite version conflict (root has v5 from vitest, dashboard needs v6). Hub serves built dashboard assets with SPA fallback.
 - **Setup flow**: First-boot wizard persisted in `setup` table. `GET /api/v1/setup/status` is unauthenticated. `POST /api/v1/setup/complete` is one-time (409 on repeat).
+- **Install script**: `GET /install` returns a bash bootstrapper that installs Node.js 22 + `@sonde/agent`, then runs `sonde install --hub <url>` for the TUI. Supports Linux (apt/dnf/yum) and macOS (brew).
+
+## Deployment
+
+- **Hub**: Deployed at `https://mcp.sondeapp.com` via Dokploy. Dockerfile at repo root (copied from `docker/hub.Dockerfile`).
+- **Agent**: Installed on target machines via `npm install -g @sonde/agent` or `curl -fsSL https://mcp.sondeapp.com/install | bash`.
+- **MCP integration**: Claude Desktop configured at `~/Library/Application Support/Claude/claude_desktop_config.json` with Sonde MCP server URL.
+- **Live agent**: `gmtek01` enrolled and running on remote infrastructure.
+
+## Publishing
+
+- Changesets configured: `npx changeset` to create, `npm run release` to version + publish.
+- `scripts/publish.sh` convenience wrapper: build → test → changeset version → changeset publish.
+- Agent package (`@sonde/agent`) is public. Hub and dashboard are private.

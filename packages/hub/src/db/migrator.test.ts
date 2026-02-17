@@ -1,0 +1,100 @@
+import Database from 'better-sqlite3';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { Migration } from './migrations/index.js';
+import { runMigrations } from './migrator.js';
+
+describe('runMigrations', () => {
+  let db: Database.Database;
+
+  afterEach(() => {
+    db?.close();
+  });
+
+  it('should apply all migrations on a fresh database', () => {
+    db = new Database(':memory:');
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    const applied = runMigrations(db);
+
+    expect(applied).toBe(2);
+
+    // Verify schema_version is at 2
+    const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
+      version: number;
+    };
+    expect(row.version).toBe(2);
+
+    // Verify tables from migration 001 exist
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      .all() as Array<{ name: string }>;
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain('agents');
+    expect(tableNames).toContain('audit_log');
+    expect(tableNames).toContain('api_keys');
+    expect(tableNames).toContain('setup');
+
+    // Verify table from migration 002 exists
+    expect(tableNames).toContain('hub_settings');
+  });
+
+  it('should be idempotent — running again applies 0 migrations', () => {
+    db = new Database(':memory:');
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    const first = runMigrations(db);
+    expect(first).toBe(2);
+
+    const second = runMigrations(db);
+    expect(second).toBe(0);
+
+    const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
+      version: number;
+    };
+    expect(row.version).toBe(2);
+  });
+
+  it('should apply only new migrations when a new one is added', async () => {
+    db = new Database(':memory:');
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    // Run initial migrations
+    runMigrations(db);
+
+    // Simulate adding migration 003 by manually importing and modifying the module
+    const { migrations } = await import('./migrations/index.js');
+
+    const fakeMigration: Migration = {
+      version: 3,
+      up: (database) => {
+        database.exec(
+          'CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, data TEXT NOT NULL)',
+        );
+      },
+    };
+
+    migrations.push(fakeMigration);
+
+    try {
+      const applied = runMigrations(db);
+      expect(applied).toBe(1);
+
+      const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
+        version: number;
+      };
+      expect(row.version).toBe(3);
+
+      // Verify test_table was created
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'test_table'")
+        .all();
+      expect(tables).toHaveLength(1);
+    } finally {
+      // Clean up: remove fake migration so other tests aren't affected
+      migrations.pop();
+    }
+  });
+});

@@ -35,6 +35,13 @@ export { AttestationData } from './schemas/attestation.js';
 // Crypto — Signing
 export { signPayload, verifyPayload } from './crypto/signing.js';
 
+// Crypto — Pack Signing
+export {
+  PACK_SIGNING_PUBLIC_KEY,
+  signPackManifest,
+  verifyPackManifest,
+} from './crypto/pack-signing.js';
+
 // Schemas — MCP
 export {
   ProbeInput,
