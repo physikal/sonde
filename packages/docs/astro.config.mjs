@@ -43,6 +43,13 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Integrations',
+          items: [
+            { label: 'Overview', slug: 'integrations/overview' },
+            { label: 'TLS & Certificates', slug: 'integrations/tls' },
+          ],
+        },
+        {
           label: 'AI Integration',
           items: [
             { label: 'Claude Desktop', slug: 'ai/claude-desktop' },
