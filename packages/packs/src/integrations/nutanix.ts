@@ -1438,23 +1438,19 @@ export const nutanixPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      const url = nutanixUrl(config.endpoint, 'clustermgmt', 'config/clusters');
-      const fullUrl = new URL(url);
-      fullUrl.searchParams.set('$limit', '1');
+    const url = nutanixUrl(config.endpoint, 'clustermgmt', 'config/clusters');
+    const fullUrl = new URL(url);
+    fullUrl.searchParams.set('$limit', '1');
 
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        ...buildAuthHeaders(credentials),
-        ...config.headers,
-      };
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...buildAuthHeaders(credentials),
+      ...config.headers,
+    };
 
-      const res = await fetchFn(fullUrl.toString(), { headers });
-      if (!res.ok) return false;
-      const body = (await res.json()) as { data?: unknown };
-      return body.data != null;
-    } catch {
-      return false;
-    }
+    const res = await fetchFn(fullUrl.toString(), { headers });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { data?: unknown };
+    return body.data != null;
   },
 };

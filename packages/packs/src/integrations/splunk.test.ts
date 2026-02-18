@@ -141,10 +141,10 @@ describe('splunk pack', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false on network error', async () => {
+    it('throws on network error', async () => {
       const fetchFn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await splunkPack.testConnection(splunkConfig, tokenCreds, fetchFn);
-      expect(result).toBe(false);
+      await expect(splunkPack.testConnection(splunkConfig, tokenCreds, fetchFn))
+        .rejects.toThrow('ECONNREFUSED');
     });
   });
 

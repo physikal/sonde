@@ -250,10 +250,10 @@ describe('citrix pack', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false on network error', async () => {
+    it('throws on network error', async () => {
       const fetchFn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await citrixPack.testConnection(onPremConfig, onPremCreds, fetchFn);
-      expect(result).toBe(false);
+      await expect(citrixPack.testConnection(onPremConfig, onPremCreds, fetchFn))
+        .rejects.toThrow('ECONNREFUSED');
     });
   });
 

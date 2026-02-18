@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import type { SondeDb } from '../db/index.js';
 import { decrypt, encrypt } from './crypto.js';
 import type { IntegrationExecutor } from './executor.js';
-import type { IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
+import type { FetchFn, IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
+import { buildTlsFetch } from './tls-fetch.js';
 
 interface CreateInput {
   type: string;
@@ -155,10 +156,11 @@ export class IntegrationManager {
 
     const testedAt = new Date().toISOString();
     try {
+      const fetchFn = buildTlsFetch(decrypted.config);
       const success = await pack.testConnection(
         decrypted.config,
         decrypted.credentials,
-        globalThis.fetch.bind(globalThis),
+        fetchFn,
       );
       const result = success ? 'ok' : 'failed';
       this.db.updateIntegration(id, {

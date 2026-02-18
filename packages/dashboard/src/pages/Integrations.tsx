@@ -317,6 +317,7 @@ export function Integrations() {
   const [name, setName] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [headersText, setHeadersText] = useState('');
+  const [tlsSkipVerify, setTlsSkipVerify] = useState(false);
   const [authMethod, setAuthMethod] = useState('');
   const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
@@ -361,6 +362,7 @@ export function Integrations() {
     setName('');
     setEndpoint('');
     setHeadersText('');
+    setTlsSkipVerify(false);
     setAuthMethod('');
     setCredentialValues({});
     setVisibleFields(new Set());
@@ -391,6 +393,7 @@ export function Integrations() {
       config: {
         endpoint: endpoint.trim(),
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
+        ...(tlsSkipVerify ? { tlsRejectUnauthorized: false } : {}),
       },
       credentials: {
         packName: selectedType,
@@ -618,6 +621,15 @@ export function Integrations() {
                       placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
                       className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                     />
+                    <label className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                      <input
+                        type="checkbox"
+                        checked={tlsSkipVerify}
+                        onChange={(e) => setTlsSkipVerify(e.target.checked)}
+                        className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                      />
+                      Allow self-signed TLS certificates
+                    </label>
                   </div>
                 )}
                 <div>

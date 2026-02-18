@@ -395,19 +395,15 @@ export const graphPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      const token = await ensureGraphToken(credentials, fetchFn);
-      const url = `${config.endpoint.replace(/\/$/, '')}/organization?$select=id&$top=1`;
-      const res = await fetchFn(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-          ...config.headers,
-        },
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const token = await ensureGraphToken(credentials, fetchFn);
+    const url = `${config.endpoint.replace(/\/$/, '')}/organization?$select=id&$top=1`;
+    const res = await fetchFn(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        ...config.headers,
+      },
+    });
+    return res.ok;
   },
 };

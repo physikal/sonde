@@ -189,10 +189,10 @@ describe('graph pack', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false on network error', async () => {
+    it('throws on network error', async () => {
       const fetchFn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await graphPack.testConnection(graphConfig, graphCreds, fetchFn);
-      expect(result).toBe(false);
+      await expect(graphPack.testConnection(graphConfig, graphCreds, fetchFn))
+        .rejects.toThrow('ECONNREFUSED');
     });
   });
 

@@ -339,18 +339,14 @@ export const splunkPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      const url = splunkUrl(config.endpoint, '/services/server/info');
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        ...buildAuthHeaders(credentials),
-        ...config.headers,
-      };
+    const url = splunkUrl(config.endpoint, '/services/server/info');
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...buildAuthHeaders(credentials),
+      ...config.headers,
+    };
 
-      const res = await fetchFn(url, { headers });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const res = await fetchFn(url, { headers });
+    return res.ok;
   },
 };

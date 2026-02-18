@@ -28,6 +28,8 @@ export interface IntegrationConfig {
   endpoint: string;
   /** Additional headers to include in requests */
   headers?: Record<string, string>;
+  /** Accept self-signed TLS certificates (default: true — reject invalid certs) */
+  tlsRejectUnauthorized?: boolean;
 }
 
 /** Handler function for a single integration probe */

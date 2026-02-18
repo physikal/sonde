@@ -924,10 +924,10 @@ describe('nutanix pack', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false on network error', async () => {
+    it('throws on network error', async () => {
       const fetchFn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await nutanixPack.testConnection(ntnxConfig, basicCreds, fetchFn);
-      expect(result).toBe(false);
+      await expect(nutanixPack.testConnection(ntnxConfig, basicCreds, fetchFn))
+        .rejects.toThrow('ECONNREFUSED');
     });
 
     it('returns false when data is null', async () => {

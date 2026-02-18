@@ -99,10 +99,10 @@ describe('servicenow pack', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false on network error', async () => {
+    it('throws on network error', async () => {
       const fetchFn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await servicenowPack.testConnection(config, basicCreds, fetchFn);
-      expect(result).toBe(false);
+      await expect(servicenowPack.testConnection(config, basicCreds, fetchFn))
+        .rejects.toThrow('ECONNREFUSED');
     });
   });
 

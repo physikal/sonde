@@ -1,5 +1,6 @@
 import type { ProbeResponse } from '@sonde/shared';
 import { DEFAULT_PROBE_TIMEOUT_MS } from '@sonde/shared';
+import { buildTlsFetch } from './tls-fetch.js';
 import type {
   FetchFn,
   IntegrationConfig,
@@ -79,8 +80,10 @@ export class IntegrationExecutor {
       const timer = setTimeout(() => controller.abort(), timeout);
 
       try {
+        const baseFetchFn =
+          config.tlsRejectUnauthorized === false ? buildTlsFetch(config) : this.fetchFn;
         const fetchWithSignal: FetchFn = (input, init) =>
-          this.fetchFn(input, { ...init, signal: controller.signal });
+          baseFetchFn(input, { ...init, signal: controller.signal });
 
         const data = await handler(params, config, credentials, fetchWithSignal);
         clearTimeout(timer);

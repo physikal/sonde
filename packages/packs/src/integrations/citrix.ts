@@ -531,27 +531,23 @@ export const citrixPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      let cloudToken: string | undefined;
-      if (credentials.authMethod === 'oauth2') {
-        cloudToken = await ensureAccessToken(credentials, fetchFn);
-      }
-
-      const url = buildODataUrl(config.endpoint, credentials.authMethod, 'Machines');
-      const parsed = new URL(url);
-      parsed.searchParams.set('$top', '1');
-      parsed.searchParams.set('$select', 'Id');
-
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        ...buildAuthHeaders(credentials, cloudToken),
-        ...config.headers,
-      };
-
-      const res = await fetchFn(parsed.toString(), { headers });
-      return res.ok;
-    } catch {
-      return false;
+    let cloudToken: string | undefined;
+    if (credentials.authMethod === 'oauth2') {
+      cloudToken = await ensureAccessToken(credentials, fetchFn);
     }
+
+    const url = buildODataUrl(config.endpoint, credentials.authMethod, 'Machines');
+    const parsed = new URL(url);
+    parsed.searchParams.set('$top', '1');
+    parsed.searchParams.set('$select', 'Id');
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...buildAuthHeaders(credentials, cloudToken),
+      ...config.headers,
+    };
+
+    const res = await fetchFn(parsed.toString(), { headers });
+    return res.ok;
   },
 };

@@ -98,14 +98,13 @@ describe('httpbin integration pack', () => {
     expect(ok).toBe(false);
   });
 
-  it('testConnection returns false on network error', async () => {
+  it('testConnection throws on network error', async () => {
     const mockFetch = vi
       .fn()
       .mockRejectedValue(new TypeError('fetch failed')) as unknown as typeof globalThis.fetch;
 
-    const ok = await httpbinPack.testConnection(testConfig, testCredentials, mockFetch);
-
-    expect(ok).toBe(false);
+    await expect(httpbinPack.testConnection(testConfig, testCredentials, mockFetch))
+      .rejects.toThrow('fetch failed');
   });
 
   it('routes through ProbeRouter for integration probe', async () => {

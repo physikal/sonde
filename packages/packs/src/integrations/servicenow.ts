@@ -266,20 +266,15 @@ export const servicenowPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      const url = buildUrl(config.endpoint, 'sys_properties', undefined, ['name']);
-      // Override limit for test — just need one row
-      const parsed = new URL(url);
-      parsed.searchParams.set('sysparm_limit', '1');
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        ...buildAuthHeaders(credentials),
-        ...config.headers,
-      };
-      const res = await fetchFn(parsed.toString(), { headers });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const url = buildUrl(config.endpoint, 'sys_properties', undefined, ['name']);
+    const parsed = new URL(url);
+    parsed.searchParams.set('sysparm_limit', '1');
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...buildAuthHeaders(credentials),
+      ...config.headers,
+    };
+    const res = await fetchFn(parsed.toString(), { headers });
+    return res.ok;
   },
 };

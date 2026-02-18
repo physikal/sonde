@@ -972,18 +972,14 @@ export const proxmoxPack: IntegrationPack = {
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    try {
-      const url = proxmoxUrl(config.endpoint, '/version');
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        ...buildAuthHeaders(credentials),
-        ...config.headers,
-      };
+    const url = proxmoxUrl(config.endpoint, '/version');
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...buildAuthHeaders(credentials),
+      ...config.headers,
+    };
 
-      const res = await fetchFn(url, { headers });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const res = await fetchFn(url, { headers });
+    return res.ok;
   },
 };
