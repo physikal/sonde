@@ -45,7 +45,7 @@ export class IntegrationManager {
       type: input.type,
       name: input.name,
       configEncrypted,
-      status: 'active',
+      status: 'untested',
       lastTestedAt: null,
       lastTestResult: null,
       createdAt: now,
@@ -62,7 +62,7 @@ export class IntegrationManager {
       id,
       type: input.type,
       name: input.name,
-      status: 'active',
+      status: 'untested',
       lastTestedAt: null,
       lastTestResult: null,
       createdAt: now,
@@ -166,7 +166,9 @@ export class IntegrationManager {
         lastTestResult: result,
         status: success ? 'active' : 'error',
       });
-      return { success, testedAt };
+      return success
+        ? { success: true, testedAt }
+        : { success: false, message: 'Connection refused or authentication failed', testedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.db.updateIntegration(id, {

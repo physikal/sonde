@@ -284,11 +284,13 @@ const AUTH_METHOD_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-400',
   error: 'bg-red-400',
+  untested: 'bg-amber-400',
 };
 
 const STATUS_TEXT_COLORS: Record<string, string> = {
   active: 'text-emerald-400',
   error: 'text-red-400',
+  untested: 'text-amber-400',
 };
 
 interface Integration {

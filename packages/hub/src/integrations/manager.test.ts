@@ -74,7 +74,7 @@ describe('IntegrationManager', () => {
     expect(result.id).toBeDefined();
     expect(result.type).toBe('cloudflare');
     expect(result.name).toBe('my-cf');
-    expect(result.status).toBe('active');
+    expect(result.status).toBe('untested');
 
     // Verify the DB row has encrypted config
     const row = db.getIntegration(result.id);
