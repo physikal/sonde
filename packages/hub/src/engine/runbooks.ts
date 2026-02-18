@@ -8,6 +8,9 @@ import type {
 import type { PackManifest, ProbeResponse, RunbookDefinition } from '@sonde/shared';
 import type { ProbeRouter } from '../integrations/probe-router.js';
 
+export const DEFAULT_MAX_PROBE_DATA_SIZE = 10_240; // 10 KB
+export const DEFAULT_RUNBOOK_TIMEOUT_MS = 45_000;
+
 export interface ProbeResult {
   probe: string;
   status: 'success' | 'error' | 'timeout';
@@ -25,6 +28,29 @@ export interface DiagnoseResult {
     probesFailed: number;
     durationMs: number;
   };
+}
+
+export function truncateProbeData(
+  probeResults: Record<string, RunbookProbeResult>,
+  maxSize: number = DEFAULT_MAX_PROBE_DATA_SIZE,
+): { results: Record<string, RunbookProbeResult>; truncated: boolean } {
+  let anyTruncated = false;
+  const results: Record<string, RunbookProbeResult> = {};
+
+  for (const [key, result] of Object.entries(probeResults)) {
+    const serialized = JSON.stringify(result.data);
+    if (serialized && serialized.length > maxSize) {
+      anyTruncated = true;
+      results[key] = {
+        ...result,
+        data: { _truncated: true, _originalSize: serialized.length, _maxSize: maxSize },
+      };
+    } else {
+      results[key] = result;
+    }
+  }
+
+  return { results, truncated: anyTruncated };
 }
 
 interface ResolvedRunbook {
@@ -70,34 +96,89 @@ export class RunbookEngine {
     params: Record<string, unknown>,
     probeRouter: ProbeRouter,
     context: RunbookContext,
-  ): Promise<DiagnosticRunbookResult> {
+    options?: { timeoutMs?: number; maxProbeDataSize?: number },
+  ): Promise<DiagnosticRunbookResult & { timedOut?: boolean; truncated?: boolean }> {
     const def = this.diagnosticRunbooks.get(category);
     if (!def) throw new Error(`No diagnostic runbook for "${category}"`);
+
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_RUNBOOK_TIMEOUT_MS;
+    const maxProbeDataSize = options?.maxProbeDataSize ?? DEFAULT_MAX_PROBE_DATA_SIZE;
+
+    // Collect probe results as they complete (for partial results on timeout)
+    const collectedProbes: Record<string, RunbookProbeResult> = {};
 
     const runProbe: RunProbe = async (probe, probeParams, agent) => {
       const start = Date.now();
       try {
         const response: ProbeResponse = await probeRouter.execute(probe, probeParams, agent);
-        return {
+        const result: RunbookProbeResult = {
           probe,
           status: response.status === 'success' ? 'success' : 'error',
           data: response.data,
           durationMs: response.durationMs,
-          error: response.status !== 'success' ? JSON.stringify(response.data) : undefined,
-        } as RunbookProbeResult;
+          error:
+            response.status !== 'success'
+              ? (((response as Record<string, unknown>).error as string) ??
+                JSON.stringify(response.data))
+              : undefined,
+        };
+        collectedProbes[probe] = result;
+        return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         const isTimeout = message.toLowerCase().includes('timed out');
-        return {
+        const result: RunbookProbeResult = {
           probe,
           status: isTimeout ? 'timeout' : 'error',
           durationMs: Date.now() - start,
           error: message,
-        } as RunbookProbeResult;
+        };
+        collectedProbes[probe] = result;
+        return result;
       }
     };
 
-    return def.handler(params, runProbe, context);
+    let timedOut = false;
+    let runbookResult: DiagnosticRunbookResult;
+
+    try {
+      runbookResult = await Promise.race([
+        def.handler(params, runProbe, context),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('__RUNBOOK_TIMEOUT__')), timeoutMs),
+        ),
+      ]);
+    } catch (err) {
+      if (err instanceof Error && err.message === '__RUNBOOK_TIMEOUT__') {
+        timedOut = true;
+        runbookResult = {
+          category,
+          findings: [],
+          probeResults: collectedProbes,
+          summary: {
+            probesRun: Object.keys(collectedProbes).length,
+            probesSucceeded: Object.values(collectedProbes).filter((p) => p.status === 'success')
+              .length,
+            probesFailed: Object.values(collectedProbes).filter((p) => p.status !== 'success')
+              .length,
+            findingsCount: { info: 0, warning: 0, critical: 0 },
+            durationMs: timeoutMs,
+            summaryText: `Runbook timed out after ${timeoutMs}ms with ${Object.keys(collectedProbes).length} probes completed`,
+          },
+        };
+      } else {
+        throw err;
+      }
+    }
+
+    // Apply truncation
+    const { results: truncatedProbes, truncated } = truncateProbeData(
+      runbookResult.probeResults,
+      maxProbeDataSize,
+    );
+    runbookResult.probeResults = truncatedProbes;
+
+    return { ...runbookResult, timedOut, truncated };
   }
 
   /** Execute a runbook's probes, optionally targeting an agent */

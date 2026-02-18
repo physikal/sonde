@@ -51,17 +51,22 @@ describe('handleDiagnose', () => {
 
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.agent).toBe('test-agent');
-    expect(parsed.category).toBe('docker');
-    expect(parsed.summary.probesRun).toBe(1);
-    expect(parsed.findings['docker.containers.list'].status).toBe('success');
+    expect(parsed.meta.agent).toBe('test-agent');
+    expect(parsed.meta.category).toBe('docker');
+    expect(parsed.meta.probesRun).toBe(1);
+    expect(parsed.probes['docker.containers.list'].status).toBe('success');
   });
 
   it('logs audit entries for each probe result', async () => {
     const db = createMockDb();
     const engine = createMockEngine();
 
-    await handleDiagnose({ agent: 'srv1', category: 'docker' }, createMockProbeRouter(), engine, db);
+    await handleDiagnose(
+      { agent: 'srv1', category: 'docker' },
+      createMockProbeRouter(),
+      engine,
+      db,
+    );
 
     expect(db.logAudit).toHaveBeenCalledOnce();
     const auditCall = (db.logAudit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
@@ -103,21 +108,123 @@ describe('handleDiagnose', () => {
     expect(result.content[0]?.text).toContain('not found');
   });
 
+  it('returns diagnostic runbook output with meta/probes/findings', async () => {
+    const engine = createMockEngine({
+      getDiagnosticRunbook: vi.fn().mockReturnValue({ category: 'nutanix' }),
+      executeDiagnostic: vi.fn().mockResolvedValue({
+        category: 'nutanix',
+        findings: [
+          {
+            severity: 'warning',
+            title: 'High CPU',
+            detail: 'CPU at 92%',
+            relatedProbes: ['nutanix.vm.stats'],
+          },
+        ],
+        probeResults: {
+          'nutanix.vm.stats': {
+            probe: 'nutanix.vm.stats',
+            status: 'success',
+            data: { cpu: 92 },
+            durationMs: 200,
+          },
+        },
+        summary: {
+          probesRun: 1,
+          probesSucceeded: 1,
+          probesFailed: 0,
+          findingsCount: { info: 0, warning: 1, critical: 0 },
+          durationMs: 250,
+          summaryText: 'Found 1 warning',
+        },
+        truncated: false,
+        timedOut: false,
+      }),
+    });
+
+    const result = await handleDiagnose(
+      { agent: 'nutanix-cluster', category: 'nutanix' },
+      createMockProbeRouter(),
+      engine,
+      createMockDb(),
+    );
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '');
+    expect(parsed.meta.agent).toBe('nutanix-cluster');
+    expect(parsed.meta.probesRun).toBe(1);
+    expect(parsed.meta.truncated).toBe(false);
+    expect(parsed.meta.timedOut).toBe(false);
+    expect(parsed.probes['nutanix.vm.stats'].data).toEqual({ cpu: 92 });
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0].severity).toBe('warning');
+  });
+
+  it('passes truncated and timedOut flags from diagnostic runbook to meta', async () => {
+    const engine = createMockEngine({
+      getDiagnosticRunbook: vi.fn().mockReturnValue({ category: 'slow' }),
+      executeDiagnostic: vi.fn().mockResolvedValue({
+        category: 'slow',
+        findings: [],
+        probeResults: {
+          'slow.check': {
+            probe: 'slow.check',
+            status: 'success',
+            data: { _truncated: true, _originalSize: 20000, _maxSize: 10240 },
+            durationMs: 100,
+          },
+        },
+        summary: {
+          probesRun: 1,
+          probesSucceeded: 1,
+          probesFailed: 0,
+          findingsCount: { info: 0, warning: 0, critical: 0 },
+          durationMs: 45000,
+          summaryText: 'Runbook timed out',
+        },
+        truncated: true,
+        timedOut: true,
+      }),
+    });
+
+    const result = await handleDiagnose(
+      { category: 'slow' },
+      createMockProbeRouter(),
+      engine,
+      createMockDb(),
+    );
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '');
+    expect(parsed.meta.truncated).toBe(true);
+    expect(parsed.meta.timedOut).toBe(true);
+  });
+
+  it('returns simple runbook output with meta/probes (no findings)', async () => {
+    const engine = createMockEngine();
+
+    const result = await handleDiagnose(
+      { agent: 'srv1', category: 'docker' },
+      createMockProbeRouter(),
+      engine,
+      createMockDb(),
+    );
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '');
+    expect(parsed.meta).toBeDefined();
+    expect(parsed.probes).toBeDefined();
+    expect(parsed.findings).toBeUndefined();
+    expect(parsed.meta.probesRun).toBe(1);
+  });
+
   it('works without agent for integration probes', async () => {
     const probeRouter = createMockProbeRouter();
     const db = createMockDb();
     const engine = createMockEngine();
 
-    const result = await handleDiagnose(
-      { category: 'docker' },
-      probeRouter,
-      engine,
-      db,
-    );
+    const result = await handleDiagnose({ category: 'docker' }, probeRouter, engine, db);
 
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.agent).toBe('docker');
+    expect(parsed.meta.agent).toBe('docker');
 
     expect(engine.execute).toHaveBeenCalledWith('docker', undefined, probeRouter);
   });

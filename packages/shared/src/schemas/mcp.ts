@@ -34,14 +34,33 @@ export type DiagnoseInput = z.infer<typeof DiagnoseInput>;
  * Output schema for the `diagnose` MCP tool (post-MVP).
  */
 export const DiagnoseOutput = z.object({
-  agent: z.string(),
-  timestamp: z.string().datetime(),
-  category: z.string(),
-  runbookId: z.string(),
-  /** Keyed by probe name → result */
-  findings: z.record(z.unknown()),
+  /** Execution metadata */
+  meta: z.object({
+    agent: z.string(),
+    timestamp: z.string().datetime(),
+    category: z.string(),
+    runbookId: z.string(),
+    probesRun: z.number(),
+    probesSucceeded: z.number(),
+    probesFailed: z.number(),
+    durationMs: z.number(),
+    summaryText: z.string().optional(),
+    /** Whether any probe data was truncated */
+    truncated: z.boolean().optional(),
+    /** Whether runbook timed out with partial results */
+    timedOut: z.boolean().optional(),
+  }),
+  /** Raw probe data keyed by probe name */
+  probes: z.record(
+    z.object({
+      status: z.enum(['success', 'error', 'timeout']),
+      data: z.unknown(),
+      durationMs: z.number(),
+      error: z.string().optional(),
+    }),
+  ),
   /** Structured analysis findings from diagnostic runbooks */
-  analysis: z
+  findings: z
     .array(
       z.object({
         severity: z.enum(['info', 'warning', 'critical']),
@@ -52,13 +71,6 @@ export const DiagnoseOutput = z.object({
       }),
     )
     .optional(),
-  summary: z.object({
-    probesRun: z.number(),
-    probesSucceeded: z.number(),
-    probesFailed: z.number(),
-    durationMs: z.number(),
-    summaryText: z.string().optional(),
-  }),
 });
 export type DiagnoseOutput = z.infer<typeof DiagnoseOutput>;
 

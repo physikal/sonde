@@ -46,16 +46,22 @@ export async function handleDiagnose(
 
       const agentOrSource = args.agent ?? args.category;
       const output = {
-        agent: agentOrSource,
-        timestamp: new Date().toISOString(),
-        category: args.category,
-        runbookId: `${args.category}-runbook`,
-        findings: result.probeResults,
-        analysis: result.findings,
-        summary: {
+        meta: {
+          agent: agentOrSource,
+          timestamp: new Date().toISOString(),
+          category: args.category,
+          runbookId: `${args.category}-runbook`,
           ...result.summary,
-          summaryText: result.summary.summaryText,
+          truncated: result.truncated ?? false,
+          timedOut: result.timedOut ?? false,
         },
+        probes: Object.fromEntries(
+          Object.entries(result.probeResults).map(([key, pr]) => [
+            key,
+            { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
+          ]),
+        ),
+        findings: result.findings,
       };
 
       // Log each probe result to audit
@@ -104,12 +110,19 @@ export async function handleDiagnose(
 
     const agentOrSource = args.agent ?? args.category;
     const output = {
-      agent: agentOrSource,
-      timestamp: new Date().toISOString(),
-      category: args.category,
-      runbookId: `${args.category}-runbook`,
-      findings: result.findings,
-      summary: result.summary,
+      meta: {
+        agent: agentOrSource,
+        timestamp: new Date().toISOString(),
+        category: args.category,
+        runbookId: `${args.category}-runbook`,
+        ...result.summary,
+      },
+      probes: Object.fromEntries(
+        Object.entries(result.findings).map(([key, pr]) => [
+          key,
+          { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
+        ]),
+      ),
     };
 
     // Log each probe result to audit, skip probes denied by policy
