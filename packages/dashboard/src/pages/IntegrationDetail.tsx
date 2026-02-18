@@ -185,6 +185,7 @@ export function IntegrationDetail() {
   const [editingConfig, setEditingConfig] = useState(false);
   const [editEndpoint, setEditEndpoint] = useState('');
   const [editHeadersText, setEditHeadersText] = useState('');
+  const [editTlsSkipVerify, setEditTlsSkipVerify] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
 
   // Credentials editing
@@ -271,6 +272,7 @@ export function IntegrationDetail() {
           config: {
             endpoint: editEndpoint.trim(),
             ...(Object.keys(headers).length > 0 ? { headers } : {}),
+            ...(editTlsSkipVerify ? { tlsRejectUnauthorized: false } : {}),
           },
         }),
       });
@@ -460,6 +462,7 @@ export function IntegrationDetail() {
               onClick={() => {
                 setEditEndpoint('');
                 setEditHeadersText('');
+                setEditTlsSkipVerify(false);
                 setEditingConfig(true);
               }}
               className="text-sm text-blue-400 hover:text-blue-300"
@@ -495,6 +498,15 @@ export function IntegrationDetail() {
                 className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none font-mono"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input
+                type="checkbox"
+                checked={editTlsSkipVerify}
+                onChange={(e) => setEditTlsSkipVerify(e.target.checked)}
+                className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+              />
+              Skip TLS certificate verification (for self-signed certs)
+            </label>
             <div className="flex gap-2">
               <button
                 type="submit"
