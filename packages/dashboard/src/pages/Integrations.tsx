@@ -22,7 +22,8 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'servicenow',
     label: 'ServiceNow',
-    description: 'IT service management and incident response',
+    description:
+      'CMDB lookup, incidents, changes, and ownership. Requires snc_read_only + itil roles.',
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
@@ -128,50 +129,112 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
-    value: 'entra_id',
-    label: 'Entra ID',
-    description: 'Azure Active Directory identity and Microsoft Graph',
-    authMethods: ['oauth2'],
+    value: 'graph',
+    label: 'Microsoft Graph',
+    description:
+      'Entra ID users, sign-in logs, risky users, Intune device compliance. Uses Entra SSO — no separate credentials.',
+    authMethods: [],
+    credentialFields: {},
+  },
+  {
+    value: 'citrix',
+    label: 'Citrix',
+    description:
+      'Citrix Monitor OData — sessions, logon perf, machine status, delivery groups. On-prem: Director read-only admin. Cloud: API client with Monitor scope.',
+    authMethods: ['api_key', 'oauth2'],
     credentialFields: {
+      api_key: [
+        {
+          key: 'domain',
+          label: 'Domain',
+          placeholder: 'CORP (NTLM domain for Director auth)',
+        },
+        { key: 'username', label: 'Username', placeholder: 'read_only_admin' },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Director account password',
+          sensitive: true,
+        },
+      ],
       oauth2: [
-        {
-          key: 'tenantId',
-          label: 'Tenant ID',
-          placeholder: 'e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47',
-        },
-        {
-          key: 'clientId',
-          label: 'Client ID',
-          placeholder: 'e.g. 535fb089-9ff3-47b6-9bfb-4f1264799865',
-        },
+        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
+        { key: 'clientId', label: 'Client ID', placeholder: 'API client ID from Citrix Cloud' },
         {
           key: 'clientSecret',
           label: 'Client Secret',
-          placeholder: 'App registration client secret',
+          placeholder: 'API client secret',
           sensitive: true,
         },
       ],
     },
   },
   {
-    value: 'citrix',
-    label: 'Citrix',
-    description: 'Virtual desktops and application delivery',
-    authMethods: ['api_key', 'oauth2'],
+    value: 'splunk',
+    label: 'Splunk',
+    description:
+      'Splunk Enterprise — SPL search, indexes, saved searches, health. Requires a role with search + rest_properties_get capabilities.',
+    authMethods: ['bearer_token', 'api_key'],
+    credentialFields: {
+      bearer_token: [
+        {
+          key: 'splunkToken',
+          label: 'Splunk Token',
+          placeholder: 'Settings > Tokens (NOT a HEC token)',
+          sensitive: true,
+        },
+      ],
+      api_key: [
+        { key: 'username', label: 'Username', placeholder: 'sonde_svc' },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Splunk account password',
+          sensitive: true,
+        },
+      ],
+    },
+  },
+  {
+    value: 'proxmox',
+    label: 'Proxmox VE',
+    description:
+      'Proxmox VE cluster — nodes, VMs, containers, storage, Ceph, and HA status. Requires API token with audit privileges.',
+    authMethods: ['api_key'],
     credentialFields: {
       api_key: [
-        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
-        { key: 'clientId', label: 'Client ID', placeholder: 'Service Principal client ID' },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-      ],
-      oauth2: [
-        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
-        { key: 'clientId', label: 'Client ID', placeholder: 'Service Principal client ID' },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
+        { key: 'tokenId', label: 'API Token ID', placeholder: 'sonde@pve!sonde-token' },
         {
-          key: 'tokenUrl',
-          label: 'Token URL',
-          placeholder: 'https://api.cloud.com/cctrustoauth2/{customerId}/tokens/clients',
+          key: 'tokenSecret',
+          label: 'API Token Secret',
+          placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+          sensitive: true,
+        },
+      ],
+    },
+  },
+  {
+    value: 'nutanix',
+    label: 'Nutanix',
+    description:
+      'Nutanix Prism Central — clusters, VMs, hosts, alerts, storage, and categories via v4 API. Requires Prism Viewer role.',
+    authMethods: ['api_key', 'bearer_token'],
+    credentialFields: {
+      api_key: [
+        { key: 'username', label: 'Username', placeholder: 'sonde_viewer' },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Prism Central account password',
+          sensitive: true,
+        },
+      ],
+      bearer_token: [
+        {
+          key: 'nutanixApiKey',
+          label: 'API Key',
+          placeholder: 'Prism Central IAM API key',
+          sensitive: true,
         },
       ],
     },
@@ -204,8 +267,11 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   datadog: 'https://api.datadoghq.com',
   pagerduty: 'https://api.pagerduty.com',
   cloudflare: 'https://api.cloudflare.com/client/v4',
-  entra_id: 'https://graph.microsoft.com/v1.0',
-  citrix: 'https://api.cloud.com',
+  graph: 'https://graph.microsoft.com/v1.0',
+  citrix: 'https://director.company.com',
+  splunk: 'https://splunk.company.com:8089',
+  proxmox: 'https://pve01.local:8006',
+  nutanix: 'https://prism-central.company.com:9440',
   custom: 'https://api.example.com',
 };
 
@@ -256,6 +322,9 @@ export function Integrations() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message?: string } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [ssoStatus, setSsoStatus] = useState<{ configured: boolean; enabled: boolean } | null>(
+    null,
+  );
 
   const fetchIntegrations = useCallback(() => {
     setLoading(true);
@@ -274,6 +343,14 @@ export function Integrations() {
     fetchIntegrations();
   }, [fetchIntegrations]);
 
+  useEffect(() => {
+    if (selectedType === 'graph') {
+      apiFetch<{ configured: boolean; enabled: boolean }>('/sso/status')
+        .then(setSsoStatus)
+        .catch(() => setSsoStatus(null));
+    }
+  }, [selectedType]);
+
   const typeDef = INTEGRATION_TYPES.find((t) => t.value === selectedType);
 
   const resetForm = () => {
@@ -287,6 +364,7 @@ export function Integrations() {
     setVisibleFields(new Set());
     setTestResult(null);
     setSavedId(null);
+    setSsoStatus(null);
     setShowCreate(false);
   };
 
@@ -322,6 +400,15 @@ export function Integrations() {
 
   const saveIntegration = async (): Promise<string> => {
     if (savedId) return savedId;
+    if (selectedType === 'graph') {
+      const data = await apiFetch<{ id: string }>('/integrations/graph/activate', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      setSavedId(data.id);
+      fetchIntegrations();
+      return data.id;
+    }
     const data = await apiFetch<{ id: string }>('/integrations', {
       method: 'POST',
       body: JSON.stringify(buildPayload()),
@@ -381,10 +468,13 @@ export function Integrations() {
   };
 
   const canAdvanceToStep2 = !!selectedType;
-  const canAdvanceToStep3 = !!name.trim() && !!endpoint.trim();
+  const canAdvanceToStep3 =
+    selectedType === 'graph' ? !!name.trim() : !!name.trim() && !!endpoint.trim();
   const currentFields = typeDef?.credentialFields[authMethod] ?? [];
   const canAdvanceToStep4 =
-    !!authMethod && currentFields.every((f) => !!credentialValues[f.key]?.trim());
+    selectedType === 'graph'
+      ? !!(ssoStatus?.configured && ssoStatus?.enabled)
+      : !!authMethod && currentFields.every((f) => !!credentialValues[f.key]?.trim());
 
   if (loading) {
     return <div className="p-8 text-gray-400">Loading...</div>;
@@ -471,8 +561,11 @@ export function Integrations() {
                     type="button"
                     onClick={() => {
                       setSelectedType(t.value);
-                      setAuthMethod(t.authMethods[0]);
+                      setAuthMethod(t.authMethods[0] ?? '');
                       setCredentialValues({});
+                      if (t.value === 'graph') {
+                        setEndpoint('https://graph.microsoft.com/v1.0');
+                      }
                     }}
                     className={`rounded-lg border p-4 text-left transition-colors ${
                       selectedType === t.value
@@ -513,16 +606,18 @@ export function Integrations() {
                     className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Endpoint URL</p>
-                  <input
-                    type="url"
-                    value={endpoint}
-                    onChange={(e) => setEndpoint(e.target.value)}
-                    placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
-                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
+                {selectedType !== 'graph' && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">Endpoint URL</p>
+                    <input
+                      type="url"
+                      value={endpoint}
+                      onChange={(e) => setEndpoint(e.target.value)}
+                      placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
+                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">
                     Headers{' '}
@@ -561,53 +656,69 @@ export function Integrations() {
           {step === 3 && typeDef && (
             <div>
               <h3 className="text-lg font-medium text-white">Credentials</h3>
-              <div className="mt-4 space-y-3">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Auth Method</p>
-                  <select
-                    value={authMethod}
-                    onChange={(e) => {
-                      setAuthMethod(e.target.value);
-                      setCredentialValues({});
-                      setVisibleFields(new Set());
-                    }}
-                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-                  >
-                    {typeDef.authMethods.map((m) => (
-                      <option key={m} value={m}>
-                        {AUTH_METHOD_LABELS[m]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {currentFields.map((field) => (
-                  <div key={field.key}>
-                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-                      {field.label}
-                    </p>
-                    <div className="relative">
-                      <input
-                        type={
-                          field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'
-                        }
-                        value={credentialValues[field.key] ?? ''}
-                        onChange={(e) => setCredential(field.key, e.target.value)}
-                        placeholder={field.placeholder}
-                        className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
-                      />
-                      {field.sensitive && (
-                        <button
-                          type="button"
-                          onClick={() => toggleFieldVisibility(field.key)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
-                        >
-                          {visibleFields.has(field.key) ? 'Hide' : 'Show'}
-                        </button>
-                      )}
+              {selectedType === 'graph' ? (
+                <div className="mt-4">
+                  {ssoStatus?.configured && ssoStatus?.enabled ? (
+                    <div className="rounded-lg border border-emerald-800 bg-emerald-950/30 p-4 text-sm text-emerald-300">
+                      Uses Entra SSO App Registration — credentials are managed via SSO
+                      configuration. No separate credentials needed.
                     </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-300">
+                      Entra SSO must be configured and enabled first. Go to Settings &rarr; SSO to
+                      set up Entra ID.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">Auth Method</p>
+                    <select
+                      value={authMethod}
+                      onChange={(e) => {
+                        setAuthMethod(e.target.value);
+                        setCredentialValues({});
+                        setVisibleFields(new Set());
+                      }}
+                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      {typeDef.authMethods.map((m) => (
+                        <option key={m} value={m}>
+                          {AUTH_METHOD_LABELS[m]}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ))}
-              </div>
+                  {currentFields.map((field) => (
+                    <div key={field.key}>
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-1">
+                        {field.label}
+                      </p>
+                      <div className="relative">
+                        <input
+                          type={
+                            field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'
+                          }
+                          value={credentialValues[field.key] ?? ''}
+                          onChange={(e) => setCredential(field.key, e.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
+                        />
+                        {field.sensitive && (
+                          <button
+                            type="button"
+                            onClick={() => toggleFieldVisibility(field.key)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
+                          >
+                            {visibleFields.has(field.key) ? 'Hide' : 'Show'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 flex justify-between">
                 <button
                   type="button"
@@ -647,7 +758,9 @@ export function Integrations() {
                 </div>
                 <div>
                   <dt className="text-xs uppercase text-gray-500">Auth Method</dt>
-                  <dd className="mt-0.5 text-sm text-gray-300">{AUTH_METHOD_LABELS[authMethod]}</dd>
+                  <dd className="mt-0.5 text-sm text-gray-300">
+                    {selectedType === 'graph' ? 'Entra SSO' : AUTH_METHOD_LABELS[authMethod]}
+                  </dd>
                 </div>
               </dl>
 

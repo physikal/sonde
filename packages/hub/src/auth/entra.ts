@@ -18,6 +18,26 @@ interface EntraAuthConfig {
 /** Exported for testing — allows injection of fetch function. */
 export type FetchFn = typeof globalThis.fetch;
 
+/** Read and decrypt SSO config for reuse by Graph integration activation + SSO sync */
+export function getDecryptedSSOConfig(
+  db: SondeDb,
+  secret: string,
+): { tenantId: string; clientId: string; clientSecret: string } | undefined {
+  const ssoConfig = db.getSsoConfig();
+  if (!ssoConfig || !ssoConfig.enabled) return undefined;
+
+  try {
+    const clientSecret = decrypt(ssoConfig.clientSecretEnc, secret);
+    return {
+      tenantId: ssoConfig.tenantId,
+      clientId: ssoConfig.clientId,
+      clientSecret,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export function createEntraRoutes(
   sessionManager: SessionManager,
   db: SondeDb,

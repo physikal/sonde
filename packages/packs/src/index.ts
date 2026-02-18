@@ -38,7 +38,9 @@ export { citrixPack } from './integrations/citrix.js';
 export { graphPack } from './integrations/graph.js';
 export { splunkPack } from './integrations/splunk.js';
 export { proxmoxPack } from './integrations/proxmox.js';
+export { nutanixPack } from './integrations/nutanix.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
+export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 
 /** Inject stored signatures into pack manifests */
 function injectSignatures(packs: Pack[]): Pack[] {

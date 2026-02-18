@@ -9,6 +9,8 @@ import {
   citrixPack,
   graphPack,
   httpbinPack,
+  nutanixDiagnosticRunbooks,
+  nutanixPack,
   packRegistry,
   proxmoxDiagnosticRunbooks,
   proxmoxPack,
@@ -61,6 +63,7 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [graphPack.manifest.name, graphPack],
   [splunkPack.manifest.name, splunkPack],
   [proxmoxPack.manifest.name, proxmoxPack],
+  [nutanixPack.manifest.name, nutanixPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,
@@ -74,6 +77,9 @@ integrationManager.loadAll();
 startVersionCheckLoop(db);
 runbookEngine.loadFromManifests([...packRegistry.values()].map((p) => p.manifest));
 for (const runbook of proxmoxDiagnosticRunbooks) {
+  runbookEngine.registerDiagnostic(runbook);
+}
+for (const runbook of nutanixDiagnosticRunbooks) {
   runbookEngine.registerDiagnostic(runbook);
 }
 

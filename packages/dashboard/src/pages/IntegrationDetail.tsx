@@ -24,12 +24,14 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
-        { key: 'username', label: 'Username', placeholder: 'admin' },
+        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
         { key: 'password', label: 'Password', sensitive: true },
       ],
       oauth2: [
         { key: 'clientId', label: 'Client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
+        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
+        { key: 'password', label: 'Password', sensitive: true },
         { key: 'tokenUrl', label: 'Token URL' },
       ],
     },
@@ -67,16 +69,10 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
-    value: 'entra_id',
-    label: 'Entra ID',
-    authMethods: ['oauth2'],
-    credentialFields: {
-      oauth2: [
-        { key: 'tenantId', label: 'Tenant ID' },
-        { key: 'clientId', label: 'Client ID' },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-      ],
-    },
+    value: 'graph',
+    label: 'Microsoft Graph',
+    authMethods: [],
+    credentialFields: {},
   },
   {
     value: 'citrix',
@@ -84,15 +80,37 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
-        { key: 'customerId', label: 'Customer ID' },
-        { key: 'clientId', label: 'Client ID' },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
+        { key: 'domain', label: 'Domain', placeholder: 'CORP' },
+        { key: 'username', label: 'Username', placeholder: 'read_only_admin' },
+        { key: 'password', label: 'Password', sensitive: true },
       ],
       oauth2: [
-        { key: 'customerId', label: 'Customer ID' },
-        { key: 'clientId', label: 'Client ID' },
+        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
+        { key: 'clientId', label: 'Client ID', placeholder: 'API client ID' },
         { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-        { key: 'tokenUrl', label: 'Token URL' },
+      ],
+    },
+  },
+  {
+    value: 'splunk',
+    label: 'Splunk',
+    authMethods: ['bearer_token', 'api_key'],
+    credentialFields: {
+      bearer_token: [{ key: 'splunkToken', label: 'Splunk Token', sensitive: true }],
+      api_key: [
+        { key: 'username', label: 'Username', placeholder: 'sonde_svc' },
+        { key: 'password', label: 'Password', sensitive: true },
+      ],
+    },
+  },
+  {
+    value: 'proxmox',
+    label: 'Proxmox VE',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        { key: 'tokenId', label: 'API Token ID', placeholder: 'sonde@pve!sonde-token' },
+        { key: 'tokenSecret', label: 'API Token Secret', sensitive: true },
       ],
     },
   },
@@ -480,7 +498,7 @@ export function IntegrationDetail() {
       <div className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Credentials</h2>
-          {!editingCreds && (
+          {integration.type !== 'graph' && !editingCreds && (
             <button
               type="button"
               onClick={() => {
@@ -495,7 +513,12 @@ export function IntegrationDetail() {
             </button>
           )}
         </div>
-        {editingCreds && typeDef ? (
+        {integration.type === 'graph' ? (
+          <div className="mt-3 rounded-lg border border-blue-800 bg-blue-950/30 p-4 text-sm text-blue-300">
+            Synced from Entra SSO configuration. Credentials update automatically when SSO settings
+            change.
+          </div>
+        ) : editingCreds && typeDef ? (
           <form
             onSubmit={handleSaveCreds}
             className="mt-3 space-y-3 rounded-xl border border-gray-800 bg-gray-900 p-4"
