@@ -297,6 +297,13 @@ describe('IntegrationManager', () => {
     expect(events).toHaveLength(1);
     expect(events[0]!.eventType).toBe('created');
     expect(events[0]!.status).toBe('success');
+
+    const detail = JSON.parse(events[0]!.detailJson!);
+    expect(detail.config.endpoint).toBe(testConfig.endpoint);
+    expect(detail.config.headerKeys).toEqual(['X-Custom']);
+    expect(detail.config.tlsRejectUnauthorized).toBe(true);
+    expect(detail.credentials.authMethod).toBe('api_key');
+    expect(detail.credentials.credentialKeys).toEqual(['apiKey']);
   });
 
   it('logs test_connection success event', async () => {
@@ -313,6 +320,10 @@ describe('IntegrationManager', () => {
     const testEvents = events.filter((e) => e.eventType === 'test_connection');
     expect(testEvents).toHaveLength(1);
     expect(testEvents[0]!.status).toBe('success');
+
+    const detail = JSON.parse(testEvents[0]!.detailJson!);
+    expect(detail.effectiveConfig.endpoint).toBe(testConfig.endpoint);
+    expect(detail.effectiveConfig.tlsRejectUnauthorized).toBe(true);
   });
 
   it('logs test_connection error event on failure', async () => {
@@ -357,6 +368,7 @@ describe('IntegrationManager', () => {
     expect(testEvents).toHaveLength(1);
 
     const detail = JSON.parse(testEvents[0]!.detailJson!);
+    expect(detail.effectiveConfig.endpoint).toBe(testConfig.endpoint);
     expect(detail.errorName).toBe('TypeError');
     expect(detail.causeName).toBe('Error');
     expect(detail.causeMessage).toContain('ENOTFOUND');
@@ -384,6 +396,16 @@ describe('IntegrationManager', () => {
     const eventTypes = events.map((e) => e.eventType);
     expect(eventTypes).toContain('config_update');
     expect(eventTypes).toContain('credentials_update');
+
+    const configEvent = events.find((e) => e.eventType === 'config_update')!;
+    const configDetail = JSON.parse(configEvent.detailJson!);
+    expect(configDetail.savedConfig.endpoint).toBe('https://new.endpoint.com');
+    expect(configDetail.savedConfig.tlsRejectUnauthorized).toBe(true);
+
+    const credsEvent = events.find((e) => e.eventType === 'credentials_update')!;
+    const credsDetail = JSON.parse(credsEvent.detailJson!);
+    expect(credsDetail.savedCredentials.authMethod).toBe('api_key');
+    expect(credsDetail.savedCredentials.credentialKeys).toEqual(['apiKey']);
   });
 
   it('rejects duplicate names with 409', () => {

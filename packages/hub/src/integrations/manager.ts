@@ -5,6 +5,30 @@ import type { IntegrationExecutor } from './executor.js';
 import type { FetchFn, IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 import { buildTlsFetch } from './tls-fetch.js';
 
+/** Non-sensitive config snapshot for event logging */
+function configSummary(
+  config: IntegrationConfig,
+): Record<string, unknown> {
+  return {
+    endpoint: config.endpoint,
+    headerKeys: config.headers
+      ? Object.keys(config.headers)
+      : [],
+    tlsRejectUnauthorized: config.tlsRejectUnauthorized ?? true,
+  };
+}
+
+/** Non-sensitive credential snapshot for event logging */
+function credentialSummary(
+  creds: IntegrationCredentials,
+): Record<string, unknown> {
+  return {
+    authMethod: creds.authMethod,
+    credentialKeys: Object.keys(creds.credentials),
+    hasOAuth2: !!creds.oauth2,
+  };
+}
+
 interface CreateInput {
   type: string;
   name: string;
@@ -64,6 +88,10 @@ export class IntegrationManager {
       eventType: 'created',
       status: 'success',
       message: `Integration "${input.name}" created (type: ${input.type})`,
+      detailJson: JSON.stringify({
+        config: configSummary(input.config),
+        credentials: credentialSummary(input.credentials),
+      }),
     });
 
     return {
@@ -133,6 +161,9 @@ export class IntegrationManager {
         eventType: 'config_update',
         status: 'success',
         message: 'Configuration updated',
+        detailJson: JSON.stringify({
+          savedConfig: configSummary(merged.config),
+        }),
       });
     }
     if (input.credentials) {
@@ -141,6 +172,9 @@ export class IntegrationManager {
         eventType: 'credentials_update',
         status: 'success',
         message: 'Credentials updated',
+        detailJson: JSON.stringify({
+          savedCredentials: credentialSummary(merged.credentials),
+        }),
       });
     }
 
@@ -193,12 +227,17 @@ export class IntegrationManager {
         status: success ? 'active' : 'error',
       });
 
+      const testDetail = {
+        effectiveConfig: configSummary(decrypted.config),
+      };
+
       if (success) {
         this.db.logIntegrationEvent({
           integrationId: id,
           eventType: 'test_connection',
           status: 'success',
           message: 'Connection test passed',
+          detailJson: JSON.stringify(testDetail),
         });
         return { success: true, testedAt };
       }
@@ -208,6 +247,7 @@ export class IntegrationManager {
         eventType: 'test_connection',
         status: 'error',
         message: 'Connection refused or authentication failed',
+        detailJson: JSON.stringify(testDetail),
       });
       return {
         success: false,
@@ -223,6 +263,7 @@ export class IntegrationManager {
       });
 
       const detail: Record<string, unknown> = {
+        effectiveConfig: configSummary(decrypted.config),
         errorName: error instanceof Error ? error.constructor.name : 'Unknown',
         errorMessage: message,
       };
