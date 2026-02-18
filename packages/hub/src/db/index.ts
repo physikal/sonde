@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
+import { decrypt, encrypt } from '../integrations/crypto.js';
 import { runMigrations } from './migrator.js';
 
 export interface AgentRow {
@@ -289,20 +290,42 @@ export class SondeDb {
     return { valid: true };
   }
 
-  getCa(): { certPem: string; keyPem: string } | undefined {
-    const row = this.db.prepare('SELECT cert_pem, key_pem FROM hub_ca WHERE id = 1').get() as
-      | { cert_pem: string; key_pem: string }
+  getCa(secret?: string): { certPem: string; keyPem: string } | undefined {
+    const row = this.db
+      .prepare('SELECT cert_pem, key_pem, key_pem_enc FROM hub_ca WHERE id = 1')
+      .get() as
+      | { cert_pem: string; key_pem: string | null; key_pem_enc: string | null }
       | undefined;
     if (!row) return undefined;
-    return { certPem: row.cert_pem, keyPem: row.key_pem };
+
+    // Prefer encrypted key; fall back to plaintext for backward compatibility
+    let keyPem: string;
+    if (row.key_pem_enc && secret) {
+      keyPem = decrypt(row.key_pem_enc, secret);
+    } else if (row.key_pem) {
+      keyPem = row.key_pem;
+    } else {
+      return undefined;
+    }
+
+    return { certPem: row.cert_pem, keyPem };
   }
 
-  storeCa(certPem: string, keyPem: string): void {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, created_at) VALUES (1, ?, ?, ?)',
-      )
-      .run(certPem, keyPem, new Date().toISOString());
+  storeCa(certPem: string, keyPem: string, secret?: string): void {
+    if (secret) {
+      const keyPemEnc = encrypt(keyPem, secret);
+      this.db
+        .prepare(
+          'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, key_pem_enc, created_at) VALUES (1, ?, NULL, ?, ?)',
+        )
+        .run(certPem, keyPemEnc, new Date().toISOString());
+    } else {
+      this.db
+        .prepare(
+          'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, created_at) VALUES (1, ?, ?, ?)',
+        )
+        .run(certPem, keyPem, new Date().toISOString());
+    }
   }
 
   createEnrollmentToken(token: string, expiresAt: string): void {
@@ -336,7 +359,8 @@ export class SondeDb {
       if (r.used_at) status = 'used';
       else if (new Date(r.expires_at) < now) status = 'expired';
       return {
-        token: r.token,
+        // Mask active tokens — only show prefix for identification
+        token: status === 'active' ? `${r.token.slice(0, 8)}...` : r.token,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
         usedAt: r.used_at,

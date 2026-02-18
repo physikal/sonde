@@ -28,6 +28,7 @@ import {
 import { createEntraRoutes, getDecryptedSSOConfig } from './auth/entra.js';
 import { createAuthRoutes } from './auth/local-auth.js';
 import { requireRole } from './auth/rbac.js';
+import { VALID_ROLES, exceedsRole } from './auth/roles.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
 import { SessionManager } from './auth/sessions.js';
 import type { UserContext } from './auth/sessions.js';
@@ -184,6 +185,18 @@ exec sonde install --hub ${hubUrl}
 type Env = { Variables: { user: UserContext } };
 const app = new Hono<Env>();
 
+// Security headers middleware
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('X-XSS-Protection', '0');
+  if (config.tlsEnabled) {
+    c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+});
+
 // Session middleware on dashboard and API routes
 app.use('/api/*', sessionMiddleware(sessionManager));
 app.use('/auth/*', sessionMiddleware(sessionManager));
@@ -210,8 +223,6 @@ app.route(
 const PUBLIC_API_PATHS = new Set([
   '/api/v1/setup/status',
   '/api/v1/setup/complete',
-  '/api/v1/agents',
-  '/api/v1/packs',
   '/api/v1/sso/status',
 ]);
 
@@ -257,6 +268,7 @@ app.use('/api/v1/authorized-users/*', requireRole('admin'));
 app.use('/api/v1/authorized-groups/*', requireRole('admin'));
 app.use('/api/v1/access-groups/*', requireRole('admin'));
 app.use('/api/v1/audit/*', requireRole('admin'));
+app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
 
 app.get('/health', (c) =>
@@ -292,6 +304,14 @@ app.post('/api/v1/api-keys', async (c) => {
   }
 
   const role = body.role ?? 'member';
+  if (!VALID_ROLES.has(role)) {
+    return c.json({ error: `Invalid role: ${role}` }, 400);
+  }
+  const caller = getUser(c);
+  if (caller && exceedsRole(caller.role, role)) {
+    return c.json({ error: 'Cannot create key with role higher than your own' }, 403);
+  }
+
   const id = crypto.randomUUID();
   const rawKey = crypto.randomUUID();
   const keyHash = hashApiKey(rawKey);
@@ -422,6 +442,13 @@ app.post('/api/v1/authorized-users', async (c) => {
 
   const id = crypto.randomUUID();
   const role = body.role ?? 'member';
+  if (!VALID_ROLES.has(role)) {
+    return c.json({ error: `Invalid role: ${role}` }, 400);
+  }
+  const caller = getUser(c);
+  if (caller && exceedsRole(caller.role, role)) {
+    return c.json({ error: 'Cannot assign role higher than your own' }, 403);
+  }
 
   try {
     db.createAuthorizedUser(id, body.email, role);
@@ -439,6 +466,14 @@ app.put('/api/v1/authorized-users/:id', async (c) => {
   const body = await c.req.json<{ role?: string; enabled?: boolean }>();
   if (!body.role && body.enabled === undefined) {
     return c.json({ error: 'role or enabled is required' }, 400);
+  }
+
+  if (body.role && !VALID_ROLES.has(body.role)) {
+    return c.json({ error: `Invalid role: ${body.role}` }, 400);
+  }
+  const caller2 = getUser(c);
+  if (body.role && caller2 && exceedsRole(caller2.role, body.role)) {
+    return c.json({ error: 'Cannot assign role higher than your own' }, 403);
   }
 
   const id = c.req.param('id');
@@ -481,6 +516,13 @@ app.post('/api/v1/authorized-groups', async (c) => {
 
   const id = crypto.randomUUID();
   const role = body.role ?? 'member';
+  if (!VALID_ROLES.has(role)) {
+    return c.json({ error: `Invalid role: ${role}` }, 400);
+  }
+  const caller3 = getUser(c);
+  if (caller3 && exceedsRole(caller3.role, role)) {
+    return c.json({ error: 'Cannot assign role higher than your own' }, 403);
+  }
 
   try {
     db.createAuthorizedGroup(id, body.entraGroupId, body.entraGroupName ?? '', role);
@@ -498,6 +540,14 @@ app.put('/api/v1/authorized-groups/:id', async (c) => {
   const body = await c.req.json<{ role?: string }>();
   if (!body.role) {
     return c.json({ error: 'role is required' }, 400);
+  }
+
+  if (!VALID_ROLES.has(body.role)) {
+    return c.json({ error: `Invalid role: ${body.role}` }, 400);
+  }
+  const caller4 = getUser(c);
+  if (caller4 && exceedsRole(caller4.role, body.role)) {
+    return c.json({ error: 'Cannot assign role higher than your own' }, 403);
   }
 
   const updated = db.updateAuthorizedGroupRole(c.req.param('id'), body.role);
@@ -807,6 +857,11 @@ app.get('/api/v1/agents/:id', (c) => {
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
   }
+  // Access group filtering — return 404 if user can't see this agent
+  const user = getUser(c);
+  if (user && !isAgentVisible(db, user.id, agent.name)) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
   return c.json({
     ...agent,
     status: dispatcher.isAgentOnline(agent.id)
@@ -1008,10 +1063,11 @@ app.post('/api/v1/setup/complete', (c) => {
 
 // Agent installer script (curl -fsSL https://hub.example.com/install | bash)
 app.get('/install', (c) => {
-  const hubUrl =
-    config.hubUrl ?? `${c.req.header('x-forwarded-proto') ?? 'http'}://${c.req.header('host')}`;
+  if (!config.hubUrl) {
+    return c.text('SONDE_HUB_URL must be configured to serve the install script', 500);
+  }
   c.header('Content-Type', 'text/plain; charset=utf-8');
-  return c.body(generateInstallScript(hubUrl));
+  return c.body(generateInstallScript(config.hubUrl));
 });
 
 // Static file serving for dashboard SPA
@@ -1032,11 +1088,11 @@ if (dashboardExists) {
 // Initialize CA if TLS is enabled
 let ca: { certPem: string; keyPem: string } | undefined;
 if (config.tlsEnabled) {
-  ca = db.getCa();
+  ca = db.getCa(config.secret);
   if (!ca) {
     console.log('Generating hub CA certificate...');
     ca = generateCaCert();
-    db.storeCa(ca.certPem, ca.keyPem);
+    db.storeCa(ca.certPem, ca.keyPem, config.secret);
   }
 }
 
@@ -1123,6 +1179,7 @@ setupWsServer(
     return !!record && !record.revokedAt;
   },
   ca,
+  sessionManager,
 );
 
 const protocol = config.tlsEnabled ? 'https' : 'http';

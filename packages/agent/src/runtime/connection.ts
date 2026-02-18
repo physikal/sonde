@@ -154,7 +154,7 @@ function buildWsOptions(config: AgentConfig): WebSocket.ClientOptions {
       options.cert = fs.readFileSync(config.certPath, 'utf-8');
       options.key = fs.readFileSync(config.keyPath, 'utf-8');
       options.ca = [fs.readFileSync(config.caCertPath, 'utf-8')];
-      options.rejectUnauthorized = false; // Hub uses self-signed CA cert
+      options.rejectUnauthorized = true; // Verify hub cert against our CA
     } catch {
       // Cert files missing or unreadable — fall back to API key only
     }

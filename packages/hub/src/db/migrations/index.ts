@@ -11,6 +11,7 @@ import { up as up003, version as v003 } from './003-integrations.js';
 import { up as up004, version as v004 } from './004-sessions-and-roles.js';
 import { up as up005, version as v005 } from './005-sso-config.js';
 import { up as up006, version as v006 } from './006-rbac-and-groups.js';
+import { up as up007, version as v007 } from './007-ca-key-encryption.js';
 
 export const migrations: Migration[] = [
   { version: v001, up: up001 },
@@ -19,4 +20,5 @@ export const migrations: Migration[] = [
   { version: v004, up: up004 },
   { version: v005, up: up005 },
   { version: v006, up: up006 },
+  { version: v007, up: up007 },
 ].sort((a, b) => a.version - b.version);

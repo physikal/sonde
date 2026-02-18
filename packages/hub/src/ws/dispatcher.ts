@@ -72,6 +72,11 @@ export class AgentDispatcher {
     this.broadcastAgentStatus();
   }
 
+  /** Look up the agentId associated with a WebSocket (for impersonation checks). */
+  getAgentIdBySocket(ws: WebSocket): string | undefined {
+    return this.socketIndex.get(ws);
+  }
+
   removeBySocket(ws: WebSocket): void {
     const agentId = this.socketIndex.get(ws);
     if (agentId) {

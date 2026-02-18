@@ -3,24 +3,18 @@ import {
   AttestationData,
   MessageEnvelope,
   ProbeResponse,
+  RegisterPayload,
   signPayload,
   verifyPayload,
 } from '@sonde/shared';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { extractApiKey, hashApiKey } from '../auth.js';
+import { SESSION_COOKIE } from '../auth/session-middleware.js';
+import type { SessionManager } from '../auth/sessions.js';
 import { getCertFingerprint, issueAgentCert } from '../crypto/ca.js';
 import type { SondeDb } from '../db/index.js';
 import { semverLt } from '../version-check.js';
 import type { AgentDispatcher } from './dispatcher.js';
-
-interface RegisterPayload {
-  name: string;
-  os: string;
-  agentVersion: string;
-  packs: Array<{ name: string; version: string; status: string }>;
-  enrollmentToken?: string;
-  attestation?: unknown;
-}
 
 interface CaContext {
   certPem: string;
@@ -33,15 +27,31 @@ export function setupWsServer(
   db: SondeDb,
   validateKey: (key: string) => boolean,
   ca?: CaContext,
+  sessionManager?: SessionManager,
 ): void {
-  const wss = new WebSocketServer({ noServer: true });
-  const dashboardWss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1_048_576 });
+  const dashboardWss = new WebSocketServer({ noServer: true, maxPayload: 1_048_576 });
 
   httpServer.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '';
 
-    // Dashboard WebSocket — no auth required (same origin)
+    // Dashboard WebSocket — require session authentication
     if (url === '/ws/dashboard' || url.startsWith('/ws/dashboard?')) {
+      // Extract session cookie from upgrade request headers
+      const cookieHeader = req.headers.cookie ?? '';
+      const cookies = Object.fromEntries(
+        cookieHeader.split(';').map((c) => {
+          const [k, ...v] = c.trim().split('=');
+          return [k, v.join('=')];
+        }),
+      );
+      const sessionId = cookies[SESSION_COOKIE];
+      if (!sessionManager || !sessionId || !sessionManager.getSession(sessionId)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       dashboardWss.handleUpgrade(req, socket, head, (ws) => {
         dashboardWss.emit('connection', ws);
       });
@@ -96,11 +106,25 @@ export function setupWsServer(
       try {
         const raw: unknown = JSON.parse(data.toString());
         const envelope = MessageEnvelope.parse(raw);
+
+        // For response/heartbeat messages, enforce that envelope.agentId matches
+        // the agent registered on this socket to prevent impersonation
+        if (envelope.agentId && envelope.type !== 'agent.register') {
+          const socketAgentId = dispatcher.getAgentIdBySocket(ws);
+          if (socketAgentId && socketAgentId !== envelope.agentId) {
+            console.warn(
+              `Agent impersonation attempt: socket owns ${socketAgentId} but claimed ${envelope.agentId}`,
+            );
+            ws.send(JSON.stringify({ error: 'Agent ID mismatch' }));
+            return;
+          }
+        }
+
         handleMessage(ws, envelope, dispatcher, db, ca, bearerToken);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error(`WebSocket message error: ${message}`);
-        ws.send(JSON.stringify({ error: message }));
+        ws.send(JSON.stringify({ error: 'Invalid message format' }));
       }
     });
 
@@ -118,10 +142,15 @@ function handleMessage(
   ca?: CaContext,
   bearerToken?: string,
 ): void {
-  // Verify signature if present (non-empty) and agent has a stored cert
-  if (envelope.signature !== '' && envelope.agentId) {
+  // Signature verification: if agent has a stored cert, require a valid signature
+  if (envelope.agentId) {
     const certPem = db.getAgentCertPem(envelope.agentId);
     if (certPem) {
+      if (envelope.signature === '') {
+        console.warn(`Missing signature from agent ${envelope.agentId} which has a stored cert`);
+        ws.send(JSON.stringify({ error: 'Signature required' }));
+        return;
+      }
       const valid = verifyPayload(envelope.payload, envelope.signature, certPem);
       if (!valid) {
         console.warn(`Signature verification failed for agent ${envelope.agentId}`);
@@ -155,7 +184,13 @@ function handleRegister(
   ca?: CaContext,
   bearerToken?: string,
 ): void {
-  const payload = envelope.payload as RegisterPayload;
+  const parsed = RegisterPayload.safeParse(envelope.payload);
+  if (!parsed.success) {
+    ws.send(JSON.stringify({ error: 'Invalid registration data' }));
+    ws.close();
+    return;
+  }
+  const payload = parsed.data;
   // Reuse existing agent ID if same name re-registers (stable identity)
   const existing = db.getAgent(payload.name);
   const agentId = existing?.id ?? crypto.randomUUID();
@@ -249,8 +284,7 @@ function handleRegister(
       const storedJson = existingAgent?.attestationJson;
       // Accept new attestation baseline if agent version changed (expected after self-update)
       const versionChanged =
-        existingAgent?.agentVersion &&
-        existingAgent.agentVersion !== payload.agentVersion;
+        existingAgent?.agentVersion && existingAgent.agentVersion !== payload.agentVersion;
       const mismatch = !!(
         storedJson &&
         storedJson !== '{}' &&

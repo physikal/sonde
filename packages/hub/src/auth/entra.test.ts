@@ -7,6 +7,16 @@ import { type FetchFn, createEntraRoutes } from './entra.js';
 import { sessionMiddleware } from './session-middleware.js';
 import { SessionManager } from './sessions.js';
 
+// Mock jose so fake test JWTs pass verification
+vi.mock('jose', () => ({
+  createRemoteJWKSet: () => () => Promise.resolve({}),
+  jwtVerify: async (token: string) => {
+    const payloadB64 = token.split('.')[1] as string;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+    return { payload, protectedHeader: { alg: 'RS256' } };
+  },
+}));
+
 const TEST_SECRET = 'test-secret-at-least-16-chars';
 const TEST_HUB_URL = 'https://hub.example.com';
 const TEST_TENANT = 'tenant-123';

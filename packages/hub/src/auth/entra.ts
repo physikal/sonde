@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { SondeDb } from '../db/index.js';
 import { decrypt } from '../integrations/crypto.js';
 import { resolveHighestRole } from './roles.js';
@@ -8,6 +9,7 @@ import { SESSION_COOKIE } from './session-middleware.js';
 import type { SessionManager } from './sessions.js';
 
 const STATE_COOKIE = 'entra_state';
+const VERIFIER_COOKIE = 'entra_code_verifier';
 const STATE_MAX_AGE = 600; // 10 minutes
 
 interface EntraAuthConfig {
@@ -55,8 +57,17 @@ export function createEntraRoutes(
     }
 
     const state = crypto.randomBytes(16).toString('hex');
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
     setCookie(c, STATE_COOKIE, state, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: STATE_MAX_AGE,
+    });
+    setCookie(c, VERIFIER_COOKIE, codeVerifier, {
       httpOnly: true,
       secure: true,
       sameSite: 'Lax',
@@ -77,6 +88,8 @@ export function createEntraRoutes(
       redirect_uri: redirectUri,
       scope,
       state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     });
 
     const authorizeUrl = `https://login.microsoftonline.com/${ssoConfig.tenantId}/oauth2/v2.0/authorize?${params.toString()}`;
@@ -90,10 +103,12 @@ export function createEntraRoutes(
       return c.json({ error: 'SSO is not configured or disabled' }, 404);
     }
 
-    // Validate state
+    // Validate state and retrieve PKCE verifier
     const stateCookie = getCookie(c, STATE_COOKIE);
     const stateParam = c.req.query('state');
+    const codeVerifier = getCookie(c, VERIFIER_COOKIE);
     deleteCookie(c, STATE_COOKIE, { path: '/' });
+    deleteCookie(c, VERIFIER_COOKIE, { path: '/' });
 
     if (!stateCookie || !stateParam || stateCookie !== stateParam) {
       return c.redirect('/login?error=state_mismatch', 302);
@@ -121,6 +136,7 @@ export function createEntraRoutes(
       code,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
+      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
     });
 
     let tokenResponse: Response;
@@ -146,19 +162,18 @@ export function createEntraRoutes(
       return c.redirect('/login?error=no_id_token', 302);
     }
 
-    // Decode ID token payload
-    const parts = tokenData.id_token.split('.');
-    if (parts.length !== 3) {
-      return c.redirect('/login?error=invalid_token', 302);
-    }
-
+    // Verify ID token signature against Entra JWKS and validate claims
     let claims: { preferred_username?: string; email?: string; name?: string; oid?: string };
     try {
-      const payload = parts[1];
-      if (!payload) {
-        return c.redirect('/login?error=invalid_token', 302);
-      }
-      claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      const jwksUrl = new URL(
+        `https://login.microsoftonline.com/${ssoConfig.tenantId}/discovery/v2.0/keys`,
+      );
+      const jwks = createRemoteJWKSet(jwksUrl);
+      const { payload } = await jwtVerify(tokenData.id_token, jwks, {
+        issuer: `https://login.microsoftonline.com/${ssoConfig.tenantId}/v2.0`,
+        audience: ssoConfig.clientId,
+      });
+      claims = payload as typeof claims;
     } catch {
       return c.redirect('/login?error=invalid_token', 302);
     }

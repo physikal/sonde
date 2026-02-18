@@ -22,7 +22,7 @@ export type {
 } from './types/integrations.js';
 
 // Schemas — Protocol
-export { MessageEnvelope } from './schemas/protocol.js';
+export { MessageEnvelope, RegisterPayload } from './schemas/protocol.js';
 
 // Schemas — Probes
 export { ProbeRequest, ProbeResponse } from './schemas/probes.js';

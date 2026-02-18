@@ -65,6 +65,14 @@ export function hasPermission(role: string, permission: string): boolean {
   return perms.has(permission);
 }
 
+/** Valid role IDs for input validation. */
+export const VALID_ROLES: ReadonlySet<string> = new Set(['member', 'admin', 'owner']);
+
+/** Check if targetRole exceeds the callerRole in hierarchy (ceiling check). */
+export function exceedsRole(callerRole: string, targetRole: string): boolean {
+  return getRoleLevel(targetRole) > getRoleLevel(callerRole);
+}
+
 /** Return the role with the higher level. If equal, returns role1. */
 export function resolveHighestRole(
   role1: string | undefined,

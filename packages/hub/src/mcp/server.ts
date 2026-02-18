@@ -177,11 +177,19 @@ export function createMcpHandler(
       return;
     }
 
-    // Read request body for POST
+    // Read request body for POST (max 10 MB)
+    const MAX_BODY_SIZE = 10 * 1024 * 1024;
     let body: unknown;
     if (req.method === 'POST') {
       const chunks: Buffer[] = [];
+      let totalSize = 0;
       for await (const chunk of req) {
+        totalSize += (chunk as Buffer).length;
+        if (totalSize > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Request body too large' }));
+          return;
+        }
         chunks.push(chunk as Buffer);
       }
       try {

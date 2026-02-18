@@ -54,9 +54,15 @@ COPY --from=builder /app/packages/dashboard/dist packages/dashboard/dist
 # SQLite data directory
 RUN mkdir -p /data
 
+# Run as non-root user
+RUN addgroup -S sonde && adduser -S sonde -G sonde
+RUN chown -R sonde:sonde /data /app
+
 ENV NODE_ENV=production
 ENV SONDE_DB_PATH=/data/sonde.db
 
 EXPOSE 3000
+
+USER sonde
 
 CMD ["node", "packages/hub/dist/index.js"]

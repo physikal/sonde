@@ -1,7 +1,20 @@
+import crypto from 'node:crypto';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { SESSION_COOKIE, getUser } from './session-middleware.js';
 import type { SessionManager } from './sessions.js';
+
+/** Constant-time string comparison to prevent timing attacks. */
+function timingSafeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Compare against self to maintain constant time, then return false
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 interface LocalAuthConfig {
   adminUser?: string;
@@ -18,8 +31,10 @@ export function createAuthRoutes(sessionManager: SessionManager, config: LocalAu
     if (
       config.adminUser === undefined ||
       config.adminPassword === undefined ||
-      body.username !== config.adminUser ||
-      body.password !== config.adminPassword
+      !body.username ||
+      !body.password ||
+      !timingSafeEqual(body.username, config.adminUser) ||
+      !timingSafeEqual(body.password, config.adminPassword)
     ) {
       return c.json({ error: 'Invalid credentials' }, 401);
     }
