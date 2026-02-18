@@ -26,7 +26,7 @@ Available tags:
 docker run -d \
   --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key \
+  -e SONDE_SECRET=your-secret-key \
   -v sonde-data:/data \
   ghcr.io/sonde-dev/hub:latest
 ```
@@ -42,9 +42,11 @@ docker run -d \
   --name sonde-hub \
   --restart unless-stopped \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key \
-  -e SONDE_DB_PATH=/data/sonde.db \
+  -e SONDE_SECRET=your-secret-key \
   -e SONDE_HUB_URL=https://mcp.example.com \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
+  -e SONDE_DB_PATH=/data/sonde.db \
   -v sonde-data:/data \
   ghcr.io/sonde-dev/hub:latest
 ```
@@ -53,9 +55,11 @@ docker run -d \
 |---|---|
 | `--restart unless-stopped` | Auto-restart on crash or host reboot. |
 | `-p 3000:3000` | Expose the hub on port 3000. Change the host port as needed. |
-| `-e SONDE_API_KEY=...` | Required. Master API key (at least 16 characters). |
+| `-e SONDE_SECRET=...` | Required. Encryption root of trust (at least 16 characters). |
+| `-e SONDE_HUB_URL=...` | Public URL. Required for SSO callbacks and agent enrollment. |
+| `-e SONDE_ADMIN_USER=...` | Required. Bootstrap admin username for dashboard access. |
+| `-e SONDE_ADMIN_PASSWORD=...` | Required. Bootstrap admin password. |
 | `-e SONDE_DB_PATH=/data/sonde.db` | SQLite path inside the container. |
-| `-e SONDE_HUB_URL=...` | Public URL for install scripts and enrollment tokens. |
 | `-v sonde-data:/data` | Persist the SQLite database across restarts. |
 
 See [Hub Configuration](/hub/configuration/) for all environment variables.
@@ -71,7 +75,7 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     environment:
-      SONDE_API_KEY: your-secret-key
+      SONDE_SECRET: your-secret-key
       SONDE_DB_PATH: /data/sonde.db
     volumes:
       - hub-data:/data
@@ -95,7 +99,7 @@ services:
   sonde-hub:
     image: ghcr.io/sonde-dev/hub:latest
     environment:
-      SONDE_API_KEY: your-secret-key
+      SONDE_SECRET: your-secret-key
       SONDE_DB_PATH: /data/sonde.db
     volumes:
       - hub-data:/data
@@ -175,7 +179,7 @@ Then run it:
 docker run -d \
   --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key \
+  -e SONDE_SECRET=your-secret-key \
   -v sonde-data:/data \
   sonde-hub
 ```

@@ -8,12 +8,20 @@ All hub configuration is done through environment variables. There are no config
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SONDE_API_KEY` | Yes | — | Master API key for authenticating MCP clients and managing the hub. Must be at least 16 characters. |
+| `SONDE_SECRET` | Yes | — | Encryption root of trust (AES-256-GCM) and fallback auth secret. Must be at least 16 characters. |
+| `SONDE_HUB_URL` | No | — | Public URL of the hub (e.g., `https://mcp.example.com`). Required for SSO callback URLs and agent enrollment. Used in install scripts and enrollment token payloads. |
+| `SONDE_ADMIN_USER` | Yes | — | Username for the bootstrap admin login. Required to access the dashboard and configure SSO, integrations, etc. |
+| `SONDE_ADMIN_PASSWORD` | Yes | — | Password for the bootstrap admin login. Choose a strong value. |
 | `PORT` | No | `3000` | HTTP port the hub listens on. |
 | `HOST` | No | `0.0.0.0` | Bind address. Set to `127.0.0.1` to restrict to localhost. |
 | `SONDE_DB_PATH` | No | `./sonde.db` | Path to the SQLite database file. In Docker, this defaults to `/data/sonde.db`. |
 | `SONDE_TLS` | No | `false` | Enable TLS/mTLS for agent WebSocket connections. When enabled, the hub acts as a CA and issues certificates to agents during enrollment. |
-| `SONDE_HUB_URL` | No | — | Public URL of the hub (e.g., `https://mcp.example.com`). Used in install scripts and enrollment token payloads so agents know where to connect. |
+| `LOG_LEVEL` | No | `info` | Pino log level. One of: `fatal`, `error`, `warn`, `info`, `debug`, `trace`. |
+| `NODE_ENV` | No | — | Set to `production` to disable pretty-printed logs (outputs structured JSON instead). |
+
+:::note
+`SONDE_API_KEY` is accepted as a fallback for `SONDE_SECRET` for backward compatibility, but is deprecated. If both are set, `SONDE_SECRET` takes precedence. Migrate to `SONDE_SECRET` — `SONDE_API_KEY` will be removed in a future release.
+:::
 
 ## Setting variables
 
@@ -21,9 +29,11 @@ All hub configuration is done through environment variables. There are no config
 
 ```bash
 docker run -d \
-  -e SONDE_API_KEY=your-secret-key \
-  -e PORT=8080 \
+  -e SONDE_SECRET=your-secret-key \
   -e SONDE_HUB_URL=https://mcp.example.com \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
+  -e PORT=8080 \
   -p 8080:8080 \
   -v sonde-data:/data \
   ghcr.io/sonde-dev/hub:latest
@@ -36,9 +46,11 @@ services:
   sonde-hub:
     image: ghcr.io/sonde-dev/hub:latest
     environment:
-      SONDE_API_KEY: your-secret-key
-      SONDE_DB_PATH: /data/sonde.db
+      SONDE_SECRET: your-secret-key
       SONDE_HUB_URL: https://mcp.example.com
+      SONDE_ADMIN_USER: admin
+      SONDE_ADMIN_PASSWORD: change-me
+      SONDE_DB_PATH: /data/sonde.db
     volumes:
       - hub-data:/data
     ports:
@@ -48,25 +60,26 @@ services:
 **Bare metal:**
 
 ```bash
-export SONDE_API_KEY=your-secret-key
-export SONDE_DB_PATH=/var/lib/sonde/sonde.db
+export SONDE_SECRET=your-secret-key
 export SONDE_HUB_URL=https://mcp.example.com
+export SONDE_ADMIN_USER=admin
+export SONDE_ADMIN_PASSWORD=change-me
+export SONDE_DB_PATH=/var/lib/sonde/sonde.db
 node packages/hub/dist/index.js
 ```
 
 Or inline:
 
 ```bash
-SONDE_API_KEY=your-secret-key SONDE_DB_PATH=/var/lib/sonde/sonde.db node packages/hub/dist/index.js
+SONDE_SECRET=your-secret-key SONDE_DB_PATH=/var/lib/sonde/sonde.db node packages/hub/dist/index.js
 ```
 
-## API key requirements
+## Secret requirements
 
-The master API key (`SONDE_API_KEY`) is the root credential for the hub. It is used to:
+The hub secret (`SONDE_SECRET`) is the root of trust for all encryption in Sonde. It is used to:
 
-- Authenticate MCP client requests (passed as a Bearer token).
-- Access the REST API for agent management.
-- Generate enrollment tokens via the dashboard.
+- Derive AES-256-GCM keys for encrypting integration credentials and SSO client secrets.
+- Authenticate MCP client requests (as a fallback when no API keys exist yet).
 
 Choose a strong, random value. For example:
 
@@ -74,11 +87,11 @@ Choose a strong, random value. For example:
 openssl rand -hex 32
 ```
 
-Agents do not use the master API key. During enrollment, the hub mints a scoped API key for each agent automatically.
+API keys are managed via the hub dashboard — there is no hardcoded master key. Agents do not use the secret directly. During enrollment, the hub mints a scoped API key for each agent automatically.
 
 ## Database
 
-The hub uses SQLite for all persistent state: agents, API keys, audit logs, OAuth clients, and setup status. The database file is created automatically on first start.
+The hub uses SQLite for all persistent state: agents, API keys, audit logs, OAuth clients, sessions, and setup status. The database file is created automatically on first start.
 
 To back up the hub, copy the SQLite file while the hub is stopped, or use SQLite's `.backup` command.
 

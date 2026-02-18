@@ -11,7 +11,7 @@
 #   2. In the Cloudflare dashboard, add a public hostname route:
 #        Hostname: sonde.example.com  →  http://sonde-hub:3000
 #   3. Create a .env file next to this compose file:
-#        SONDE_API_KEY=<openssl rand -hex 32>
+#        SONDE_SECRET=<openssl rand -hex 32>
 #        SONDE_HUB_URL=https://sonde.example.com
 #        CF_TUNNEL_TOKEN=<token from step 1>
 #   4. Run:

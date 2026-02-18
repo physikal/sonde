@@ -5,7 +5,7 @@
 #   2. Set the Git repository to: https://github.com/sonde-dev/sonde.git
 #   3. Set the compose path to: docker/docker-compose.dokploy.yml
 #   4. Add these environment variables in Dokploy:
-#      - SONDE_API_KEY   (required) — generate with: openssl rand -hex 32
+#      - SONDE_SECRET   (required) — generate with: openssl rand -hex 32
 #      - SONDE_HUB_URL   (required) — your public URL, e.g. https://sonde.example.com
 #      - SONDE_DOMAIN    (required) — just the hostname, e.g. sonde.example.com
 #   5. Deploy
@@ -19,7 +19,7 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     environment:
-      SONDE_API_KEY: ${SONDE_API_KEY:?Set SONDE_API_KEY in Dokploy environment}
+      SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET in Dokploy environment}
       SONDE_HUB_URL: ${SONDE_HUB_URL:-https://${SONDE_DOMAIN}}
       SONDE_DB_PATH: /data/sonde.db
     volumes:

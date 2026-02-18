@@ -11,7 +11,7 @@ The fastest way to run the hub:
 ```bash
 docker run -d \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key \
+  -e SONDE_SECRET=your-secret-key \
   -v sonde-data:/data \
   ghcr.io/sonde-dev/hub:latest
 ```
@@ -31,7 +31,7 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     environment:
-      SONDE_API_KEY: your-secret-key
+      SONDE_SECRET: your-secret-key
       SONDE_DB_PATH: /data/sonde.db
     volumes:
       - hub-data:/data
@@ -55,7 +55,7 @@ cd docker
 docker compose up -d
 ```
 
-The `hub-data` volume persists the SQLite database across container restarts. Set `SONDE_API_KEY` to a strong secret (at least 16 characters).
+The `hub-data` volume persists the SQLite database across container restarts. Set `SONDE_SECRET` to a strong random value (at least 16 characters — see [Hub Configuration](/hub/configuration/)).
 
 ## From source
 
@@ -71,7 +71,7 @@ npm run build
 Then start the hub:
 
 ```bash
-SONDE_API_KEY=your-secret-key node packages/hub/dist/index.js
+SONDE_SECRET=your-secret-key node packages/hub/dist/index.js
 ```
 
 The hub will listen on port 3000 by default. Override with the `PORT` environment variable.
@@ -91,7 +91,7 @@ The wizard walks through initial configuration: creating an API key, configuring
 The hub listens on port 3000 by default, bound to all interfaces (`0.0.0.0`). Configure with environment variables:
 
 ```bash
-PORT=8080 HOST=127.0.0.1 SONDE_API_KEY=... node packages/hub/dist/index.js
+PORT=8080 HOST=127.0.0.1 SONDE_SECRET=... node packages/hub/dist/index.js
 ```
 
 See [Hub Configuration](/hub/configuration/) for the full list of environment variables.
@@ -135,7 +135,7 @@ For Dokploy users, deploy directly from GitHub:
 1. Create a new application in Dokploy.
 2. Point it at the Sonde repository.
 3. Set the Dockerfile path to `docker/hub.Dockerfile` (or the root `Dockerfile` if present).
-4. Add the `SONDE_API_KEY` environment variable.
+4. Add the required environment variables: `SONDE_SECRET`, `SONDE_HUB_URL` (your public URL), and optionally `SONDE_ADMIN_USER` / `SONDE_ADMIN_PASSWORD` for local admin login.
 5. Deploy.
 
 Dokploy handles builds, restarts, and TLS via its built-in Traefik integration.

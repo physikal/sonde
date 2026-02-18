@@ -9,7 +9,7 @@ Get Sonde running in three steps: deploy the hub, install an agent, and connect 
 ```bash
 docker run -d --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key-min-16-chars \
+  -e SONDE_SECRET=your-secret-key-min-16-chars \
   -v sonde-data:/data \
   ghcr.io/sonde-dev/hub:latest
 ```
