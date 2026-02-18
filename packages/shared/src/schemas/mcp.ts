@@ -25,6 +25,8 @@ export const DiagnoseInput = z.object({
   category: z.string(),
   /** Natural language problem description */
   description: z.string().optional(),
+  /** Parameters for diagnostic runbooks (e.g. { vmid: 100 }) */
+  params: z.record(z.unknown()).optional(),
 });
 export type DiagnoseInput = z.infer<typeof DiagnoseInput>;
 
@@ -38,11 +40,24 @@ export const DiagnoseOutput = z.object({
   runbookId: z.string(),
   /** Keyed by probe name → result */
   findings: z.record(z.unknown()),
+  /** Structured analysis findings from diagnostic runbooks */
+  analysis: z
+    .array(
+      z.object({
+        severity: z.enum(['info', 'warning', 'critical']),
+        title: z.string(),
+        detail: z.string(),
+        remediation: z.string().optional(),
+        relatedProbes: z.array(z.string()),
+      }),
+    )
+    .optional(),
   summary: z.object({
     probesRun: z.number(),
     probesSucceeded: z.number(),
     probesFailed: z.number(),
     durationMs: z.number(),
+    summaryText: z.string().optional(),
   }),
 });
 export type DiagnoseOutput = z.infer<typeof DiagnoseOutput>;

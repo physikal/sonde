@@ -5,7 +5,16 @@ import https from 'node:https';
 import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { httpbinPack, packRegistry } from '@sonde/packs';
+import {
+  citrixPack,
+  graphPack,
+  httpbinPack,
+  packRegistry,
+  proxmoxDiagnosticRunbooks,
+  proxmoxPack,
+  servicenowPack,
+  splunkPack,
+} from '@sonde/packs';
 import type { IntegrationPack } from '@sonde/shared';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
@@ -14,7 +23,7 @@ import {
   filterIntegrationsByAccess,
   isAgentVisible,
 } from './auth/access-groups.js';
-import { createEntraRoutes } from './auth/entra.js';
+import { createEntraRoutes, getDecryptedSSOConfig } from './auth/entra.js';
 import { createAuthRoutes } from './auth/local-auth.js';
 import { requireRole } from './auth/rbac.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
@@ -47,6 +56,11 @@ const runbookEngine = new RunbookEngine();
 
 const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [httpbinPack.manifest.name, httpbinPack],
+  [servicenowPack.manifest.name, servicenowPack],
+  [citrixPack.manifest.name, citrixPack],
+  [graphPack.manifest.name, graphPack],
+  [splunkPack.manifest.name, splunkPack],
+  [proxmoxPack.manifest.name, proxmoxPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,
@@ -59,6 +73,9 @@ integrationManager.loadAll();
 // Start periodic version check for agent updates
 startVersionCheckLoop(db);
 runbookEngine.loadFromManifests([...packRegistry.values()].map((p) => p.manifest));
+for (const runbook of proxmoxDiagnosticRunbooks) {
+  runbookEngine.registerDiagnostic(runbook);
+}
 
 function generateInstallScript(hubUrl: string): string {
   return `#!/usr/bin/env bash
@@ -355,6 +372,7 @@ app.post('/api/v1/sso/entra', async (c) => {
 
   const clientSecretEnc = encrypt(body.clientSecret, config.secret);
   db.upsertSsoConfig(body.tenantId, body.clientId, clientSecretEnc, body.enabled !== false);
+  syncGraphIntegrationCredentials();
   return c.json({ ok: true });
 });
 
@@ -380,6 +398,7 @@ app.put('/api/v1/sso/entra', async (c) => {
   const enabled = body.enabled ?? existing.enabled;
 
   db.upsertSsoConfig(tenantId, clientId, clientSecretEnc, enabled);
+  syncGraphIntegrationCredentials();
   return c.json({ ok: true });
 });
 
@@ -599,6 +618,69 @@ app.delete('/api/v1/access-groups/:id/users', async (c) => {
   const deleted = db.removeAccessGroupUser(c.req.param('id'), body.userId);
   if (!deleted) return c.json({ error: 'User not found in access group' }, 404);
   return c.json({ ok: true });
+});
+
+// --- Graph integration activation endpoint ---
+
+/** Sync Graph integration credentials when SSO config changes */
+function syncGraphIntegrationCredentials(): void {
+  const ssoConfig = getDecryptedSSOConfig(db, config.secret);
+  if (!ssoConfig) return;
+
+  const existing = integrationManager.list().find((i) => i.type === 'graph');
+  if (!existing) return;
+
+  integrationManager.update(existing.id, {
+    credentials: {
+      packName: 'graph',
+      authMethod: 'oauth2',
+      credentials: {
+        tenantId: ssoConfig.tenantId,
+        clientId: ssoConfig.clientId,
+        clientSecret: ssoConfig.clientSecret,
+      },
+    },
+  });
+}
+
+app.post('/api/v1/integrations/graph/activate', async (c) => {
+  const body = await c.req.json<{ name?: string }>();
+  if (!body.name?.trim()) {
+    return c.json({ error: 'name is required' }, 400);
+  }
+
+  const ssoConfig = getDecryptedSSOConfig(db, config.secret);
+  if (!ssoConfig) {
+    return c.json({ error: 'Entra SSO is not configured or not enabled' }, 400);
+  }
+
+  const existing = integrationManager.list().find((i) => i.type === 'graph');
+  if (existing) {
+    return c.json({ error: 'A Graph integration already exists' }, 409);
+  }
+
+  try {
+    const result = integrationManager.create({
+      type: 'graph',
+      name: body.name.trim(),
+      config: { endpoint: 'https://graph.microsoft.com/v1.0' },
+      credentials: {
+        packName: 'graph',
+        authMethod: 'oauth2',
+        credentials: {
+          tenantId: ssoConfig.tenantId,
+          clientId: ssoConfig.clientId,
+          clientSecret: ssoConfig.clientSecret,
+        },
+      },
+    });
+    return c.json(result, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Integration with this name already exists' }, 409);
+    }
+    throw error;
+  }
 });
 
 // --- Integration management endpoints (require master API key) ---
@@ -857,13 +939,18 @@ app.post('/api/v1/probe', async (c) => {
 
 // Execute diagnostic runbook via REST (authenticated — used by Try It page)
 app.post('/api/v1/diagnose', async (c) => {
-  const body = await c.req.json<{ agent?: string; category: string }>();
+  const body = await c.req.json<{
+    agent?: string;
+    category: string;
+    params?: Record<string, unknown>;
+  }>();
   if (!body.category) {
     return c.json({ error: 'category is required' }, 400);
   }
 
   const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
-  const result = await handleDiagnose(body, probeRouter, runbookEngine, db, auth);
+  const connectedAgents = dispatcher.getOnlineAgents().map((a) => a.name);
+  const result = await handleDiagnose(body, probeRouter, runbookEngine, db, auth, connectedAgents);
   const text = result.content[0]?.text ?? '';
 
   if (result.isError) {

@@ -63,7 +63,7 @@ export function createMcpHandler(
       'diagnose',
       {
         description:
-          'Run a diagnostic runbook. For agent runbooks, specify the agent. For integration runbooks, the agent can be omitted.',
+          'Run a diagnostic runbook. For agent runbooks, specify the agent. For integration/diagnostic runbooks (e.g. proxmox-vm, proxmox-cluster, proxmox-storage), the agent can be omitted.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -71,15 +71,24 @@ export function createMcpHandler(
             .describe(
               'Agent name or ID (required for agent runbooks, omit for integration runbooks)',
             ),
-          category: z.string().describe('Runbook category, e.g. "docker", "system", "systemd"'),
+          category: z
+            .string()
+            .describe(
+              'Runbook category, e.g. "docker", "system", "proxmox-vm", "proxmox-cluster", "proxmox-storage"',
+            ),
           description: z
             .string()
             .optional()
             .describe('Optional natural language problem description'),
+          params: z
+            .record(z.unknown())
+            .optional()
+            .describe('Runbook-specific parameters, e.g. { vmid: 100 }'),
         }),
       },
       async (args) => {
-        return handleDiagnose(args, probeRouter, runbookEngine, db, auth);
+        const connectedAgents = dispatcher.getOnlineAgents().map((a) => a.name);
+        return handleDiagnose(args, probeRouter, runbookEngine, db, auth, connectedAgents);
       },
     );
 

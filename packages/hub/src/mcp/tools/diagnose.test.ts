@@ -18,6 +18,7 @@ function createMockEngine(overrides: Partial<RunbookEngine> = {}): RunbookEngine
   return {
     loadFromManifests: vi.fn(),
     getRunbook: vi.fn().mockReturnValue({ packName: 'docker', definition: {} }),
+    getDiagnosticRunbook: vi.fn().mockReturnValue(undefined),
     getCategories: vi.fn().mockReturnValue(['docker', 'system']),
     execute: vi.fn().mockResolvedValue({
       category: 'docker',

@@ -5,11 +5,17 @@ import type { RunbookEngine } from '../../engine/runbooks.js';
 import type { ProbeRouter } from '../../integrations/probe-router.js';
 
 export async function handleDiagnose(
-  args: { agent?: string; category: string; description?: string },
+  args: {
+    agent?: string;
+    category: string;
+    description?: string;
+    params?: Record<string, unknown>;
+  },
   probeRouter: ProbeRouter,
   runbookEngine: RunbookEngine,
   db: SondeDb,
   auth?: AuthContext,
+  connectedAgents?: string[],
 ): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
@@ -27,6 +33,59 @@ export async function handleDiagnose(
       }
     }
 
+    // Check for diagnostic runbook first
+    const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(args.category);
+    if (diagnosticRunbook) {
+      const context = { connectedAgents: connectedAgents ?? [] };
+      const result = await runbookEngine.executeDiagnostic(
+        args.category,
+        args.params ?? {},
+        probeRouter,
+        context,
+      );
+
+      const agentOrSource = args.agent ?? args.category;
+      const output = {
+        agent: agentOrSource,
+        timestamp: new Date().toISOString(),
+        category: args.category,
+        runbookId: `${args.category}-runbook`,
+        findings: result.probeResults,
+        analysis: result.findings,
+        summary: {
+          ...result.summary,
+          summaryText: result.summary.summaryText,
+        },
+      };
+
+      // Log each probe result to audit
+      for (const [probe, probeResult] of Object.entries(result.probeResults)) {
+        if (auth) {
+          const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe);
+          if (!probeDecision.allowed) continue;
+        }
+
+        db.logAudit({
+          apiKeyId: auth?.keyId,
+          agentId: agentOrSource,
+          probe,
+          status: probeResult.status,
+          durationMs: probeResult.durationMs,
+          requestJson: JSON.stringify({
+            agent: args.agent,
+            category: args.category,
+            params: args.params,
+          }),
+          responseJson: JSON.stringify(probeResult),
+        });
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+      };
+    }
+
+    // Fall through to simple runbook path
     const runbook = runbookEngine.getRunbook(args.category);
     if (!runbook) {
       const available = runbookEngine.getCategories();
