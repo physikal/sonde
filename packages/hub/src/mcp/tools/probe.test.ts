@@ -14,6 +14,7 @@ function createMockDb(): SondeDb {
   return {
     logAudit: vi.fn(),
     updateApiKeyLastUsed: vi.fn(),
+    getAgent: vi.fn().mockReturnValue(undefined),
   } as unknown as SondeDb;
 }
 
@@ -93,6 +94,30 @@ describe('handleProbe', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('not found');
+    expect(result.content[0]?.text).toContain('Check that the agent is running');
+  });
+
+  it('includes last-seen time when offline agent is registered', async () => {
+    const probeRouter = createMockProbeRouter({
+      execute: vi.fn().mockRejectedValue(new Error("Agent 'srv1' not found or offline")),
+    });
+    const db = createMockDb();
+    (db.getAgent as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: 'abc-123',
+      name: 'srv1',
+      status: 'offline',
+      lastSeen: '2026-02-18T10:00:00Z',
+    });
+
+    const result = await handleProbe(
+      { agent: 'srv1', probe: 'system.disk.usage' },
+      probeRouter,
+      db,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('registered but offline');
+    expect(result.content[0]?.text).toContain('2026-02-18T10:00:00Z');
   });
 
   it('returns error on timeout', async () => {

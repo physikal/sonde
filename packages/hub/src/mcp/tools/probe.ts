@@ -50,7 +50,15 @@ export async function handleProbe(
     const message = error instanceof Error ? error.message : 'Unknown error';
     let hint = '';
     if (message.includes('not found or offline')) {
-      hint = ' Check that the agent is running and connected to the hub.';
+      const agentRow = args.agent ? db.getAgent(args.agent) : undefined;
+      if (agentRow) {
+        const lastSeen = agentRow.lastSeen
+          ? ` Last seen: ${agentRow.lastSeen}.`
+          : '';
+        hint = ` Agent "${args.agent}" is registered but offline.${lastSeen} Check that the agent process is running and can reach the hub.`;
+      } else {
+        hint = ' Check that the agent is running and connected to the hub.';
+      }
     } else if (message.includes('timed out')) {
       hint = ' The agent may be overloaded or the probe may be slow.';
     }

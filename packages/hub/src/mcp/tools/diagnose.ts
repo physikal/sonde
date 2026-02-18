@@ -33,6 +33,30 @@ export async function handleDiagnose(
       }
     }
 
+    // Pre-flight: fail fast if a specific agent is requested but offline
+    if (args.agent && connectedAgents && !connectedAgents.includes(args.agent)) {
+      const agentRow = db.getAgent(args.agent);
+      if (!agentRow) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Error: Agent "${args.agent}" is not registered with the hub.`,
+          }],
+          isError: true,
+        };
+      }
+      const lastSeen = agentRow.lastSeen
+        ? ` Last seen: ${agentRow.lastSeen}.`
+        : '';
+      return {
+        content: [{
+          type: 'text',
+          text: `Error: Agent "${args.agent}" is offline.${lastSeen} Check that the agent process is running and can reach the hub.`,
+        }],
+        isError: true,
+      };
+    }
+
     // Check for diagnostic runbook first
     const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(args.category);
     if (diagnosticRunbook) {

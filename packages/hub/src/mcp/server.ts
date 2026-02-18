@@ -87,7 +87,8 @@ export function createMcpHandler(
         }),
       },
       async (args) => {
-        const connectedAgents = dispatcher.getOnlineAgents().map((a) => a.name);
+        const online = dispatcher.getOnlineAgents();
+        const connectedAgents = [...online.map((a) => a.name), ...online.map((a) => a.id)];
         return handleDiagnose(args, probeRouter, runbookEngine, db, auth, connectedAgents);
       },
     );
