@@ -926,14 +926,40 @@ describe('proxmox pack', () => {
     it('returns all VMs and containers', async () => {
       const fetchFn = mockPveResponse({
         data: [
-          { vmid: 100, name: 'web-01', node: 'pve01', type: 'qemu', status: 'running', uptime: 3600, cpu: 0.1, mem: 2e9, maxmem: 4e9 },
-          { vmid: 200, name: 'ct-db', node: 'pve02', type: 'lxc', status: 'running', uptime: 7200, cpu: 0.05, mem: 512e6, maxmem: 1e9 },
+          {
+            vmid: 100,
+            name: 'web-01',
+            node: 'pve01',
+            type: 'qemu',
+            status: 'running',
+            uptime: 3600,
+            cpu: 0.1,
+            mem: 2e9,
+            maxmem: 4e9,
+          },
+          {
+            vmid: 200,
+            name: 'ct-db',
+            node: 'pve02',
+            type: 'lxc',
+            status: 'running',
+            uptime: 7200,
+            cpu: 0.05,
+            mem: 512e6,
+            maxmem: 1e9,
+          },
           { vmid: 101, name: 'stopped-vm', node: 'pve01', type: 'qemu', status: 'stopped' },
         ],
       });
 
       const result = (await handler('cluster.resources')({}, pveConfig, pveCreds, fetchFn)) as {
-        resources: Array<{ vmid: number; name: string | null; node: string; type: string; status: string }>;
+        resources: Array<{
+          vmid: number;
+          name: string | null;
+          node: string;
+          type: string;
+          status: string;
+        }>;
       };
 
       expect(result.resources).toHaveLength(3);

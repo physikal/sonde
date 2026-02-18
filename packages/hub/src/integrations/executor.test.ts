@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 import { IntegrationExecutor } from './executor.js';
+import type { IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 
 function createTestPack(overrides?: {
   handlers?: Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -92,26 +92,29 @@ describe('IntegrationExecutor', () => {
   });
 
   it('times out probe execution', async () => {
-    const handler = vi.fn().mockImplementation(
-      async (_params: unknown, _config: unknown, _creds: unknown, fetchFn: typeof fetch) => {
-        // The abort signal will be on the fetchFn — simulate a long-running call
-        // by making a fetch that takes too long. We mock the fetch to delay.
-        await fetchFn('https://api.test.com/slow');
-      },
-    );
+    const handler = vi
+      .fn()
+      .mockImplementation(
+        async (_params: unknown, _config: unknown, _creds: unknown, fetchFn: typeof fetch) => {
+          // The abort signal will be on the fetchFn — simulate a long-running call
+          // by making a fetch that takes too long. We mock the fetch to delay.
+          await fetchFn('https://api.test.com/slow');
+        },
+      );
 
-    const slowFetch = vi.fn().mockImplementation(
-      (_input: unknown, init?: { signal?: AbortSignal }) => {
+    const slowFetch = vi
+      .fn()
+      .mockImplementation((_input: unknown, init?: { signal?: AbortSignal }) => {
         return new Promise((_resolve, reject) => {
-          const onAbort = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+          const onAbort = () =>
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
           if (init?.signal?.aborted) {
             onAbort();
             return;
           }
           init?.signal?.addEventListener('abort', onAbort);
         });
-      },
-    );
+      });
 
     const executor = new IntegrationExecutor(slowFetch);
     // Register pack with very short timeout

@@ -21,11 +21,18 @@ export const connectionsActive: ProbeHandler = async (params, exec) => {
   const user = (params?.user as string) ?? 'postgres';
 
   const stdout = await exec('psql', [
-    '-h', host,
-    '-p', port,
-    '-U', user,
-    '-t', '-A', '-F', '\t',
-    '-c', "SELECT pid, datname, usename, client_addr, state, LEFT(query, 200), backend_start FROM pg_stat_activity WHERE state IS NOT NULL AND pid <> pg_backend_pid() ORDER BY backend_start DESC",
+    '-h',
+    host,
+    '-p',
+    port,
+    '-U',
+    user,
+    '-t',
+    '-A',
+    '-F',
+    '\t',
+    '-c',
+    'SELECT pid, datname, usename, client_addr, state, LEFT(query, 200), backend_start FROM pg_stat_activity WHERE state IS NOT NULL AND pid <> pg_backend_pid() ORDER BY backend_start DESC',
   ]);
   return parseConnectionsActive(stdout);
 };

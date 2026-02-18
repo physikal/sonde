@@ -101,7 +101,11 @@ describe('handleProbe', () => {
     });
     const db = createMockDb();
 
-    const result = await handleProbe({ agent: 'srv1', probe: 'system.disk.usage' }, probeRouter, db);
+    const result = await handleProbe(
+      { agent: 'srv1', probe: 'system.disk.usage' },
+      probeRouter,
+      db,
+    );
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('timed out');
@@ -126,11 +130,7 @@ describe('handleProbe', () => {
     });
     const db = createMockDb();
 
-    const result = await handleProbe(
-      { probe: 'cloudflare.zones.list' },
-      probeRouter,
-      db,
-    );
+    const result = await handleProbe({ probe: 'cloudflare.zones.list' }, probeRouter, db);
 
     expect(result.isError).toBeUndefined();
     expect(probeRouter.execute).toHaveBeenCalledWith('cloudflare.zones.list', undefined, undefined);
@@ -141,17 +141,15 @@ describe('handleProbe', () => {
 
   it('returns error for agent probe without agent', async () => {
     const probeRouter = createMockProbeRouter({
-      execute: vi.fn().mockRejectedValue(
-        new Error("Agent name or ID is required for agent probe 'system.disk.usage'"),
-      ),
+      execute: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("Agent name or ID is required for agent probe 'system.disk.usage'"),
+        ),
     });
     const db = createMockDb();
 
-    const result = await handleProbe(
-      { probe: 'system.disk.usage' },
-      probeRouter,
-      db,
-    );
+    const result = await handleProbe({ probe: 'system.disk.usage' }, probeRouter, db);
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('required');

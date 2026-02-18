@@ -18,11 +18,18 @@ export const databasesList: ProbeHandler = async (params, exec) => {
   const user = (params?.user as string) ?? 'postgres';
 
   const stdout = await exec('psql', [
-    '-h', host,
-    '-p', port,
-    '-U', user,
-    '-t', '-A', '-F', '\t',
-    '-c', 'SELECT datname, pg_catalog.pg_get_userbyid(datdba), pg_catalog.pg_encoding_to_char(encoding), pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(datname)) FROM pg_catalog.pg_database WHERE datistemplate = false ORDER BY datname',
+    '-h',
+    host,
+    '-p',
+    port,
+    '-U',
+    user,
+    '-t',
+    '-A',
+    '-F',
+    '\t',
+    '-c',
+    'SELECT datname, pg_catalog.pg_get_userbyid(datdba), pg_catalog.pg_encoding_to_char(encoding), pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(datname)) FROM pg_catalog.pg_database WHERE datistemplate = false ORDER BY datname',
   ]);
   return parseDatabasesList(stdout);
 };

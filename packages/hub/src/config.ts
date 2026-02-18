@@ -1,4 +1,5 @@
 import { DEFAULT_HUB_PORT } from '@sonde/shared';
+import { logger } from './logger.js';
 
 export interface HubConfig {
   port: number;
@@ -15,9 +16,8 @@ export function loadConfig(): HubConfig {
   let secret = process.env.SONDE_SECRET;
   if (!secret && process.env.SONDE_API_KEY) {
     secret = process.env.SONDE_API_KEY;
-    console.warn(
-      'SONDE_API_KEY is deprecated. Please use SONDE_SECRET instead. ' +
-        'SONDE_SECRET is used only for encryption; API keys are now managed via the dashboard.',
+    logger.warn(
+      'SONDE_API_KEY is deprecated — use SONDE_SECRET instead. API keys are now managed via the dashboard.',
     );
   }
   if (!secret) {

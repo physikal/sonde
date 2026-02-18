@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { logger } from '../logger.js';
 import { migrations } from './migrations/index.js';
 
 /**
@@ -38,7 +39,7 @@ export function runMigrations(db: Database.Database): number {
 
     runInTransaction();
     applied++;
-    console.log(`Migration ${migration.version} applied`);
+    logger.info({ version: migration.version }, 'Migration applied');
   }
 
   return applied;

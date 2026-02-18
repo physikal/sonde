@@ -13,6 +13,7 @@ import { SESSION_COOKIE } from '../auth/session-middleware.js';
 import type { SessionManager } from '../auth/sessions.js';
 import { getCertFingerprint, issueAgentCert } from '../crypto/ca.js';
 import type { SondeDb } from '../db/index.js';
+import { logger } from '../logger.js';
 import { semverLt } from '../version-check.js';
 import type { AgentDispatcher } from './dispatcher.js';
 
@@ -99,7 +100,7 @@ export function setupWsServer(
   });
 
   wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
-    console.log('Agent connected');
+    logger.info('Agent connected');
     const bearerToken = extractApiKey(req);
 
     ws.on('message', (data) => {
@@ -112,8 +113,9 @@ export function setupWsServer(
         if (envelope.agentId && envelope.type !== 'agent.register') {
           const socketAgentId = dispatcher.getAgentIdBySocket(ws);
           if (socketAgentId && socketAgentId !== envelope.agentId) {
-            console.warn(
-              `Agent impersonation attempt: socket owns ${socketAgentId} but claimed ${envelope.agentId}`,
+            logger.warn(
+              { socketAgentId, claimedAgentId: envelope.agentId },
+              'Agent impersonation attempt',
             );
             ws.send(JSON.stringify({ error: 'Agent ID mismatch' }));
             return;
@@ -123,7 +125,7 @@ export function setupWsServer(
         handleMessage(ws, envelope, dispatcher, db, ca, bearerToken);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`WebSocket message error: ${message}`);
+        logger.error({ err: message }, 'WebSocket message error');
         ws.send(JSON.stringify({ error: 'Invalid message format' }));
       }
     });
@@ -147,13 +149,13 @@ function handleMessage(
     const certPem = db.getAgentCertPem(envelope.agentId);
     if (certPem) {
       if (envelope.signature === '') {
-        console.warn(`Missing signature from agent ${envelope.agentId} which has a stored cert`);
+        logger.warn({ agentId: envelope.agentId }, 'Missing signature from agent with stored cert');
         ws.send(JSON.stringify({ error: 'Signature required' }));
         return;
       }
       const valid = verifyPayload(envelope.payload, envelope.signature, certPem);
       if (!valid) {
-        console.warn(`Signature verification failed for agent ${envelope.agentId}`);
+        logger.warn({ agentId: envelope.agentId }, 'Signature verification failed');
         ws.send(JSON.stringify({ error: 'Signature verification failed' }));
         return;
       }
@@ -293,7 +295,7 @@ function handleRegister(
       );
       if (mismatch) {
         db.updateAgentStatus(agentId, 'degraded', now);
-        console.warn(`Attestation mismatch for agent ${payload.name} (${agentId})`);
+        logger.warn({ agent: payload.name, agentId }, 'Attestation mismatch');
       }
       db.updateAgentAttestation(agentId, newJson, mismatch);
     }
@@ -324,7 +326,7 @@ function handleRegister(
     : mintedApiKey
       ? 'token → API key minted'
       : 'API key';
-  console.log(`Agent registered: ${payload.name} (${agentId}) [${authMethod}]`);
+  logger.info({ agent: payload.name, agentId, authMethod }, 'Agent registered');
 
   // Send update notification if agent is outdated
   const latestVersion = db.getHubSetting('latest_agent_version');

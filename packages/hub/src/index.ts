@@ -17,7 +17,7 @@ import {
   servicenowPack,
   splunkPack,
 } from '@sonde/packs';
-import type { IntegrationPack } from '@sonde/shared';
+import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
 import {
@@ -28,7 +28,7 @@ import {
 import { createEntraRoutes, getDecryptedSSOConfig } from './auth/entra.js';
 import { createAuthRoutes } from './auth/local-auth.js';
 import { requireRole } from './auth/rbac.js';
-import { VALID_ROLES, exceedsRole } from './auth/roles.js';
+import { exceedsRole } from './auth/roles.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
 import { SessionManager } from './auth/sessions.js';
 import type { UserContext } from './auth/sessions.js';
@@ -40,10 +40,30 @@ import { encrypt } from './integrations/crypto.js';
 import { IntegrationExecutor } from './integrations/executor.js';
 import { IntegrationManager } from './integrations/manager.js';
 import { ProbeRouter } from './integrations/probe-router.js';
+import { logger } from './logger.js';
 import { createMcpHandler } from './mcp/server.js';
 import { handleDiagnose } from './mcp/tools/diagnose.js';
 import { handleProbe } from './mcp/tools/probe.js';
 import type { SondeOAuthProvider } from './oauth/provider.js';
+import {
+  AccessGroupAgentBody,
+  AccessGroupIntegrationBody,
+  AccessGroupUserBody,
+  ActivateGraphBody,
+  CreateAccessGroupBody,
+  CreateApiKeyBody,
+  CreateAuthorizedGroupBody,
+  CreateAuthorizedUserBody,
+  CreateIntegrationBody,
+  CreateSsoBody,
+  UpdateAccessGroupBody,
+  UpdateApiKeyPolicyBody,
+  UpdateAuthorizedGroupBody,
+  UpdateAuthorizedUserBody,
+  UpdateIntegrationBody,
+  UpdateSsoBody,
+  parseBody,
+} from './schemas.js';
 import { semverLt, startVersionCheckLoop } from './version-check.js';
 import { AgentDispatcher } from './ws/dispatcher.js';
 import { setupWsServer } from './ws/server.js';
@@ -294,19 +314,11 @@ app.get('/api/v1/enrollment-tokens', (c) => {
 
 // API key management endpoints (require legacy key auth)
 app.post('/api/v1/api-keys', async (c) => {
-  const body = await c.req.json<{
-    name: string;
-    policy?: Record<string, unknown>;
-    role?: string;
-  }>();
-  if (!body.name) {
-    return c.json({ error: 'name is required' }, 400);
-  }
+  const parsed = parseBody(CreateApiKeyBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
-  const role = body.role ?? 'member';
-  if (!VALID_ROLES.has(role)) {
-    return c.json({ error: `Invalid role: ${role}` }, 400);
-  }
+  const role = body.role;
   const caller = getUser(c);
   if (caller && exceedsRole(caller.role, role)) {
     return c.json({ error: 'Cannot create key with role higher than your own' }, 403);
@@ -351,8 +363,9 @@ app.post('/api/v1/api-keys/:id/rotate', (c) => {
 });
 
 app.put('/api/v1/api-keys/:id/policy', async (c) => {
-  const body = await c.req.json<{ policy: Record<string, unknown> }>();
-  const updated = db.updateApiKeyPolicy(c.req.param('id'), JSON.stringify(body.policy ?? {}));
+  const parsed = parseBody(UpdateApiKeyPolicyBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const updated = db.updateApiKeyPolicy(c.req.param('id'), JSON.stringify(parsed.data.policy));
   if (!updated) {
     return c.json({ error: 'API key not found' }, 404);
   }
@@ -385,31 +398,21 @@ app.get('/api/v1/sso/entra', (c) => {
 
 // Admin: create/update SSO config
 app.post('/api/v1/sso/entra', async (c) => {
-  const body = await c.req.json<{
-    tenantId?: string;
-    clientId?: string;
-    clientSecret?: string;
-    enabled?: boolean;
-  }>();
-
-  if (!body.tenantId || !body.clientId || !body.clientSecret) {
-    return c.json({ error: 'tenantId, clientId, and clientSecret are required' }, 400);
-  }
+  const parsed = parseBody(CreateSsoBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const clientSecretEnc = encrypt(body.clientSecret, config.secret);
-  db.upsertSsoConfig(body.tenantId, body.clientId, clientSecretEnc, body.enabled !== false);
+  db.upsertSsoConfig(body.tenantId, body.clientId, clientSecretEnc, body.enabled);
   syncGraphIntegrationCredentials();
   return c.json({ ok: true });
 });
 
 // Admin: update SSO config
 app.put('/api/v1/sso/entra', async (c) => {
-  const body = await c.req.json<{
-    tenantId?: string;
-    clientId?: string;
-    clientSecret?: string;
-    enabled?: boolean;
-  }>();
+  const parsed = parseBody(UpdateSsoBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const existing = db.getSsoConfig();
   if (!existing) {
@@ -435,16 +438,12 @@ app.get('/api/v1/authorized-users', (c) => {
 });
 
 app.post('/api/v1/authorized-users', async (c) => {
-  const body = await c.req.json<{ email?: string; role?: string }>();
-  if (!body.email) {
-    return c.json({ error: 'email is required' }, 400);
-  }
+  const parsed = parseBody(CreateAuthorizedUserBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const id = crypto.randomUUID();
-  const role = body.role ?? 'member';
-  if (!VALID_ROLES.has(role)) {
-    return c.json({ error: `Invalid role: ${role}` }, 400);
-  }
+  const role = body.role;
   const caller = getUser(c);
   if (caller && exceedsRole(caller.role, role)) {
     return c.json({ error: 'Cannot assign role higher than your own' }, 403);
@@ -463,14 +462,9 @@ app.post('/api/v1/authorized-users', async (c) => {
 });
 
 app.put('/api/v1/authorized-users/:id', async (c) => {
-  const body = await c.req.json<{ role?: string; enabled?: boolean }>();
-  if (!body.role && body.enabled === undefined) {
-    return c.json({ error: 'role or enabled is required' }, 400);
-  }
-
-  if (body.role && !VALID_ROLES.has(body.role)) {
-    return c.json({ error: `Invalid role: ${body.role}` }, 400);
-  }
+  const parsed = parseBody(UpdateAuthorizedUserBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
   const caller2 = getUser(c);
   if (body.role && caller2 && exceedsRole(caller2.role, body.role)) {
     return c.json({ error: 'Cannot assign role higher than your own' }, 403);
@@ -505,27 +499,19 @@ app.get('/api/v1/authorized-groups', (c) => {
 });
 
 app.post('/api/v1/authorized-groups', async (c) => {
-  const body = await c.req.json<{
-    entraGroupId?: string;
-    entraGroupName?: string;
-    role?: string;
-  }>();
-  if (!body.entraGroupId) {
-    return c.json({ error: 'entraGroupId is required' }, 400);
-  }
+  const parsed = parseBody(CreateAuthorizedGroupBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const id = crypto.randomUUID();
-  const role = body.role ?? 'member';
-  if (!VALID_ROLES.has(role)) {
-    return c.json({ error: `Invalid role: ${role}` }, 400);
-  }
+  const role = body.role;
   const caller3 = getUser(c);
   if (caller3 && exceedsRole(caller3.role, role)) {
     return c.json({ error: 'Cannot assign role higher than your own' }, 403);
   }
 
   try {
-    db.createAuthorizedGroup(id, body.entraGroupId, body.entraGroupName ?? '', role);
+    db.createAuthorizedGroup(id, body.entraGroupId, body.entraGroupName, role);
   } catch (error) {
     if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'Group with this Entra group ID already exists' }, 409);
@@ -537,14 +523,10 @@ app.post('/api/v1/authorized-groups', async (c) => {
 });
 
 app.put('/api/v1/authorized-groups/:id', async (c) => {
-  const body = await c.req.json<{ role?: string }>();
-  if (!body.role) {
-    return c.json({ error: 'role is required' }, 400);
-  }
+  const parsed = parseBody(UpdateAuthorizedGroupBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
-  if (!VALID_ROLES.has(body.role)) {
-    return c.json({ error: `Invalid role: ${body.role}` }, 400);
-  }
   const caller4 = getUser(c);
   if (caller4 && exceedsRole(caller4.role, body.role)) {
     return c.json({ error: 'Cannot assign role higher than your own' }, 403);
@@ -578,14 +560,13 @@ app.get('/api/v1/access-groups', (c) => {
 });
 
 app.post('/api/v1/access-groups', async (c) => {
-  const body = await c.req.json<{ name?: string; description?: string }>();
-  if (!body.name) {
-    return c.json({ error: 'name is required' }, 400);
-  }
+  const parsed = parseBody(CreateAccessGroupBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const id = crypto.randomUUID();
   try {
-    db.createAccessGroup(id, body.name, body.description ?? '');
+    db.createAccessGroup(id, body.name, body.description);
   } catch (error) {
     if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'Access group with this name already exists' }, 409);
@@ -597,8 +578,9 @@ app.post('/api/v1/access-groups', async (c) => {
 });
 
 app.put('/api/v1/access-groups/:id', async (c) => {
-  const body = await c.req.json<{ name?: string; description?: string }>();
-  const updated = db.updateAccessGroup(c.req.param('id'), body);
+  const parsed = parseBody(UpdateAccessGroupBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const updated = db.updateAccessGroup(c.req.param('id'), parsed.data);
   if (!updated) {
     return c.json({ error: 'Access group not found' }, 404);
   }
@@ -618,18 +600,18 @@ app.post('/api/v1/access-groups/:id/agents', async (c) => {
   const group = db.getAccessGroup(c.req.param('id'));
   if (!group) return c.json({ error: 'Access group not found' }, 404);
 
-  const body = await c.req.json<{ pattern?: string }>();
-  if (!body.pattern) return c.json({ error: 'pattern is required' }, 400);
+  const parsed = parseBody(AccessGroupAgentBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  db.addAccessGroupAgent(group.id, body.pattern);
+  db.addAccessGroupAgent(group.id, parsed.data.pattern);
   return c.json({ ok: true }, 201);
 });
 
 app.delete('/api/v1/access-groups/:id/agents', async (c) => {
-  const body = await c.req.json<{ pattern?: string }>();
-  if (!body.pattern) return c.json({ error: 'pattern is required' }, 400);
+  const parsed = parseBody(AccessGroupAgentBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  const deleted = db.removeAccessGroupAgent(c.req.param('id'), body.pattern);
+  const deleted = db.removeAccessGroupAgent(c.req.param('id'), parsed.data.pattern);
   if (!deleted) return c.json({ error: 'Pattern not found in access group' }, 404);
   return c.json({ ok: true });
 });
@@ -639,18 +621,18 @@ app.post('/api/v1/access-groups/:id/integrations', async (c) => {
   const group = db.getAccessGroup(c.req.param('id'));
   if (!group) return c.json({ error: 'Access group not found' }, 404);
 
-  const body = await c.req.json<{ integrationId?: string }>();
-  if (!body.integrationId) return c.json({ error: 'integrationId is required' }, 400);
+  const parsed = parseBody(AccessGroupIntegrationBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  db.addAccessGroupIntegration(group.id, body.integrationId);
+  db.addAccessGroupIntegration(group.id, parsed.data.integrationId);
   return c.json({ ok: true }, 201);
 });
 
 app.delete('/api/v1/access-groups/:id/integrations', async (c) => {
-  const body = await c.req.json<{ integrationId?: string }>();
-  if (!body.integrationId) return c.json({ error: 'integrationId is required' }, 400);
+  const parsed = parseBody(AccessGroupIntegrationBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  const deleted = db.removeAccessGroupIntegration(c.req.param('id'), body.integrationId);
+  const deleted = db.removeAccessGroupIntegration(c.req.param('id'), parsed.data.integrationId);
   if (!deleted) return c.json({ error: 'Integration not found in access group' }, 404);
   return c.json({ ok: true });
 });
@@ -660,18 +642,18 @@ app.post('/api/v1/access-groups/:id/users', async (c) => {
   const group = db.getAccessGroup(c.req.param('id'));
   if (!group) return c.json({ error: 'Access group not found' }, 404);
 
-  const body = await c.req.json<{ userId?: string }>();
-  if (!body.userId) return c.json({ error: 'userId is required' }, 400);
+  const parsed = parseBody(AccessGroupUserBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  db.addAccessGroupUser(group.id, body.userId);
+  db.addAccessGroupUser(group.id, parsed.data.userId);
   return c.json({ ok: true }, 201);
 });
 
 app.delete('/api/v1/access-groups/:id/users', async (c) => {
-  const body = await c.req.json<{ userId?: string }>();
-  if (!body.userId) return c.json({ error: 'userId is required' }, 400);
+  const parsed = parseBody(AccessGroupUserBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  const deleted = db.removeAccessGroupUser(c.req.param('id'), body.userId);
+  const deleted = db.removeAccessGroupUser(c.req.param('id'), parsed.data.userId);
   if (!deleted) return c.json({ error: 'User not found in access group' }, 404);
   return c.json({ ok: true });
 });
@@ -700,10 +682,9 @@ function syncGraphIntegrationCredentials(): void {
 }
 
 app.post('/api/v1/integrations/graph/activate', async (c) => {
-  const body = await c.req.json<{ name?: string }>();
-  if (!body.name?.trim()) {
-    return c.json({ error: 'name is required' }, 400);
-  }
+  const parsed = parseBody(ActivateGraphBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const ssoConfig = getDecryptedSSOConfig(db, config.secret);
   if (!ssoConfig) {
@@ -718,7 +699,7 @@ app.post('/api/v1/integrations/graph/activate', async (c) => {
   try {
     const result = integrationManager.create({
       type: 'graph',
-      name: body.name.trim(),
+      name: body.name,
       config: { endpoint: 'https://graph.microsoft.com/v1.0' },
       credentials: {
         packName: 'graph',
@@ -742,28 +723,16 @@ app.post('/api/v1/integrations/graph/activate', async (c) => {
 // --- Integration management endpoints (require master API key) ---
 
 app.post('/api/v1/integrations', async (c) => {
-  const body = await c.req.json<{
-    type?: string;
-    name?: string;
-    config?: { endpoint: string; headers?: Record<string, string> };
-    credentials?: {
-      packName?: string;
-      authMethod?: string;
-      credentials?: Record<string, string>;
-      oauth2?: Record<string, unknown>;
-    };
-  }>();
-
-  if (!body.type || !body.name || !body.config || !body.credentials) {
-    return c.json({ error: 'type, name, config, and credentials are required' }, 400);
-  }
+  const parsed = parseBody(CreateIntegrationBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   try {
     const result = integrationManager.create({
       type: body.type,
       name: body.name,
-      config: body.config as import('./integrations/types.js').IntegrationConfig,
-      credentials: body.credentials as import('./integrations/types.js').IntegrationCredentials,
+      config: body.config,
+      credentials: body.credentials,
     });
     return c.json(result, 201);
   } catch (error) {
@@ -794,22 +763,10 @@ app.get('/api/v1/integrations/:id', (c) => {
 });
 
 app.put('/api/v1/integrations/:id', async (c) => {
-  const body = await c.req.json<{
-    config?: { endpoint: string; headers?: Record<string, string> };
-    credentials?: {
-      packName?: string;
-      authMethod?: string;
-      credentials?: Record<string, string>;
-      oauth2?: Record<string, unknown>;
-    };
-  }>();
+  const parsed = parseBody(UpdateIntegrationBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  const updated = integrationManager.update(c.req.param('id'), {
-    config: body.config as import('./integrations/types.js').IntegrationConfig | undefined,
-    credentials: body.credentials as
-      | import('./integrations/types.js').IntegrationCredentials
-      | undefined,
-  });
+  const updated = integrationManager.update(c.req.param('id'), parsed.data);
 
   if (!updated) {
     return c.json({ error: 'Integration not found' }, 404);
@@ -966,14 +923,9 @@ app.get('/api/v1/packs', (c) => {
 
 // Execute single probe via REST (authenticated — used by Try It page)
 app.post('/api/v1/probe', async (c) => {
-  const body = await c.req.json<{
-    agent?: string;
-    probe: string;
-    params?: Record<string, unknown>;
-  }>();
-  if (!body.probe) {
-    return c.json({ error: 'probe is required' }, 400);
-  }
+  const parsed = parseBody(ProbeInput, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   // Access group check: if targeting a specific agent, verify visibility
   const user = getUser(c);
@@ -1000,14 +952,9 @@ app.post('/api/v1/probe', async (c) => {
 
 // Execute diagnostic runbook via REST (authenticated — used by Try It page)
 app.post('/api/v1/diagnose', async (c) => {
-  const body = await c.req.json<{
-    agent?: string;
-    category: string;
-    params?: Record<string, unknown>;
-  }>();
-  if (!body.category) {
-    return c.json({ error: 'category is required' }, 400);
-  }
+  const parsed = parseBody(DiagnoseInput, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
 
   const auth = { type: 'api_key' as const, keyId: 'legacy', policy: {} };
   const connectedAgents = dispatcher.getOnlineAgents().map((a) => a.name);
@@ -1090,7 +1037,7 @@ let ca: { certPem: string; keyPem: string } | undefined;
 if (config.tlsEnabled) {
   ca = db.getCa(config.secret);
   if (!ca) {
-    console.log('Generating hub CA certificate...');
+    logger.info('Generating hub CA certificate');
     ca = generateCaCert();
     db.storeCa(ca.certPem, ca.keyPem, config.secret);
   }

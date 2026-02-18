@@ -11,10 +11,7 @@ export const PACK_SIGNING_PUBLIC_KEY = '';
  * Sign a pack manifest. Strips the `signature` field before signing.
  * Returns a base64-encoded RSA-SHA256 signature.
  */
-export function signPackManifest(
-  manifest: Record<string, unknown>,
-  privateKeyPem: string,
-): string {
+export function signPackManifest(manifest: Record<string, unknown>, privateKeyPem: string): string {
   const { signature: _, ...rest } = manifest;
   return signPayload(rest, privateKeyPem);
 }

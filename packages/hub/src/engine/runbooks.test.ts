@@ -231,9 +231,8 @@ describe('RunbookEngine', () => {
       execute: vi.fn().mockResolvedValue({
         probe: 'nutanix.vm.list',
         status: 'error',
-        data: null,
+        data: { error: 'Authentication failed: invalid credentials' },
         durationMs: 50,
-        error: 'Authentication failed: invalid credentials',
         metadata: {
           agentVersion: 'hub',
           packName: 'nutanix',

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { SondeDb } from '../db/index.js';
-import { encrypt, decrypt } from './crypto.js';
+import { decrypt, encrypt } from './crypto.js';
 import type { IntegrationExecutor } from './executor.js';
 import type { IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 
@@ -58,7 +58,15 @@ export class IntegrationManager {
       this.executor.registerPack(pack, input.config, input.credentials);
     }
 
-    return { id, type: input.type, name: input.name, status: 'active', lastTestedAt: null, lastTestResult: null, createdAt: now };
+    return {
+      id,
+      type: input.type,
+      name: input.name,
+      status: 'active',
+      lastTestedAt: null,
+      lastTestResult: null,
+      createdAt: now,
+    };
   }
 
   list(): IntegrationSummary[] {
@@ -122,7 +130,9 @@ export class IntegrationManager {
     return this.db.deleteIntegration(id);
   }
 
-  async testConnection(id: string): Promise<{ success: boolean; message?: string; testedAt: string }> {
+  async testConnection(
+    id: string,
+  ): Promise<{ success: boolean; message?: string; testedAt: string }> {
     const row = this.db.getIntegration(id);
     if (!row) throw new Error('Integration not found');
 
@@ -132,13 +142,24 @@ export class IntegrationManager {
     const pack = this.findPack(row.type);
     if (!pack) {
       const testedAt = new Date().toISOString();
-      this.db.updateIntegration(id, { lastTestedAt: testedAt, lastTestResult: 'error: no pack definition' });
-      return { success: false, message: 'No pack definition found for type: ' + row.type, testedAt };
+      this.db.updateIntegration(id, {
+        lastTestedAt: testedAt,
+        lastTestResult: 'error: no pack definition',
+      });
+      return {
+        success: false,
+        message: 'No pack definition found for type: ' + row.type,
+        testedAt,
+      };
     }
 
     const testedAt = new Date().toISOString();
     try {
-      const success = await pack.testConnection(decrypted.config, decrypted.credentials, globalThis.fetch.bind(globalThis));
+      const success = await pack.testConnection(
+        decrypted.config,
+        decrypted.credentials,
+        globalThis.fetch.bind(globalThis),
+      );
       const result = success ? 'ok' : 'failed';
       this.db.updateIntegration(id, {
         lastTestedAt: testedAt,
@@ -176,7 +197,9 @@ export class IntegrationManager {
     }
   }
 
-  getDecryptedConfig(id: string): { config: IntegrationConfig; credentials: IntegrationCredentials } | undefined {
+  getDecryptedConfig(
+    id: string,
+  ): { config: IntegrationConfig; credentials: IntegrationCredentials } | undefined {
     const row = this.db.getIntegration(id);
     if (!row) return undefined;
 

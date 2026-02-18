@@ -1,12 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SondeDb } from '../db/index.js';
+import { decrypt } from './crypto.js';
 import { IntegrationExecutor } from './executor.js';
 import { IntegrationManager } from './manager.js';
 import type { IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
-import { decrypt } from './crypto.js';
-import os from 'node:os';
-import path from 'node:path';
-import fs from 'node:fs';
 
 const SECRET = 'test-api-key-1234567890';
 
@@ -42,7 +42,10 @@ function createTestPack(name = 'cloudflare'): IntegrationPack {
 
 function createTempDb(): SondeDb {
   const tmpDir = os.tmpdir();
-  const dbPath = path.join(tmpDir, `sonde-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+  const dbPath = path.join(
+    tmpDir,
+    `sonde-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  );
   return new SondeDb(dbPath);
 }
 
@@ -87,8 +90,18 @@ describe('IntegrationManager', () => {
   });
 
   it('lists integrations without credentials', () => {
-    manager.create({ type: 'cloudflare', name: 'cf-1', config: testConfig, credentials: testCredentials });
-    manager.create({ type: 'datadog', name: 'dd-1', config: testConfig, credentials: testCredentials });
+    manager.create({
+      type: 'cloudflare',
+      name: 'cf-1',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+    manager.create({
+      type: 'datadog',
+      name: 'dd-1',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const list = manager.list();
 
@@ -103,7 +116,12 @@ describe('IntegrationManager', () => {
   });
 
   it('gets a single integration without credentials', () => {
-    const created = manager.create({ type: 'cloudflare', name: 'cf-get', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-get',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const result = manager.get(created.id);
 
@@ -118,7 +136,12 @@ describe('IntegrationManager', () => {
   });
 
   it('updates integration config and re-encrypts', () => {
-    const created = manager.create({ type: 'cloudflare', name: 'cf-update', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-update',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const newConfig: IntegrationConfig = { endpoint: 'https://api.new-endpoint.com' };
     const updated = manager.update(created.id, { config: newConfig });
@@ -132,7 +155,12 @@ describe('IntegrationManager', () => {
   });
 
   it('updates integration credentials and re-encrypts', () => {
-    const created = manager.create({ type: 'cloudflare', name: 'cf-creds', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-creds',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const newCreds: IntegrationCredentials = {
       packName: 'cloudflare',
@@ -151,7 +179,12 @@ describe('IntegrationManager', () => {
   });
 
   it('deletes integration from DB and unregisters from executor', () => {
-    const created = manager.create({ type: 'cloudflare', name: 'cf-delete', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-delete',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     // After create, the pack is registered on executor
     expect(executor.isIntegrationProbe('cloudflare.zones.list')).toBe(true);
@@ -167,7 +200,12 @@ describe('IntegrationManager', () => {
   });
 
   it('testConnection calls pack.testConnection with decrypted creds', async () => {
-    const created = manager.create({ type: 'cloudflare', name: 'cf-test', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-test',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const result = await manager.testConnection(created.id);
 
@@ -181,9 +219,16 @@ describe('IntegrationManager', () => {
   });
 
   it('testConnection handles pack test failure', async () => {
-    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue(
+      false,
+    );
 
-    const created = manager.create({ type: 'cloudflare', name: 'cf-fail', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-fail',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const result = await manager.testConnection(created.id);
 
@@ -195,9 +240,16 @@ describe('IntegrationManager', () => {
   });
 
   it('testConnection handles pack test exception', async () => {
-    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Connection refused'));
+    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Connection refused'),
+    );
 
-    const created = manager.create({ type: 'cloudflare', name: 'cf-err', config: testConfig, credentials: testCredentials });
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-err',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     const result = await manager.testConnection(created.id);
 
@@ -211,8 +263,18 @@ describe('IntegrationManager', () => {
 
   it('loadAll registers active integrations with executor', () => {
     // Create integrations in DB
-    manager.create({ type: 'cloudflare', name: 'cf-load-1', config: testConfig, credentials: testCredentials });
-    manager.create({ type: 'cloudflare', name: 'cf-load-2', config: testConfig, credentials: testCredentials });
+    manager.create({
+      type: 'cloudflare',
+      name: 'cf-load-1',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+    manager.create({
+      type: 'cloudflare',
+      name: 'cf-load-2',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     // Simulate restart: fresh executor with no registered packs
     const freshExecutor = new IntegrationExecutor(vi.fn());
@@ -224,10 +286,20 @@ describe('IntegrationManager', () => {
   });
 
   it('rejects duplicate names with 409', () => {
-    manager.create({ type: 'cloudflare', name: 'unique-name', config: testConfig, credentials: testCredentials });
+    manager.create({
+      type: 'cloudflare',
+      name: 'unique-name',
+      config: testConfig,
+      credentials: testCredentials,
+    });
 
     expect(() =>
-      manager.create({ type: 'cloudflare', name: 'unique-name', config: testConfig, credentials: testCredentials }),
+      manager.create({
+        type: 'cloudflare',
+        name: 'unique-name',
+        config: testConfig,
+        credentials: testCredentials,
+      }),
     ).toThrow();
   });
 });

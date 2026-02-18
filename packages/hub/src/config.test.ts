@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from './config.js';
+import { logger } from './logger.js';
 
 describe('loadConfig', () => {
   const originalEnv = process.env;
@@ -31,7 +32,7 @@ describe('loadConfig', () => {
 
   it('falls back to SONDE_API_KEY with deprecation warning', () => {
     process.env.SONDE_API_KEY = 'legacy-key-value-1234567890';
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const config = loadConfig();
     expect(config.secret).toBe('legacy-key-value-1234567890');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('SONDE_API_KEY is deprecated'));

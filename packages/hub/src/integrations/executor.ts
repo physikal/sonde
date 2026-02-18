@@ -52,10 +52,7 @@ export class IntegrationExecutor {
     return [...this.packs.values()].map((r) => r.pack);
   }
 
-  async executeProbe(
-    probe: string,
-    params?: Record<string, unknown>,
-  ): Promise<ProbeResponse> {
+  async executeProbe(probe: string, params?: Record<string, unknown>): Promise<ProbeResponse> {
     const startTime = Date.now();
     const packName = probe.split('.')[0];
     const registered = this.packs.get(packName!);
@@ -124,9 +121,12 @@ export class IntegrationExecutor {
       }
     }
 
-    const message = lastError instanceof Error ? lastError.message
-      : lastError instanceof DOMException ? lastError.message
-      : 'Integration probe failed';
+    const message =
+      lastError instanceof Error
+        ? lastError.message
+        : lastError instanceof DOMException
+          ? lastError.message
+          : 'Integration probe failed';
 
     return this.errorResponse(probe, startTime, message);
   }
@@ -136,7 +136,7 @@ export class IntegrationExecutor {
     return {
       probe,
       status: 'error',
-      data: null,
+      data: { error },
       durationMs: Date.now() - startTime,
       metadata: {
         agentVersion: 'hub',
@@ -144,8 +144,7 @@ export class IntegrationExecutor {
         packVersion: '0.0.0',
         capabilityLevel: 'observe',
       },
-      error,
-    } as ProbeResponse;
+    };
   }
 
   private async refreshOAuth2Token(credentials: IntegrationCredentials): Promise<boolean> {

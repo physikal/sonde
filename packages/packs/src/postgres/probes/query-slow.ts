@@ -22,11 +22,18 @@ export const querySlow: ProbeHandler = async (params, exec) => {
   const thresholdMs = (params?.thresholdMs as number) ?? 1000;
 
   const stdout = await exec('psql', [
-    '-h', host,
-    '-p', port,
-    '-U', user,
-    '-t', '-A', '-F', '\t',
-    '-c', `SELECT pid, datname, usename, EXTRACT(EPOCH FROM (now() - query_start))::int * 1000, state, LEFT(query, 300) FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid() AND EXTRACT(EPOCH FROM (now() - query_start)) * 1000 > ${thresholdMs} ORDER BY query_start ASC`,
+    '-h',
+    host,
+    '-p',
+    port,
+    '-U',
+    user,
+    '-t',
+    '-A',
+    '-F',
+    '\t',
+    '-c',
+    `SELECT pid, datname, usename, EXTRACT(EPOCH FROM (now() - query_start))::int * 1000, state, LEFT(query, 300) FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid() AND EXTRACT(EPOCH FROM (now() - query_start)) * 1000 > ${thresholdMs} ORDER BY query_start ASC`,
   ]);
   return parseQuerySlow(stdout, thresholdMs);
 };

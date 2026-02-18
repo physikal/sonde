@@ -22,11 +22,16 @@ export const processlist: ProbeHandler = async (params, exec) => {
   const user = (params?.user as string) ?? 'root';
 
   const stdout = await exec('mysql', [
-    '-h', host,
-    '-P', port,
-    '-u', user,
-    '--batch', '--skip-column-names',
-    '-e', 'SELECT ID, USER, HOST, IFNULL(DB, ""), COMMAND, TIME, IFNULL(STATE, ""), LEFT(IFNULL(INFO, ""), 200) FROM information_schema.PROCESSLIST ORDER BY TIME DESC',
+    '-h',
+    host,
+    '-P',
+    port,
+    '-u',
+    user,
+    '--batch',
+    '--skip-column-names',
+    '-e',
+    'SELECT ID, USER, HOST, IFNULL(DB, ""), COMMAND, TIME, IFNULL(STATE, ""), LEFT(IFNULL(INFO, ""), 200) FROM information_schema.PROCESSLIST ORDER BY TIME DESC',
   ]);
   return parseProcesslist(stdout);
 };

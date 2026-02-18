@@ -17,11 +17,16 @@ export const databasesList: ProbeHandler = async (params, exec) => {
   const user = (params?.user as string) ?? 'root';
 
   const stdout = await exec('mysql', [
-    '-h', host,
-    '-P', port,
-    '-u', user,
-    '--batch', '--skip-column-names',
-    '-e', "SELECT s.SCHEMA_NAME, COUNT(t.TABLE_NAME), ROUND(SUM(t.DATA_LENGTH + t.INDEX_LENGTH) / 1024 / 1024, 2) FROM information_schema.SCHEMATA s LEFT JOIN information_schema.TABLES t ON s.SCHEMA_NAME = t.TABLE_SCHEMA GROUP BY s.SCHEMA_NAME ORDER BY s.SCHEMA_NAME",
+    '-h',
+    host,
+    '-P',
+    port,
+    '-u',
+    user,
+    '--batch',
+    '--skip-column-names',
+    '-e',
+    'SELECT s.SCHEMA_NAME, COUNT(t.TABLE_NAME), ROUND(SUM(t.DATA_LENGTH + t.INDEX_LENGTH) / 1024 / 1024, 2) FROM information_schema.SCHEMATA s LEFT JOIN information_schema.TABLES t ON s.SCHEMA_NAME = t.TABLE_SCHEMA GROUP BY s.SCHEMA_NAME ORDER BY s.SCHEMA_NAME',
   ]);
   return parseDatabasesList(stdout);
 };

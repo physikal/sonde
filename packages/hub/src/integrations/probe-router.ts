@@ -18,9 +18,7 @@ export class ProbeRouter {
     }
 
     if (!agent) {
-      throw new Error(
-        `Agent name or ID is required for agent probe '${probe}'`,
-      );
+      throw new Error(`Agent name or ID is required for agent probe '${probe}'`);
     }
 
     return this.dispatcher.sendProbe(agent, probe, params);

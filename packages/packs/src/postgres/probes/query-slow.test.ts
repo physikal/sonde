@@ -3,7 +3,8 @@ import type { ExecFn } from '../../types.js';
 import type { QuerySlowResult } from './query-slow.js';
 import { parseQuerySlow, querySlow } from './query-slow.js';
 
-const SAMPLE_OUTPUT = `9876\tmyapp\tappuser\t5432\tactive\tSELECT * FROM large_table WHERE expensive_join`;
+const SAMPLE_OUTPUT =
+  '9876\tmyapp\tappuser\t5432\tactive\tSELECT * FROM large_table WHERE expensive_join';
 
 describe('parseQuerySlow', () => {
   it('parses slow queries', () => {

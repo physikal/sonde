@@ -15,7 +15,12 @@ export const mysqlManifest: PackManifest = {
       description: 'List all MySQL databases with table counts and sizes',
       capability: 'observe',
       params: {
-        host: { type: 'string', description: 'Database host', required: false, default: 'localhost' },
+        host: {
+          type: 'string',
+          description: 'Database host',
+          required: false,
+          default: 'localhost',
+        },
         port: { type: 'number', description: 'Database port', required: false, default: 3306 },
         user: { type: 'string', description: 'Database user', required: false, default: 'root' },
       },
@@ -26,7 +31,12 @@ export const mysqlManifest: PackManifest = {
       description: 'Show active MySQL processes',
       capability: 'observe',
       params: {
-        host: { type: 'string', description: 'Database host', required: false, default: 'localhost' },
+        host: {
+          type: 'string',
+          description: 'Database host',
+          required: false,
+          default: 'localhost',
+        },
         port: { type: 'number', description: 'Database port', required: false, default: 3306 },
         user: { type: 'string', description: 'Database user', required: false, default: 'root' },
       },
@@ -37,7 +47,12 @@ export const mysqlManifest: PackManifest = {
       description: 'Get MySQL server status variables',
       capability: 'observe',
       params: {
-        host: { type: 'string', description: 'Database host', required: false, default: 'localhost' },
+        host: {
+          type: 'string',
+          description: 'Database host',
+          required: false,
+          default: 'localhost',
+        },
         port: { type: 'number', description: 'Database port', required: false, default: 3306 },
         user: { type: 'string', description: 'Database user', required: false, default: 'root' },
       },

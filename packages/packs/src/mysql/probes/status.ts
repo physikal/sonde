@@ -17,11 +17,16 @@ export const status: ProbeHandler = async (params, exec) => {
   const user = (params?.user as string) ?? 'root';
 
   const stdout = await exec('mysql', [
-    '-h', host,
-    '-P', port,
-    '-u', user,
-    '--batch', '--skip-column-names',
-    '-e', 'SHOW GLOBAL STATUS',
+    '-h',
+    host,
+    '-P',
+    port,
+    '-u',
+    user,
+    '--batch',
+    '--skip-column-names',
+    '-e',
+    'SHOW GLOBAL STATUS',
   ]);
   return parseMysqlStatus(stdout);
 };

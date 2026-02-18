@@ -118,7 +118,7 @@ export class RunbookEngine {
           durationMs: response.durationMs,
           error:
             response.status !== 'success'
-              ? (((response as Record<string, unknown>).error as string) ??
+              ? (((response.data as Record<string, unknown> | null)?.error as string) ??
                 JSON.stringify(response.data))
               : undefined,
         };
