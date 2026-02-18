@@ -112,6 +112,7 @@ export const CreateIntegrationBody = z.object({
   config: z.object({
     endpoint: z.string(),
     headers: z.record(z.string()).optional(),
+    tlsRejectUnauthorized: z.boolean().optional(),
   }),
   credentials: CredentialsSchema,
 });
@@ -121,6 +122,7 @@ export const UpdateIntegrationBody = z.object({
     .object({
       endpoint: z.string(),
       headers: z.record(z.string()).optional(),
+      tlsRejectUnauthorized: z.boolean().optional(),
     })
     .optional(),
   credentials: CredentialsSchema.optional(),
