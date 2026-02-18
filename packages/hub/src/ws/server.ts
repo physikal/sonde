@@ -261,7 +261,7 @@ function handleRegister(
     const keyId = crypto.randomUUID();
     mintedApiKey = crypto.randomUUID();
     const keyHash = hashApiKey(mintedApiKey);
-    db.createApiKey(keyId, `agent:${payload.name}`, keyHash, '{}');
+    db.createApiKey(keyId, `agent:${payload.name}`, keyHash, '{}', undefined, 'agent');
   } else {
     db.upsertAgent({
       id: agentId,

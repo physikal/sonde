@@ -2,6 +2,8 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useToast } from '../components/common/Toast';
 import { apiFetch } from '../lib/api';
 
+type KeyType = 'mcp' | 'agent';
+
 interface ApiKey {
   id: string;
   name: string;
@@ -11,6 +13,7 @@ interface ApiKey {
   policyJson: string;
   lastUsedAt: string | null;
   role: string;
+  keyType: KeyType;
 }
 
 export function ApiKeys() {
@@ -18,6 +21,7 @@ export function ApiKeys() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<KeyType>('mcp');
   const [showCreate, setShowCreate] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyRole, setNewKeyRole] = useState('member');
@@ -44,6 +48,8 @@ export function ApiKeys() {
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  const filteredKeys = keys.filter((k) => k.keyType === activeTab);
 
   const handleCreate = (e: FormEvent) => {
     e.preventDefault();
@@ -129,27 +135,64 @@ export function ApiKeys() {
     );
   }
 
+  const activeCount = filteredKeys.filter((k) => !k.revokedAt).length;
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">API Keys</h1>
           <p className="mt-1 text-sm text-gray-400">
-            {keys.filter((k) => !k.revokedAt).length} active key
-            {keys.filter((k) => !k.revokedAt).length !== 1 ? 's' : ''}
+            {activeCount} active key{activeCount !== 1 ? 's' : ''}
           </p>
         </div>
+        {activeTab === 'mcp' && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(!showCreate)}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            Create Key
+          </button>
+        )}
+      </div>
+
+      {/* Tab bar */}
+      <div className="mt-4 flex border-b border-gray-800">
         <button
           type="button"
-          onClick={() => setShowCreate(!showCreate)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          onClick={() => setActiveTab('mcp')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === 'mcp'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
         >
-          Create Key
+          MCP Keys
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('agent')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === 'agent'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          Agent Keys
         </button>
       </div>
 
-      {/* Create form */}
-      {showCreate && (
+      {/* Agent tab info note */}
+      {activeTab === 'agent' && (
+        <p className="mt-4 text-sm text-gray-400">
+          These keys are auto-created when agents enroll. They authenticate agent WebSocket
+          connections to the hub.
+        </p>
+      )}
+
+      {/* Create form (MCP tab only) */}
+      {activeTab === 'mcp' && showCreate && (
         <form
           onSubmit={handleCreate}
           className="mt-4 space-y-3 rounded-xl border border-gray-800 bg-gray-900 p-4"
@@ -251,14 +294,16 @@ export function ApiKeys() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {keys.length === 0 ? (
+            {filteredKeys.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                  No API keys created yet.
+                  {activeTab === 'mcp'
+                    ? 'No MCP keys created yet.'
+                    : 'No agent keys yet. Keys appear here when agents enroll.'}
                 </td>
               </tr>
             ) : (
-              keys.map((k) => {
+              filteredKeys.map((k) => {
                 const policy = safeParse(k.policyJson);
                 const isRevoked = !!k.revokedAt;
                 return (

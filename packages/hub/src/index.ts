@@ -329,7 +329,7 @@ app.post('/api/v1/api-keys', async (c) => {
   const keyHash = hashApiKey(rawKey);
   const policyJson = JSON.stringify({ ...body.policy, role });
 
-  db.createApiKey(id, body.name, keyHash, policyJson, role);
+  db.createApiKey(id, body.name, keyHash, policyJson, role, 'mcp');
 
   return c.json({ id, key: rawKey, name: body.name, policy: { ...body.policy, role } }, 201);
 });
@@ -341,7 +341,7 @@ app.get('/api/v1/api-keys', (c) => {
       const parsed = JSON.parse(k.policyJson);
       if (parsed.role) role = parsed.role;
     } catch {}
-    return { ...k, role };
+    return { ...k, role, keyType: k.keyType };
   });
   return c.json({ keys });
 });

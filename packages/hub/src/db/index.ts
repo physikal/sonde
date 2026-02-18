@@ -435,12 +435,13 @@ export class SondeDb {
     keyHash: string,
     policyJson: string,
     roleId?: string,
+    keyType: 'mcp' | 'agent' = 'mcp',
   ): void {
     this.db
       .prepare(
-        'INSERT INTO api_keys (id, name, key_hash, policy_json, role_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO api_keys (id, name, key_hash, policy_json, role_id, key_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, name, keyHash, policyJson, roleId ?? 'member', new Date().toISOString());
+      .run(id, name, keyHash, policyJson, roleId ?? 'member', keyType, new Date().toISOString());
   }
 
   rotateApiKey(id: string, newKeyHash: string): boolean {
@@ -512,10 +513,11 @@ export class SondeDb {
     revokedAt: string | null;
     policyJson: string;
     lastUsedAt: string | null;
+    keyType: 'mcp' | 'agent';
   }> {
     const rows = this.db
       .prepare(
-        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at FROM api_keys',
+        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at, key_type FROM api_keys',
       )
       .all() as Array<{
       id: string;
@@ -525,6 +527,7 @@ export class SondeDb {
       expires_at: string | null;
       revoked_at: string | null;
       last_used_at: string | null;
+      key_type: string;
     }>;
     return rows.map((r) => ({
       id: r.id,
@@ -534,6 +537,7 @@ export class SondeDb {
       revokedAt: r.revoked_at,
       policyJson: r.policy_json,
       lastUsedAt: r.last_used_at,
+      keyType: (r.key_type === 'agent' ? 'agent' : 'mcp') as 'mcp' | 'agent',
     }));
   }
 
