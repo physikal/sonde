@@ -1,17 +1,21 @@
 import type http from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { Pack } from '@sonde/packs';
 import { z } from 'zod';
 import { validateAuth } from '../auth.js';
 import type { SondeDb } from '../db/index.js';
 import type { AuthContext } from '../engine/policy.js';
 import type { RunbookEngine } from '../engine/runbooks.js';
+import type { IntegrationManager } from '../integrations/manager.js';
 import type { ProbeRouter } from '../integrations/probe-router.js';
 import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
 import { handleAgentOverview } from './tools/agent-overview.js';
 import { handleDiagnose } from './tools/diagnose.js';
+import { handleHealthCheck } from './tools/health-check.js';
 import { handleListAgents } from './tools/list-agents.js';
+import { handleListCapabilities } from './tools/list-capabilities.js';
 import { handleProbe } from './tools/probe.js';
 
 /**
@@ -23,6 +27,8 @@ export function createMcpHandler(
   dispatcher: AgentDispatcher,
   db: SondeDb,
   runbookEngine: RunbookEngine,
+  integrationManager: IntegrationManager,
+  packRegistry: ReadonlyMap<string, Pack>,
   oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
   // Per-session transports (sessionId → transport)
@@ -115,6 +121,57 @@ export function createMcpHandler(
       },
       async (args) => {
         return handleAgentOverview(args, db, dispatcher, auth);
+      },
+    );
+
+    server.registerTool(
+      'list_capabilities',
+      {
+        description:
+          'Discover available agents, integrations, and diagnostic categories. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks.',
+        inputSchema: z.object({}),
+      },
+      () => {
+        return handleListCapabilities(
+          db,
+          dispatcher,
+          runbookEngine,
+          integrationManager,
+          packRegistry,
+          auth,
+        );
+      },
+    );
+
+    server.registerTool(
+      'health_check',
+      {
+        description:
+          'Run a comprehensive health check across all applicable diagnostics in parallel. Auto-discovers available runbooks for the specified agent and active integrations. Returns unified findings sorted by severity (critical → warning → info). Skips categories that require user-provided parameters.',
+        inputSchema: z.object({
+          agent: z
+            .string()
+            .optional()
+            .describe('Agent name or ID for agent-specific checks'),
+          categories: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Optional filter: only run these diagnostic categories (default: all available)',
+            ),
+        }),
+      },
+      async (args) => {
+        return handleHealthCheck(
+          args,
+          probeRouter,
+          dispatcher,
+          db,
+          runbookEngine,
+          integrationManager,
+          packRegistry,
+          auth,
+        );
       },
     );
 

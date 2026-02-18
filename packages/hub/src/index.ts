@@ -1100,7 +1100,15 @@ if (config.hubUrl) {
 }
 
 // MCP handler for /mcp/* routes
-const mcpHandler = createMcpHandler(probeRouter, dispatcher, db, runbookEngine, oauthProvider);
+const mcpHandler = createMcpHandler(
+  probeRouter,
+  dispatcher,
+  db,
+  runbookEngine,
+  integrationManager,
+  packRegistry,
+  oauthProvider,
+);
 
 // Node HTTP server — routes /mcp to MCP handler, OAuth paths to Express, everything else to Hono
 const honoListener = getRequestListener(app.fetch);
