@@ -31,6 +31,26 @@ Add the following MCP server entry:
 
 Replace `your-hub-url` with your hub's address and `your-api-key` with a valid API key.
 
+:::tip[Windows: `npx` path with spaces]
+If Claude Desktop fails to connect with the error `'C:\Program' is not recognized`, the space in `C:\Program Files\nodejs\npx.cmd` is breaking `cmd.exe` argument parsing. Use the Windows 8.3 short path instead:
+
+```json
+{
+  "mcpServers": {
+    "sonde": {
+      "command": "C:\\PROGRA~1\\nodejs\\npx.cmd",
+      "args": [
+        "mcp-remote",
+        "https://your-hub-url/mcp",
+        "--header",
+        "Authorization: Bearer your-api-key"
+      ]
+    }
+  }
+}
+```
+:::
+
 Restart Claude Desktop after saving the file.
 
 ## Available tools
