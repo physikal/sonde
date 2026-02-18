@@ -459,10 +459,18 @@ export function IntegrationDetail() {
           {!editingConfig && (
             <button
               type="button"
-              onClick={() => {
-                setEditEndpoint('');
-                setEditHeadersText('');
-                setEditTlsSkipVerify(false);
+              onClick={async () => {
+                try {
+                  const data = await apiFetch<{ config: { endpoint?: string; headers?: Record<string, string>; tlsRejectUnauthorized?: boolean } }>(`/integrations/${id}/config`);
+                  setEditEndpoint(data.config.endpoint ?? '');
+                  const hdrs = data.config.headers;
+                  setEditHeadersText(hdrs ? Object.entries(hdrs).map(([k, v]) => `${k}: ${v}`).join('\n') : '');
+                  setEditTlsSkipVerify(data.config.tlsRejectUnauthorized === false);
+                } catch {
+                  setEditEndpoint('');
+                  setEditHeadersText('');
+                  setEditTlsSkipVerify(false);
+                }
                 setEditingConfig(true);
               }}
               className="text-sm text-blue-400 hover:text-blue-300"

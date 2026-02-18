@@ -268,6 +268,11 @@ export class IntegrationManager {
     }
   }
 
+  getConfig(id: string): IntegrationConfig | undefined {
+    const decrypted = this.getDecryptedConfig(id);
+    return decrypted?.config;
+  }
+
   getDecryptedConfig(
     id: string,
   ): { config: IntegrationConfig; credentials: IntegrationCredentials } | undefined {

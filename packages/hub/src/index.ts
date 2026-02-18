@@ -782,6 +782,14 @@ app.delete('/api/v1/integrations/:id', (c) => {
   return c.json({ ok: true });
 });
 
+app.get('/api/v1/integrations/:id/config', (c) => {
+  const config = integrationManager.getConfig(c.req.param('id'));
+  if (!config) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+  return c.json({ config });
+});
+
 app.post('/api/v1/integrations/:id/test', async (c) => {
   const integration = integrationManager.get(c.req.param('id'));
   if (!integration) {
