@@ -74,7 +74,10 @@ const sessionManager = new SessionManager(db);
 sessionManager.startCleanupLoop();
 const dispatcher = new AgentDispatcher();
 const integrationExecutor = new IntegrationExecutor();
-const probeRouter = new ProbeRouter(dispatcher, integrationExecutor);
+const probeRouter = new ProbeRouter(dispatcher, integrationExecutor, db, (packName) => {
+  const integration = db.listIntegrations().find((i) => i.type === packName);
+  return integration?.id;
+});
 const runbookEngine = new RunbookEngine();
 
 const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
@@ -787,6 +790,18 @@ app.post('/api/v1/integrations/:id/test', async (c) => {
 
   const result = await integrationManager.testConnection(c.req.param('id'));
   return c.json(result);
+});
+
+app.get('/api/v1/integrations/:id/events', (c) => {
+  const integration = integrationManager.get(c.req.param('id'));
+  if (!integration) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const offset = Number(c.req.query('offset')) || 0;
+  const events = db.getIntegrationEvents(c.req.param('id'), { limit, offset });
+  return c.json({ events });
 });
 
 // Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)

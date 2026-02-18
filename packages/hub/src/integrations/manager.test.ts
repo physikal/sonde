@@ -285,6 +285,107 @@ describe('IntegrationManager', () => {
     expect(freshExecutor.isIntegrationProbe('cloudflare.zones.list')).toBe(true);
   });
 
+  it('logs a created event on create()', () => {
+    const result = manager.create({
+      type: 'cloudflare',
+      name: 'cf-event',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+
+    const events = db.getIntegrationEvents(result.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.eventType).toBe('created');
+    expect(events[0]!.status).toBe('success');
+  });
+
+  it('logs test_connection success event', async () => {
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-test-event',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+
+    await manager.testConnection(created.id);
+
+    const events = db.getIntegrationEvents(created.id);
+    const testEvents = events.filter((e) => e.eventType === 'test_connection');
+    expect(testEvents).toHaveLength(1);
+    expect(testEvents[0]!.status).toBe('success');
+  });
+
+  it('logs test_connection error event on failure', async () => {
+    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockResolvedValue(
+      false,
+    );
+
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-fail-event',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+
+    await manager.testConnection(created.id);
+
+    const events = db.getIntegrationEvents(created.id);
+    const testEvents = events.filter((e) => e.eventType === 'test_connection');
+    expect(testEvents).toHaveLength(1);
+    expect(testEvents[0]!.status).toBe('error');
+  });
+
+  it('captures error.cause in detailJson on TypeError', async () => {
+    const cause = new Error('getaddrinfo ENOTFOUND api.example.com');
+    (cause as NodeJS.ErrnoException).code = 'ENOTFOUND';
+    const fetchError = new TypeError('fetch failed', { cause });
+    (catalog.get('cloudflare')!.testConnection as ReturnType<typeof vi.fn>).mockRejectedValue(
+      fetchError,
+    );
+
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-cause-event',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+
+    await manager.testConnection(created.id);
+
+    const events = db.getIntegrationEvents(created.id);
+    const testEvents = events.filter((e) => e.eventType === 'test_connection');
+    expect(testEvents).toHaveLength(1);
+
+    const detail = JSON.parse(testEvents[0]!.detailJson!);
+    expect(detail.errorName).toBe('TypeError');
+    expect(detail.causeName).toBe('Error');
+    expect(detail.causeMessage).toContain('ENOTFOUND');
+    expect(detail.causeCode).toBe('ENOTFOUND');
+  });
+
+  it('logs config_update and credentials_update events on update()', () => {
+    const created = manager.create({
+      type: 'cloudflare',
+      name: 'cf-update-events',
+      config: testConfig,
+      credentials: testCredentials,
+    });
+
+    manager.update(created.id, {
+      config: { endpoint: 'https://new.endpoint.com' },
+      credentials: {
+        packName: 'cloudflare',
+        authMethod: 'api_key',
+        credentials: { apiKey: 'new-key' },
+      },
+    });
+
+    const events = db.getIntegrationEvents(created.id);
+    const eventTypes = events.map((e) => e.eventType);
+    expect(eventTypes).toContain('config_update');
+    expect(eventTypes).toContain('credentials_update');
+  });
+
   it('rejects duplicate names with 409', () => {
     manager.create({
       type: 'cloudflare',

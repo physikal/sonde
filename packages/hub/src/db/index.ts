@@ -86,6 +86,16 @@ export interface AccessGroupRow {
   createdBy: string;
 }
 
+export interface IntegrationEventRow {
+  id: number;
+  integrationId: string;
+  eventType: string;
+  status: string | null;
+  message: string | null;
+  detailJson: string | null;
+  createdAt: string;
+}
+
 export interface AuditEntry {
   apiKeyId?: string;
   agentId: string;
@@ -1238,6 +1248,53 @@ export class SondeDb {
       description: row.description as string,
       createdAt: row.created_at as string,
       createdBy: row.created_by as string,
+    }));
+  }
+
+  // --- Integration Events ---
+
+  logIntegrationEvent(event: {
+    integrationId: string;
+    eventType: string;
+    status?: string;
+    message?: string;
+    detailJson?: string;
+  }): void {
+    this.db
+      .prepare(
+        'INSERT INTO integration_events (integration_id, event_type, status, message, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        event.integrationId,
+        event.eventType,
+        event.status ?? null,
+        event.message ?? null,
+        event.detailJson ?? null,
+        new Date().toISOString(),
+      );
+  }
+
+  getIntegrationEvents(
+    integrationId: string,
+    opts?: { limit?: number; offset?: number },
+  ): IntegrationEventRow[] {
+    const limit = opts?.limit ?? 50;
+    const offset = opts?.offset ?? 0;
+
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM integration_events WHERE integration_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+      )
+      .all(integrationId, limit, offset) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: row.id as number,
+      integrationId: row.integration_id as string,
+      eventType: row.event_type as string,
+      status: (row.status as string) ?? null,
+      message: (row.message as string) ?? null,
+      detailJson: (row.detail_json as string) ?? null,
+      createdAt: row.created_at as string,
     }));
   }
 

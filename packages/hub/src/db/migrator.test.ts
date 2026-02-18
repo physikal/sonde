@@ -17,13 +17,13 @@ describe('runMigrations', () => {
 
     const applied = runMigrations(db);
 
-    expect(applied).toBe(8);
+    expect(applied).toBe(9);
 
     // Verify schema_version is at 7
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(8);
+    expect(row.version).toBe(9);
 
     // Verify tables from migration 001 exist
     const tables = db
@@ -55,6 +55,9 @@ describe('runMigrations', () => {
     expect(tableNames).toContain('access_group_agents');
     expect(tableNames).toContain('access_group_integrations');
     expect(tableNames).toContain('access_group_users');
+
+    // Verify table from migration 009 exists
+    expect(tableNames).toContain('integration_events');
   });
 
   it('should be idempotent — running again applies 0 migrations', () => {
@@ -63,7 +66,7 @@ describe('runMigrations', () => {
     db.pragma('foreign_keys = ON');
 
     const first = runMigrations(db);
-    expect(first).toBe(8);
+    expect(first).toBe(9);
 
     const second = runMigrations(db);
     expect(second).toBe(0);
@@ -71,7 +74,7 @@ describe('runMigrations', () => {
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(8);
+    expect(row.version).toBe(9);
   });
 
   it('should apply only new migrations when a new one is added', async () => {
@@ -86,7 +89,7 @@ describe('runMigrations', () => {
     const { migrations } = await import('./migrations/index.js');
 
     const fakeMigration: Migration = {
-      version: 9,
+      version: 10,
       up: (database) => {
         database.exec(
           'CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, data TEXT NOT NULL)',
@@ -103,7 +106,7 @@ describe('runMigrations', () => {
       const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
         version: number;
       };
-      expect(row.version).toBe(9);
+      expect(row.version).toBe(10);
 
       // Verify test_table was created
       const tables = db

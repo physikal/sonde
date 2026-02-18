@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '../components/common/Toast';
+import { ActivityLog } from '../components/integration/ActivityLog';
 import { apiFetch } from '../lib/api';
 
 interface CredentialFieldDef {
@@ -148,6 +149,16 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   untested: 'text-amber-400',
 };
 
+interface IntegrationEvent {
+  id: number;
+  integrationId: string;
+  eventType: string;
+  status: string | null;
+  message: string | null;
+  detailJson: string | null;
+  createdAt: string;
+}
+
 interface Integration {
   id: string;
   type: string;
@@ -163,6 +174,7 @@ export function IntegrationDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [integration, setIntegration] = useState<Integration | null>(null);
+  const [events, setEvents] = useState<IntegrationEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Test connection
@@ -194,9 +206,17 @@ export function IntegrationDetail() {
       .catch(() => setError('Integration not found'));
   }, [id]);
 
+  const fetchEvents = useCallback(() => {
+    if (!id) return;
+    apiFetch<{ events: IntegrationEvent[] }>(`/integrations/${id}/events?limit=50`)
+      .then((data) => setEvents(data.events))
+      .catch(() => {});
+  }, [id]);
+
   useEffect(() => {
     fetchIntegration();
-  }, [fetchIntegration]);
+    fetchEvents();
+  }, [fetchIntegration, fetchEvents]);
 
   const typeDef = integration ? INTEGRATION_TYPES.find((t) => t.value === integration.type) : null;
 
@@ -211,6 +231,7 @@ export function IntegrationDetail() {
       );
       setTestResult(result);
       fetchIntegration();
+      fetchEvents();
       if (result.success) {
         toast('Connection test passed', 'success');
       } else if (result.message?.includes('No pack definition')) {
@@ -255,6 +276,7 @@ export function IntegrationDetail() {
       });
       setEditingConfig(false);
       fetchIntegration();
+      fetchEvents();
       toast('Configuration updated', 'success');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to update config', 'error');
@@ -282,6 +304,7 @@ export function IntegrationDetail() {
       setEditCredValues({});
       setVisibleFields(new Set());
       fetchIntegration();
+      fetchEvents();
       toast('Credentials updated', 'success');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to update credentials', 'error');
@@ -594,6 +617,9 @@ export function IntegrationDetail() {
           </p>
         ) : null}
       </div>
+
+      {/* Activity Log */}
+      <ActivityLog events={events} />
 
       {/* Danger Zone */}
       <div className="mt-8 rounded-xl border border-red-900/50 bg-red-950/10 p-6">

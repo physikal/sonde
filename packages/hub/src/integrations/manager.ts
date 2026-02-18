@@ -59,6 +59,13 @@ export class IntegrationManager {
       this.executor.registerPack(pack, input.config, input.credentials);
     }
 
+    this.db.logIntegrationEvent({
+      integrationId: id,
+      eventType: 'created',
+      status: 'success',
+      message: `Integration "${input.name}" created (type: ${input.type})`,
+    });
+
     return {
       id,
       type: input.type,
@@ -120,6 +127,23 @@ export class IntegrationManager {
       this.executor.registerPack(pack, merged.config, merged.credentials);
     }
 
+    if (input.config) {
+      this.db.logIntegrationEvent({
+        integrationId: id,
+        eventType: 'config_update',
+        status: 'success',
+        message: 'Configuration updated',
+      });
+    }
+    if (input.credentials) {
+      this.db.logIntegrationEvent({
+        integrationId: id,
+        eventType: 'credentials_update',
+        status: 'success',
+        message: 'Credentials updated',
+      });
+    }
+
     return true;
   }
 
@@ -168,9 +192,28 @@ export class IntegrationManager {
         lastTestResult: result,
         status: success ? 'active' : 'error',
       });
-      return success
-        ? { success: true, testedAt }
-        : { success: false, message: 'Connection refused or authentication failed', testedAt };
+
+      if (success) {
+        this.db.logIntegrationEvent({
+          integrationId: id,
+          eventType: 'test_connection',
+          status: 'success',
+          message: 'Connection test passed',
+        });
+        return { success: true, testedAt };
+      }
+
+      this.db.logIntegrationEvent({
+        integrationId: id,
+        eventType: 'test_connection',
+        status: 'error',
+        message: 'Connection refused or authentication failed',
+      });
+      return {
+        success: false,
+        message: 'Connection refused or authentication failed',
+        testedAt,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.db.updateIntegration(id, {
@@ -178,6 +221,30 @@ export class IntegrationManager {
         lastTestResult: `error: ${message}`,
         status: 'error',
       });
+
+      const detail: Record<string, unknown> = {
+        errorName: error instanceof Error ? error.constructor.name : 'Unknown',
+        errorMessage: message,
+      };
+      if (error instanceof Error && error.cause) {
+        const cause = error.cause;
+        if (cause instanceof Error) {
+          detail.causeName = cause.constructor.name;
+          detail.causeMessage = cause.message;
+          if ('code' in cause) detail.causeCode = cause.code;
+        } else {
+          detail.cause = String(cause);
+        }
+      }
+
+      this.db.logIntegrationEvent({
+        integrationId: id,
+        eventType: 'test_connection',
+        status: 'error',
+        message,
+        detailJson: JSON.stringify(detail),
+      });
+
       return { success: false, message, testedAt };
     }
   }
