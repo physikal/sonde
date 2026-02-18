@@ -1160,6 +1160,11 @@ setupWsServer(
   sessionManager,
 );
 
+// MCP diagnostics can fan out to many probes — allow up to 5 minutes
+// before the HTTP socket is destroyed. Default is 120s which silently
+// kills long-running tool calls like proxmox-cluster.
+server.timeout = 300_000;
+
 const protocol = config.tlsEnabled ? 'https' : 'http';
 const wsProtocol = config.tlsEnabled ? 'wss' : 'ws';
 
