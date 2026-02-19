@@ -19,16 +19,19 @@ vi.mock('node:os', () => ({
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import {
-  generateUnitFile,
-  getServiceStatus,
-  isServiceInstalled,
-} from './service.js';
+import { generateUnitFile, getServiceStatus, isServiceInstalled } from './service.js';
 
 const mockExec = vi.mocked(execFileSync);
 const mockExists = vi.mocked(fs.existsSync);
 
 describe('generateUnitFile', () => {
+  afterEach(() => {
+    // biome-ignore lint/performance/noDelete: process.env coerces undefined to "undefined"
+    delete process.env.SUDO_USER;
+    // biome-ignore lint/performance/noDelete: process.env coerces undefined to "undefined"
+    delete process.env.SUDO_UID;
+  });
+
   it('includes the current user and home directory', () => {
     mockExec.mockReturnValueOnce('/usr/local/bin/sonde\n');
     const unit = generateUnitFile();
@@ -36,12 +39,35 @@ describe('generateUnitFile', () => {
     expect(unit).toContain('Environment=HOME=/home/testuser');
   });
 
+  it('uses SUDO_USER when running under sudo', () => {
+    process.env.SUDO_USER = 'realuser';
+    process.env.SUDO_UID = '1000';
+    // getent passwd call, then which sonde call
+    mockExec
+      .mockReturnValueOnce('realuser:x:1000:1000::/home/realuser:/bin/bash\n')
+      .mockReturnValueOnce('/usr/local/bin/sonde\n');
+    const unit = generateUnitFile();
+    expect(unit).toContain('User=realuser');
+    expect(unit).toContain('Environment=HOME=/home/realuser');
+  });
+
+  it('falls back to /home/<user> when getent fails under sudo', () => {
+    process.env.SUDO_USER = 'realuser';
+    process.env.SUDO_UID = '1000';
+    mockExec
+      .mockImplementationOnce(() => {
+        throw new Error('getent failed');
+      })
+      .mockReturnValueOnce('/usr/local/bin/sonde\n');
+    const unit = generateUnitFile();
+    expect(unit).toContain('User=realuser');
+    expect(unit).toContain('Environment=HOME=/home/realuser');
+  });
+
   it('includes the resolved sonde binary path', () => {
     mockExec.mockReturnValueOnce('/usr/local/bin/sonde\n');
     const unit = generateUnitFile();
-    expect(unit).toContain(
-      'ExecStart=/usr/local/bin/sonde start --headless',
-    );
+    expect(unit).toContain('ExecStart=/usr/local/bin/sonde start --headless');
   });
 
   it('sets restart on failure with 5s delay', () => {

@@ -21,8 +21,27 @@ function resolveSondeBinary(): string {
   }).trim();
 }
 
+function resolveInvokingUser(): { username: string; homedir: string } {
+  const sudoUser = process.env.SUDO_USER;
+  if (sudoUser) {
+    const homedir = process.env.SUDO_UID ? `/home/${sudoUser}` : os.userInfo().homedir;
+    try {
+      const passwd = execFileSync('getent', ['passwd', sudoUser], {
+        encoding: 'utf-8',
+        timeout: 5_000,
+      }).trim();
+      const fields = passwd.split(':');
+      return { username: sudoUser, homedir: fields[5] ?? homedir };
+    } catch {
+      return { username: sudoUser, homedir };
+    }
+  }
+  const info = os.userInfo();
+  return { username: info.username, homedir: info.homedir };
+}
+
 export function generateUnitFile(): string {
-  const user = os.userInfo();
+  const user = resolveInvokingUser();
   const sondeBin = resolveSondeBinary();
 
   return `[Unit]
