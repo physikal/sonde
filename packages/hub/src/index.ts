@@ -236,6 +236,7 @@ app.use('*', async (c, next) => {
 // Session middleware on dashboard and API routes
 app.use('/api/*', sessionMiddleware(sessionManager));
 app.use('/auth/*', sessionMiddleware(sessionManager));
+app.use('/docs/*', sessionMiddleware(sessionManager));
 
 // Auth routes (login/logout/status)
 app.route(
@@ -1143,6 +1144,13 @@ const docsDist = path.resolve(
 const docsExists = fs.existsSync(docsDist);
 
 if (docsExists) {
+  // Require authenticated session for docs
+  app.use('/docs/*', async (c, next) => {
+    const user = getUser(c);
+    if (!user) return c.redirect('/login');
+    await next();
+  });
+
   // Serve static assets (CSS, JS, images, fonts)
   app.use(
     '/docs/*',
