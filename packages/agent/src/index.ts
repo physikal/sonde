@@ -4,6 +4,14 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { packRegistry } from '@sonde/packs';
 import { buildEnabledPacks, handlePacksCommand } from './cli/packs.js';
+import {
+  getServiceStatus,
+  installService,
+  isServiceInstalled,
+  restartService,
+  stopService,
+  uninstallService,
+} from './cli/service.js';
 import { checkForUpdate, performUpdate } from './cli/update.js';
 import {
   type AgentConfig,
@@ -40,6 +48,7 @@ function printUsage(): void {
   console.log('  restart   Restart the agent in background');
   console.log('  status    Show agent status');
   console.log('  packs     Manage packs (list, scan, install, uninstall)');
+  console.log('  service   Manage systemd service (install, uninstall, status)');
   console.log('  update    Check for and install agent updates');
   console.log('  mcp-bridge  stdio MCP bridge (for Claude Code integration)');
   console.log('');
@@ -247,6 +256,12 @@ async function cmdManager(): Promise<void> {
 }
 
 function cmdStop(): void {
+  if (isServiceInstalled() && getServiceStatus() === 'active') {
+    const result = stopService();
+    console.log(result.message);
+    return;
+  }
+
   if (stopRunningAgent()) {
     console.log('Agent stopped.');
   } else {
@@ -255,6 +270,12 @@ function cmdStop(): void {
 }
 
 function cmdRestart(): void {
+  if (isServiceInstalled() && getServiceStatus() === 'active') {
+    const result = restartService();
+    console.log(result.message);
+    return;
+  }
+
   stopRunningAgent();
   const pid = spawnBackgroundAgent();
   console.log(`Agent restarted in background (PID: ${pid}).`);
@@ -273,6 +294,46 @@ function cmdStatus(): void {
   console.log(`  Hub:      ${config.hubUrl}`);
   console.log(`  Agent ID: ${config.agentId ?? '(not yet assigned)'}`);
   console.log(`  Config:   ${getConfigPath()}`);
+
+  if (isServiceInstalled()) {
+    console.log(`  Service:  ${getServiceStatus()}`);
+  }
+}
+
+function handleServiceCommand(subArgs: string[]): void {
+  const sub = subArgs[0];
+
+  switch (sub) {
+    case 'install': {
+      const result = installService();
+      console.log(result.message);
+      if (!result.success) process.exit(1);
+      break;
+    }
+    case 'uninstall': {
+      const result = uninstallService();
+      console.log(result.message);
+      if (!result.success) process.exit(1);
+      break;
+    }
+    case 'status': {
+      const status = getServiceStatus();
+      console.log(`sonde-agent service: ${status}`);
+      break;
+    }
+    default:
+      console.log('Usage: sonde service <command>');
+      console.log('');
+      console.log('Commands:');
+      console.log('  install    Install systemd service (starts on boot)');
+      console.log('  uninstall  Remove systemd service');
+      console.log('  status     Show service status');
+      if (sub) {
+        console.error(`\nUnknown subcommand: ${sub}`);
+        process.exit(1);
+      }
+      break;
+  }
 }
 
 async function cmdInstall(): Promise<void> {
@@ -338,6 +399,9 @@ switch (command) {
     break;
   case 'packs':
     handlePacksCommand(args.slice(1));
+    break;
+  case 'service':
+    handleServiceCommand(args.slice(1));
     break;
   case 'update':
     cmdUpdate().catch((err: Error) => {

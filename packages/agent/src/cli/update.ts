@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { VERSION } from '../version.js';
+import { isServiceInstalled, restartService } from './service.js';
 
 /**
  * Lightweight semver comparison: returns true if a < b.
@@ -66,13 +67,11 @@ export function performUpdate(targetVersion: string): void {
 
   console.log(`Successfully updated to v${targetVersion}`);
 
-  // Best-effort systemd restart
-  try {
-    execFileSync('systemctl', ['restart', 'sonde-agent'], {
-      timeout: 10_000,
-    });
-    console.log('Restarted sonde-agent systemd service');
-  } catch {
-    // systemd not available or service not installed — that's fine
+  if (isServiceInstalled()) {
+    const result = restartService();
+    console.log(result.message);
+  } else {
+    console.log('Restart the agent to use the new version:');
+    console.log('  sonde restart');
   }
 }
