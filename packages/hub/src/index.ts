@@ -1125,6 +1125,24 @@ app.get('/install', (c) => {
   return c.body(generateInstallScript(config.hubUrl));
 });
 
+// Static file serving for docs (Starlight)
+const docsDist = path.resolve(
+  process.cwd(),
+  'packages/docs/dist',
+);
+const docsExists = fs.existsSync(docsDist);
+
+if (docsExists) {
+  app.use(
+    '/docs/*',
+    serveStatic({
+      root: path.relative(process.cwd(), docsDist),
+      rewriteRequestPath: (p) => p.replace(/^\/docs/, ''),
+    }),
+  );
+  app.get('/docs', (c) => c.redirect('/docs/'));
+}
+
 // Static file serving for dashboard SPA
 const dashboardDist = path.resolve(process.cwd(), 'packages/dashboard/dist');
 const dashboardExists = fs.existsSync(dashboardDist);

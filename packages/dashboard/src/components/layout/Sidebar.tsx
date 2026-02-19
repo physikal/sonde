@@ -136,15 +136,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             );
           })}
           <a
-            href="https://docs.sondeapp.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-auto rounded-md px-3 py-2 text-sm font-medium text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 transition-colors flex items-center gap-2"
+            href="/docs"
+            className="mt-auto rounded-md px-3 py-2 text-sm font-medium text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 transition-colors"
           >
             Documentation
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
           </a>
         </nav>
       </aside>

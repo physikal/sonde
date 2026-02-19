@@ -13,10 +13,11 @@ COPY packages/packs/package.json packages/packs/tsconfig.json packages/packs/
 COPY packages/hub/package.json packages/hub/tsconfig.json packages/hub/
 COPY packages/agent/package.json packages/agent/
 COPY packages/dashboard/package.json packages/dashboard/
+COPY packages/docs/package.json packages/docs/
 
 RUN npm ci
 
-# Copy source for shared, packs, hub, dashboard
+# Copy source for shared, packs, hub, dashboard, docs
 COPY packages/shared/src packages/shared/src
 COPY packages/packs/src packages/packs/src
 COPY packages/hub/src packages/hub/src
@@ -25,8 +26,11 @@ COPY packages/dashboard/index.html packages/dashboard/index.html
 COPY packages/dashboard/vite.config.ts packages/dashboard/vite.config.ts
 COPY packages/dashboard/postcss.config.mjs packages/dashboard/postcss.config.mjs
 COPY packages/dashboard/tsconfig.json packages/dashboard/tsconfig.json
+COPY packages/docs/src packages/docs/src
+COPY packages/docs/astro.config.mjs packages/docs/astro.config.mjs
+COPY packages/docs/tsconfig.json packages/docs/tsconfig.json
 
-RUN npx turbo build --filter=@sonde/hub --filter=@sonde/dashboard
+RUN npx turbo build --filter=@sonde/hub --filter=@sonde/dashboard --filter=@sonde/docs
 
 # ── Runtime ──────────────────────────────────────────────────────────
 FROM node:22-alpine
@@ -42,6 +46,7 @@ COPY packages/packs/package.json packages/packs/
 COPY packages/hub/package.json packages/hub/
 COPY packages/agent/package.json packages/agent/
 COPY packages/dashboard/package.json packages/dashboard/
+COPY packages/docs/package.json packages/docs/
 
 RUN npm ci --omit=dev && apk del python3 make g++
 
@@ -50,6 +55,7 @@ COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/packs/dist packages/packs/dist
 COPY --from=builder /app/packages/hub/dist packages/hub/dist
 COPY --from=builder /app/packages/dashboard/dist packages/dashboard/dist
+COPY --from=builder /app/packages/docs/dist packages/docs/dist
 
 # SQLite data directory
 RUN mkdir -p /data
