@@ -546,6 +546,26 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
   a10: 'A10 Thunder/vThunder management IP. Default port 443.',
 };
 
+const NAME_PLACEHOLDERS: Record<string, string> = {
+  servicenow: 'e.g. prod-servicenow',
+  datadog: 'e.g. prod-datadog',
+  pagerduty: 'e.g. prod-pagerduty',
+  cloudflare: 'e.g. prod-cloudflare',
+  graph: 'e.g. entra-graph',
+  citrix: 'e.g. prod-citrix',
+  splunk: 'e.g. prod-splunk',
+  proxmox: 'e.g. pve-cluster-01',
+  nutanix: 'e.g. prism-central-01',
+  vcenter: 'e.g. vcenter-prod',
+  jira: 'e.g. jira-cloud',
+  loki: 'e.g. grafana-loki-prod',
+  thousandeyes: 'e.g. prod-thousandeyes',
+  meraki: 'e.g. meraki-prod',
+  checkpoint: 'e.g. checkpoint-mgmt-01',
+  a10: 'e.g. a10-thunder-01',
+  custom: 'e.g. my-integration',
+};
+
 const AUTH_METHOD_LABELS: Record<string, string> = {
   api_key: 'API Key',
   bearer_token: 'Bearer Token',
@@ -971,7 +991,7 @@ export function Integrations() {
           {/* Step 2: Name & Endpoint */}
           {step === 2 && (
             <div>
-              <h3 className="text-lg font-medium text-white">Configuration</h3>
+              <h3 className="text-lg font-medium text-white">{typeDef?.label ?? 'Integration'} — Configuration</h3>
               <div className="mt-4 space-y-3">
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">Name</p>
@@ -979,7 +999,7 @@ export function Integrations() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. production-datadog"
+                    placeholder={NAME_PLACEHOLDERS[selectedType] ?? 'e.g. my-integration'}
                     className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -1044,7 +1064,7 @@ export function Integrations() {
           {/* Step 3: Auth & Credentials */}
           {step === 3 && typeDef && (
             <div>
-              <h3 className="text-lg font-medium text-white">Credentials</h3>
+              <h3 className="text-lg font-medium text-white">{typeDef.label} — Credentials</h3>
               {selectedType === 'graph' ? (
                 <div className="mt-4">
                   {ssoStatus?.configured && ssoStatus?.enabled ? (
@@ -1134,7 +1154,7 @@ export function Integrations() {
           {/* Step 4: Review & Save */}
           {step === 4 && typeDef && (
             <div>
-              <h3 className="text-lg font-medium text-white">Review</h3>
+              <h3 className="text-lg font-medium text-white">{typeDef.label} — Review</h3>
               <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
                   <dt className="text-xs uppercase text-gray-500">Type</dt>

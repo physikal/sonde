@@ -48,6 +48,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         {
           key: 'clientSecret',
           label: 'Client Secret',
+          placeholder: 'OAuth application secret',
           sensitive: true,
           tooltip: 'Client secret from the OAuth application',
         },
@@ -124,7 +125,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         },
         {
           key: 'apiKey',
-          label: 'API Key',
+          label: 'Global API Key',
           sensitive: true,
           tooltip: 'Profile → API Tokens → Global API Key',
         },
@@ -393,6 +394,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         {
           key: 'username',
           label: 'Username',
+          placeholder: 'SmartConsole admin username',
           tooltip: 'SmartConsole admin with read-only permissions',
         },
         {
@@ -413,6 +415,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         {
           key: 'username',
           label: 'Username',
+          placeholder: 'A10 ACOS admin username',
           tooltip: 'A10 ACOS admin account with read-only partition access',
         },
         {
