@@ -65,9 +65,19 @@ Once connected, Claude Desktop will have access to:
 - **health_check** -- Run diagnostics across all agents and integrations in parallel
 - **query_logs** -- Query logs from agents (Docker, systemd, nginx) or the hub audit trail
 
+## Tag filtering
+
+Use `#tagname` in your prompts to filter agents and integrations by tag:
+
+- "Show me #prod agents"
+- "Run a health check on #database #linux"
+
+The `#` prefix is required — without it, words are treated as natural language and no tag filtering occurs. Multiple tags use AND logic (all must match).
+
 ## Example prompts
 
 - "List all connected sonde agents"
+- "Show me #prod agents"
 - "Check disk usage on my-server"
 - "Run a docker diagnostic on my-server"
 - "What's the memory usage on my-server?"

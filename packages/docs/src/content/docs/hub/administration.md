@@ -61,6 +61,55 @@ Click **Rotate** on an existing key to generate a new value. The old value is im
 - Rotate keys periodically and after any suspected compromise
 - Name keys descriptively so you know what breaks if you revoke one
 
+## Tag Management
+
+Tags are free-form labels for organizing agents and integrations. They enable filtered queries via MCP and bulk operations in the dashboard.
+
+### Assigning Tags
+
+**Single entity:** Open the agent or integration detail view and add tags inline.
+
+**Bulk:** In the Fleet or Integrations view, select multiple rows with checkboxes and use the bulk tag actions bar to add or remove tags.
+
+**REST API:**
+
+```bash
+# Set tags on an agent
+curl -X PUT https://your-hub/api/v1/agents/AGENT_ID/tags \
+  -H "Authorization: Bearer admin-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"tags": ["prod", "database", "us-east"]}'
+
+# Bulk add tags to multiple agents
+curl -X PATCH https://your-hub/api/v1/agents/tags \
+  -H "Authorization: Bearer admin-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"add": ["prod"], "ids": ["agent-id-1", "agent-id-2"]}'
+```
+
+### Using Tags with AI Clients
+
+MCP users filter by tags using `#tagname` syntax in their prompts:
+
+- *"Show me #prod agents"* — filters to agents tagged `prod`
+- *"Run diagnostics on #database #linux"* — filters to agents with both tags (AND logic)
+
+The `#` prefix is required. Without it, words are treated as natural language and no tag filtering occurs. This prevents accidental narrowing — "check my linux servers" queries all agents, not just those tagged `linux`.
+
+### Global Tag Operations
+
+From the dashboard at **Manage** > **Tags**:
+
+- **Rename** — Changes a tag across all agents and integrations
+- **Delete** — Removes a tag from all entities
+- **Import** — Bulk import tags from CSV
+
+### Best Practices
+
+- Use consistent naming: lowercase, hyphenated (e.g., `us-east`, `prod-db`)
+- Keep tag count manageable — a few well-chosen tags are more useful than dozens
+- Use tags for cross-cutting concerns (environment, location, team) — use access groups for security boundaries
+
 ## Fleet Management
 
 ### Monitoring Agent Health
@@ -185,8 +234,8 @@ Packs are bundled with the agent package. Updating the agent (`sonde update` or 
 |---|---|---|
 | `SONDE_SECRET` | Yes | Root encryption key. Never rotate without re-entering all credentials. |
 | `SONDE_DB_PATH` | Recommended | Database file path. Default: `./sonde.db` |
-| `SONDE_ADMIN_USER` | Yes | Bootstrap admin username |
-| `SONDE_ADMIN_PASSWORD` | Yes | Bootstrap admin password |
+| `SONDE_ADMIN_USER` | Recommended | Bootstrap admin username (required for dashboard login) |
+| `SONDE_ADMIN_PASSWORD` | Recommended | Bootstrap admin password (required for dashboard login) |
 | `SONDE_HUB_URL` | Recommended | Public URL for SSO callbacks and agent enrollment |
 
 Entra SSO is configured through the dashboard (**Settings** > **SSO**), not environment variables. Credentials are encrypted at rest in the database.

@@ -22,13 +22,17 @@ Sonde works with any MCP-compatible client. This page covers the protocol detail
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `list_agents` | List all agents with status | None (optional `tags` filter) |
+| `list_agents` | List all agents with status | Optional `tags` filter (use `#tagname` in prompt) |
 | `agent_overview` | Detailed info for one agent | `agent` (name or ID) |
 | `probe` | Execute a probe | `agent`, `probe` (e.g. `system.disk.usage`) |
 | `diagnose` | Run a diagnostic runbook | `agent`, `category` (e.g. `docker`) |
-| `list_capabilities` | Discover agents, integrations, categories | None |
+| `list_capabilities` | Discover agents, integrations, categories | Optional `tags` filter (use `#tagname` in prompt) |
 | `health_check` | Run diagnostics across fleet in parallel | Optional `agent`, `categories` |
 | `query_logs` | Query logs from agents or audit trail | `source`, `agent`, optional filters |
+
+:::tip[Tag filtering]
+Use `#tagname` syntax in your prompts to filter by tags. For example: *"List #prod agents"* or *"Check capabilities for #database #linux"*. Without the `#` prefix, words are treated as natural language and no filtering occurs.
+:::
 
 ## Example with curl
 

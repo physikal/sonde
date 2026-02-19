@@ -31,6 +31,35 @@ The main view showing all enrolled agents in a table:
 
 Status updates in real-time via WebSocket. Click any agent row to see its detail view. Use the search bar to filter by name, tags, status, packs, or OS. Select multiple agents with checkboxes for bulk tag operations.
 
+### Tags
+
+Tags are free-form labels you assign to agents and integrations for organization and filtering. Examples: `prod`, `database`, `citrix-farm`, `us-east`.
+
+**Assigning tags in the dashboard:**
+
+- Single agent/integration: open its detail view and add tags inline
+- Bulk: select multiple rows with checkboxes, then use the bulk tag actions bar
+
+**Using tags with AI clients:**
+
+When talking to Claude (or any MCP client), use `#tagname` syntax to filter by tags:
+
+- *"Show me #prod agents"* — filters to agents tagged `prod`
+- *"Run a health check on #database #linux"* — filters to agents with both tags
+
+The `#` prefix is required. Without it, Claude treats words as natural language and does not apply tag filtering. This prevents accidental narrowing of results — saying "check my linux servers" queries all agents, not just those tagged `linux`.
+
+Tag filtering uses AND logic: specifying multiple tags returns only agents/integrations matching all of them.
+
+**Managing tags globally:**
+
+Admins can manage all tags from **Manage** > **Tags**:
+
+- View all tags with agent/integration counts
+- Rename a tag across all entities
+- Delete unused tags
+- Import tags in bulk (CSV)
+
 ### Agent Detail
 
 Drilling into an agent shows:
@@ -79,7 +108,7 @@ Configure hub-side integration packs that call external REST APIs.
 - Credential fields are masked by default with show/hide toggles
 - **Test Connection** button validates connectivity before saving
 - Edit or delete existing integrations
-- Use search and bulk tagging to organize integrations
+- Use search and bulk tagging to organize integrations (see [Tags](#tags) above)
 
 See the [Integration Packs Setup](/integrations/setup) guide for per-type configuration details.
 
