@@ -17,7 +17,7 @@ In the Dokploy dashboard:
 1. Click **Projects** → **+ Create Project** → give it a name (e.g. "Sonde")
 2. Inside the project, click **+ Create Service** → **Compose**
 3. Under **Source**, choose **Git** and set:
-   - **Repository URL:** `https://github.com/sonde-dev/sonde.git`
+   - **Repository URL:** `https://github.com/physikal/sonde.git`
    - **Branch:** `main`
    - **Compose Path:** `docker/docker-compose.dokploy.yml`
 

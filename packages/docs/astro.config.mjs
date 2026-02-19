@@ -8,7 +8,7 @@ export default defineConfig({
       title: 'Sonde',
       description: 'AI infrastructure agent — give Claude eyes into your servers.',
       social: {
-        github: 'https://github.com/sonde-dev/sonde',
+        github: 'https://github.com/physikal/sonde',
       },
       sidebar: [
         { label: 'Getting Started', slug: 'getting-started' },

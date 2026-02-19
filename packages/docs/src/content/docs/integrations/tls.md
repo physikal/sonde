@@ -62,7 +62,7 @@ Mount your CA certificate and set the `NODE_EXTRA_CA_CERTS` environment variable
 ```yaml
 services:
   sonde-hub:
-    image: ghcr.io/sonde-dev/hub:latest
+    image: ghcr.io/physikal/hub:latest
     environment:
       NODE_EXTRA_CA_CERTS: /certs/internal-ca.pem
     volumes:

@@ -76,4 +76,4 @@ jobs:
           context: .
           file: docker/hub.Dockerfile
           push: true
-          tags: ghcr.io/sonde-dev/hub:nightly
+          tags: ghcr.io/physikal/hub:nightly

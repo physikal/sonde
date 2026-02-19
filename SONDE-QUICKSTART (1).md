@@ -13,7 +13,7 @@
 
 ```bash
 # Create the org and repo on GitHub first (via github.com or gh cli)
-gh repo create sonde-dev/sonde --public --clone
+gh repo create physikal/sonde --public --clone
 cd sonde
 git checkout -b dev
 ```

@@ -100,9 +100,9 @@ jobs:
           file: docker/hub.Dockerfile
           push: true
           tags: |
-            ghcr.io/sonde-dev/hub:latest
-            ghcr.io/sonde-dev/hub:sha-${{ github.sha }}
-            ghcr.io/sonde-dev/hub:v${{ steps.hub-version.outputs.version }}
+            ghcr.io/physikal/hub:latest
+            ghcr.io/physikal/hub:sha-${{ github.sha }}
+            ghcr.io/physikal/hub:v${{ steps.hub-version.outputs.version }}
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.published == 'true'

@@ -59,15 +59,17 @@ Deploy the hub:
 ```bash
 docker run -d --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_SECRET=your-secret-key-min-16-chars \
+  -e SONDE_SECRET=$(openssl rand -hex 32) \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
 Install an agent on a target machine:
 
 ```bash
-curl -fsSL https://sondeapp.com/install | bash
+curl -fsSL https://your-hub-url/install | sh
 ```
 
 Add Sonde to Claude Code:

@@ -22,7 +22,7 @@ Hub = central MCP server. Agents = lightweight daemons on target machines connec
 - **Logging:** pino
 - **Testing:** Vitest (unit/integration) + Playwright (e2e)
 - **Linting:** Biome
-- **Docker:** node:22-alpine → ghcr.io/sonde-dev/hub
+- **Docker:** node:22-alpine → ghcr.io/physikal/hub
 - **CI:** GitHub Actions + Turborepo + Changesets
 
 ## Monorepo Packages
