@@ -13,6 +13,7 @@ export interface AgentConfig {
   caCertPath?: string;
   scrubPatterns?: string[];
   allowUnsignedPacks?: boolean;
+  disabledPacks?: string[];
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.sonde');

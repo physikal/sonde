@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import os from 'node:os';
-import { handlePacksCommand } from './cli/packs.js';
+import { packRegistry } from '@sonde/packs';
+import { buildEnabledPacks, handlePacksCommand } from './cli/packs.js';
 import { checkForUpdate, performUpdate } from './cli/update.js';
 import { type AgentConfig, getConfigPath, loadConfig, saveConfig } from './config.js';
 import { AgentConnection, type ConnectionEvents, enrollWithHub } from './runtime/connection.js';
@@ -61,7 +62,10 @@ function createRuntime(events: ConnectionEvents): Runtime {
     process.exit(1);
   }
 
-  const executor = new ProbeExecutor(undefined, undefined, buildPatterns(config.scrubPatterns));
+  const enabledPacks = buildEnabledPacks(
+    packRegistry, config.disabledPacks ?? [],
+  );
+  const executor = new ProbeExecutor(enabledPacks, undefined, buildPatterns(config.scrubPatterns));
   const connection = new AgentConnection(config, executor, events);
 
   return { config, executor, connection };

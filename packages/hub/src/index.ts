@@ -127,17 +127,21 @@ set -eu
 
 # --- Sonde Agent Installer ---
 # Bootstraps Node.js 22 + @sonde/agent, then hands off to the interactive TUI.
-# Usage: curl -fsSL ${hubUrl}/install | bash
+# Usage: curl -fsSL ${hubUrl}/install | sh
 
 RED='\\033[0;31m'
 GREEN='\\033[0;32m'
+YELLOW='\\033[0;33m'
 CYAN='\\033[0;36m'
 BOLD='\\033[1m'
 RESET='\\033[0m'
 
 info()  { printf "\${CYAN}[sonde]\${RESET} %s\\n" "$1"; }
 ok()    { printf "\${GREEN}[sonde]\${RESET} %s\\n" "$1"; }
+warn()  { printf "\${YELLOW}[sonde]\${RESET} %s\\n" "$1"; }
 fail()  { printf "\${RED}[sonde]\${RESET} %s\\n" "$1" >&2; exit 1; }
+
+NODE_MANUAL_URL="https://nodejs.org/en/download"
 
 # --- OS / arch detection ---
 OS="$(uname -s)"
@@ -157,23 +161,25 @@ esac
 
 info "Detected $OS ($ARCH)"
 
-# --- Node.js >= 22 check / install ---
-needs_node=0
-if command -v node >/dev/null 2>&1; then
-  NODE_VER="$(node -v | sed 's/^v//' | cut -d. -f1)"
-  if [ "$NODE_VER" -ge 22 ] 2>/dev/null; then
-    ok "Node.js v$(node -v | sed 's/^v//') found"
-  else
-    info "Node.js v$(node -v | sed 's/^v//') found (need >= 22)"
-    needs_node=1
+# --- Helper: verify Node.js major version ---
+check_node_major() {
+  if ! command -v node >/dev/null 2>&1; then
+    return 1
   fi
-else
-  info "Node.js not found"
-  needs_node=1
-fi
+  NODE_MAJOR="$(node -v | sed 's/^v//' | cut -d. -f1)"
+  [ "$NODE_MAJOR" -ge 22 ] 2>/dev/null
+}
 
-if [ "$needs_node" -eq 1 ]; then
-  info "Installing Node.js 22..."
+# --- Node.js >= 22 check / install ---
+if check_node_major; then
+  ok "Node.js v$(node -v | sed 's/^v//') found"
+else
+  if command -v node >/dev/null 2>&1; then
+    info "Node.js v$(node -v | sed 's/^v//') found (need >= 22), upgrading..."
+  else
+    info "Node.js not found, installing..."
+  fi
+
   case "$OS" in
     Linux)
       if command -v apt-get >/dev/null 2>&1; then
@@ -186,30 +192,66 @@ if [ "$needs_node" -eq 1 ]; then
         curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo -E bash -
         sudo yum install -y nodejs
       else
-        fail "No supported package manager found (need apt-get, dnf, or yum)"
+        fail "No supported package manager (apt-get, dnf, yum). Install Node.js 22+ manually: $NODE_MANUAL_URL"
       fi
+      hash -r 2>/dev/null || true
       ;;
     Darwin)
       if command -v brew >/dev/null 2>&1; then
         brew install node@22
         brew link --overwrite node@22
+        eval "$(brew shellenv)" 2>/dev/null || true
+        hash -r 2>/dev/null || true
       else
-        fail "Homebrew is required to install Node.js on macOS. Install it from https://brew.sh"
+        fail "Homebrew is required on macOS. Install it from https://brew.sh then rerun this script."
       fi
       ;;
   esac
 
-  # Verify installation
-  if ! command -v node >/dev/null 2>&1; then
-    fail "Node.js installation failed"
+  if ! check_node_major; then
+    ACTUAL="unknown"
+    if command -v node >/dev/null 2>&1; then
+      ACTUAL="$(node -v)"
+    fi
+    fail "Node.js 22+ required but got $ACTUAL. Install manually: $NODE_MANUAL_URL"
   fi
   ok "Node.js v$(node -v | sed 's/^v//') installed"
 fi
 
+# --- Ensure npm is available ---
+hash -r 2>/dev/null || true
+if ! command -v npm >/dev/null 2>&1; then
+  case "$OS" in
+    Linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        info "npm not found, installing..."
+        sudo apt-get install -y npm
+        hash -r 2>/dev/null || true
+      fi
+      ;;
+  esac
+  if ! command -v npm >/dev/null 2>&1; then
+    fail "npm not found. Reinstall Node.js 22 from $NODE_MANUAL_URL (npm is included)."
+  fi
+fi
+ok "npm v$(npm -v) found"
+
 # --- Install @sonde/agent ---
+if command -v sonde >/dev/null 2>&1; then
+  warn "sonde already installed, updating to latest..."
+fi
+
 info "Installing @sonde/agent..."
-npm install -g @sonde/agent
-ok "@sonde/agent installed"
+case "$OS" in
+  Linux)  sudo npm install -g @sonde/agent ;;
+  Darwin) npm install -g @sonde/agent ;;
+esac
+hash -r 2>/dev/null || true
+
+if ! command -v sonde >/dev/null 2>&1; then
+  fail "sonde command not found after install. Check npm global bin is in PATH: $(npm config get prefix)/bin"
+fi
+ok "@sonde/agent installed ($(sonde --version 2>/dev/null || echo 'unknown version'))"
 
 # --- Launch interactive installer TUI ---
 info "Launching Sonde installer..."

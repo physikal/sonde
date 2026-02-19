@@ -1,7 +1,9 @@
+import { packRegistry } from '@sonde/packs';
 import type { PackManifest } from '@sonde/shared';
 import { Box, Text, useApp, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import { useEffect, useState } from 'react';
+import { buildEnabledPacks } from '../../cli/packs.js';
 import { type AgentConfig, saveConfig } from '../../config.js';
 import { enrollWithHub } from '../../runtime/connection.js';
 import { ProbeExecutor } from '../../runtime/executor.js';
@@ -19,14 +21,23 @@ export function StepComplete({ hubConfig, selectedPacks }: StepCompleteProps): J
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const selectedNames = new Set(selectedPacks.map((p) => p.name));
+    const disabledPacks = [...packRegistry.keys()]
+      .filter((name) => !selectedNames.has(name));
     const config: AgentConfig = {
       hubUrl: hubConfig.hubUrl,
       apiKey: hubConfig.apiKey,
       agentName: hubConfig.agentName,
+      disabledPacks: disabledPacks.length > 0
+        ? disabledPacks
+        : undefined,
     };
     saveConfig(config);
 
-    const executor = new ProbeExecutor();
+    const enabledPacks = buildEnabledPacks(
+      packRegistry, disabledPacks,
+    );
+    const executor = new ProbeExecutor(enabledPacks);
 
     enrollWithHub(config, executor)
       .then(({ agentId: id, apiKey: mintedKey }) => {
