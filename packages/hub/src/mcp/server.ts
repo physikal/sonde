@@ -11,6 +11,7 @@ import type { IntegrationManager } from '../integrations/manager.js';
 import type { ProbeRouter } from '../integrations/probe-router.js';
 import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
+import { buildMcpInstructions } from './instructions.js';
 import { handleAgentOverview } from './tools/agent-overview.js';
 import { handleDiagnose } from './tools/diagnose.js';
 import { handleHealthCheck } from './tools/health-check.js';
@@ -61,9 +62,15 @@ export function createMcpHandler(
     server: McpServer;
     transport: StreamableHTTPServerTransport;
   } {
+    const instructions = buildMcpInstructions(
+      db,
+      integrationManager,
+      probeRouter,
+    );
+
     const server = new McpServer(
       { name: 'sonde-hub', version: '0.1.0' },
-      { capabilities: { tools: {} } },
+      { capabilities: { tools: {} }, instructions },
     );
 
     server.registerTool(

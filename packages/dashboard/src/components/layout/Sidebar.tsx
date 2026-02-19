@@ -44,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Settings',
     items: [
       { to: '/settings/tags', label: 'Tags', minimumRole: 'admin' },
+      { to: '/settings/mcp-instructions', label: 'MCP Prompt', minimumRole: 'owner' },
       { to: '/settings/sso', label: 'SSO', minimumRole: 'owner' },
     ],
   },
