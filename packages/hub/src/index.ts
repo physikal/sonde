@@ -1133,6 +1133,7 @@ const docsDist = path.resolve(
 const docsExists = fs.existsSync(docsDist);
 
 if (docsExists) {
+  // Serve static assets (CSS, JS, images, fonts)
   app.use(
     '/docs/*',
     serveStatic({
@@ -1141,6 +1142,28 @@ if (docsExists) {
     }),
   );
   app.get('/docs', (c) => c.redirect('/docs/'));
+  // Fallback for HTML pages (serveStatic doesn't resolve
+  // directory paths to index.html with rewriteRequestPath)
+  app.get('/docs/*', (c) => {
+    const subPath = c.req.path.replace(/^\/docs/, '') || '/';
+    const candidates = [
+      path.join(docsDist, subPath, 'index.html'),
+      path.join(docsDist, subPath),
+    ];
+    for (const candidate of candidates) {
+      if (
+        fs.existsSync(candidate) &&
+        fs.statSync(candidate).isFile()
+      ) {
+        return c.html(fs.readFileSync(candidate, 'utf-8'));
+      }
+    }
+    const notFound = path.join(docsDist, '404.html');
+    if (fs.existsSync(notFound)) {
+      return c.html(fs.readFileSync(notFound, 'utf-8'), 404);
+    }
+    return c.notFound();
+  });
 }
 
 // Static file serving for dashboard SPA
