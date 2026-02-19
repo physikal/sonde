@@ -1418,6 +1418,93 @@ export class SondeDb {
     tx();
   }
 
+  /** Returns all unique tags with per-source (agent/integration) counts. */
+  getAllTagsWithCounts(): Array<{
+    tag: string;
+    agentCount: number;
+    integrationCount: number;
+    totalCount: number;
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT tag, source, COUNT(*) as cnt FROM (
+           SELECT tag, 'agent' as source FROM agent_tags
+           UNION ALL
+           SELECT tag, 'integration' as source FROM integration_tags
+         ) GROUP BY tag, source ORDER BY tag`,
+      )
+      .all() as Array<{ tag: string; source: string; cnt: number }>;
+
+    const map = new Map<string, { agentCount: number; integrationCount: number }>();
+    for (const row of rows) {
+      const entry = map.get(row.tag) ?? { agentCount: 0, integrationCount: 0 };
+      if (row.source === 'agent') {
+        entry.agentCount = row.cnt;
+      } else {
+        entry.integrationCount = row.cnt;
+      }
+      map.set(row.tag, entry);
+    }
+
+    return [...map.entries()].map(([tag, counts]) => ({
+      tag,
+      agentCount: counts.agentCount,
+      integrationCount: counts.integrationCount,
+      totalCount: counts.agentCount + counts.integrationCount,
+    }));
+  }
+
+  /** Deletes a tag from all agents and integrations. Returns rows affected per source. */
+  deleteTagGlobally(tag: string): { agents: number; integrations: number } {
+    let agents = 0;
+    let integrations = 0;
+    const tx = this.db.transaction(() => {
+      agents = this.db
+        .prepare('DELETE FROM agent_tags WHERE tag = ?')
+        .run(tag).changes;
+      integrations = this.db
+        .prepare('DELETE FROM integration_tags WHERE tag = ?')
+        .run(tag).changes;
+    });
+    tx();
+    return { agents, integrations };
+  }
+
+  /**
+   * Renames a tag globally across agents and integrations.
+   * Handles merge: if an entity already has newTag, the old row is just removed.
+   */
+  renameTagGlobally(
+    oldTag: string,
+    newTag: string,
+  ): { agents: number; integrations: number } {
+    let agents = 0;
+    let integrations = 0;
+    const tx = this.db.transaction(() => {
+      // Insert newTag for each entity that has oldTag (ignore if already exists)
+      this.db
+        .prepare(
+          'INSERT OR IGNORE INTO agent_tags (agent_id, tag) SELECT agent_id, ? FROM agent_tags WHERE tag = ?',
+        )
+        .run(newTag, oldTag);
+      this.db
+        .prepare(
+          'INSERT OR IGNORE INTO integration_tags (integration_id, tag) SELECT integration_id, ? FROM integration_tags WHERE tag = ?',
+        )
+        .run(newTag, oldTag);
+
+      // Delete old tag rows
+      agents = this.db
+        .prepare('DELETE FROM agent_tags WHERE tag = ?')
+        .run(oldTag).changes;
+      integrations = this.db
+        .prepare('DELETE FROM integration_tags WHERE tag = ?')
+        .run(oldTag).changes;
+    });
+    tx();
+    return { agents, integrations };
+  }
+
   getAllIntegrationTags(): Map<string, string[]> {
     const rows = this.db
       .prepare('SELECT integration_id, tag FROM integration_tags ORDER BY integration_id, tag')

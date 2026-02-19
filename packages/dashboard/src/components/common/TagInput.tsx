@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useState } from 'react';
+import { getTagColor } from '../../lib/tag-colors';
 
 interface TagInputProps {
   tags: string[];
@@ -30,10 +31,13 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      {tags.map((tag) => (
+      {tags.map((tag) => {
+        const color = getTagColor(tag);
+        return (
         <span
           key={tag}
-          className="inline-flex items-center gap-0.5 rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-300"
+          className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
+          style={{ backgroundColor: color.bg, color: color.text }}
         >
           {tag}
           <button
@@ -47,7 +51,8 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
             &times;
           </button>
         </span>
-      ))}
+        );
+      })}
       {editing ? (
         <input
           type="text"

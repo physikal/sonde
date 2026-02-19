@@ -57,6 +57,7 @@ import {
   ActivateGraphBody,
   BulkTagsBody,
   CreateAccessGroupBody,
+  RenameTagBody,
   CreateApiKeyBody,
   CreateAuthorizedGroupBody,
   CreateAuthorizedUserBody,
@@ -832,7 +833,63 @@ app.get('/api/v1/integrations/:id/events', (c) => {
   return c.json({ events });
 });
 
-// --- Tag management endpoints ---
+// --- Global tag management endpoints ---
+
+app.use('/api/v1/tags/*', requireRole('admin'));
+
+app.get('/api/v1/tags', (c) => {
+  const tags = db.getAllTagsWithCounts();
+  return c.json({ tags });
+});
+
+app.post('/api/v1/tags/import', requireRole('admin'), async (c) => {
+  const parsed = parseBody(TagImportBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const notFound: string[] = [];
+  let updated = 0;
+
+  for (const entry of parsed.data.entries) {
+    if (parsed.data.type === 'agent') {
+      const agent = db.getAgent(entry.name);
+      if (!agent) {
+        notFound.push(entry.name);
+        continue;
+      }
+      db.setAgentTags(agent.id, entry.tags);
+      updated++;
+    } else {
+      const integration = db
+        .listIntegrations()
+        .find((i) => i.name === entry.name);
+      if (!integration) {
+        notFound.push(entry.name);
+        continue;
+      }
+      db.setIntegrationTags(integration.id, entry.tags);
+      updated++;
+    }
+  }
+
+  return c.json({ updated, notFound });
+});
+
+app.delete('/api/v1/tags/:tag', (c) => {
+  const tag = decodeURIComponent(c.req.param('tag'));
+  const removedFrom = db.deleteTagGlobally(tag);
+  return c.json({ ok: true, removedFrom });
+});
+
+app.put('/api/v1/tags/:tag/rename', async (c) => {
+  const tag = decodeURIComponent(c.req.param('tag'));
+  const parsed = parseBody(RenameTagBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const renamed = db.renameTagGlobally(tag, parsed.data.newName);
+  return c.json({ ok: true, renamed });
+});
+
+// --- Per-entity tag endpoints ---
 
 app.put('/api/v1/agents/:id/tags', requireRole('admin'), async (c) => {
   const parsed = parseBody(SetTagsBody, await c.req.json());
@@ -872,38 +929,6 @@ app.patch('/api/v1/integrations/tags', requireRole('admin'), async (c) => {
   if (parsed.data.add) db.addIntegrationTags(parsed.data.ids, parsed.data.add);
   if (parsed.data.remove) db.removeIntegrationTags(parsed.data.ids, parsed.data.remove);
   return c.json({ ok: true });
-});
-
-app.post('/api/v1/tags/import', requireRole('admin'), async (c) => {
-  const parsed = parseBody(TagImportBody, await c.req.json());
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-
-  const notFound: string[] = [];
-  let updated = 0;
-
-  for (const entry of parsed.data.entries) {
-    if (parsed.data.type === 'agent') {
-      const agent = db.getAgent(entry.name);
-      if (!agent) {
-        notFound.push(entry.name);
-        continue;
-      }
-      db.setAgentTags(agent.id, entry.tags);
-      updated++;
-    } else {
-      const integration = db
-        .listIntegrations()
-        .find((i) => i.name === entry.name);
-      if (!integration) {
-        notFound.push(entry.name);
-        continue;
-      }
-      db.setIntegrationTags(integration.id, entry.tags);
-      updated++;
-    }
-  }
-
-  return c.json({ updated, notFound });
 });
 
 // Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)

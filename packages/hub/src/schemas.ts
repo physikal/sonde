@@ -144,6 +144,10 @@ export const BulkTagsBody = z
     message: 'add or remove is required',
   });
 
+export const RenameTagBody = z.object({
+  newName: z.string().min(1),
+});
+
 export const TagImportBody = z.object({
   type: z.enum(['agent', 'integration']),
   entries: z.array(

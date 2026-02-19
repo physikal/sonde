@@ -42,7 +42,10 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: 'Settings',
-    items: [{ to: '/settings', label: 'SSO Configuration', minimumRole: 'owner' }],
+    items: [
+      { to: '/settings/tags', label: 'Tags', minimumRole: 'admin' },
+      { to: '/settings/sso', label: 'SSO', minimumRole: 'owner' },
+    ],
   },
 ];
 

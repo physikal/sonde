@@ -16,6 +16,7 @@ import { Integrations } from './pages/Integrations';
 import { Login } from './pages/Login';
 import { Policies } from './pages/Policies';
 import { Settings } from './pages/Settings';
+import { TagsManagement } from './pages/TagsManagement';
 import { TryIt } from './pages/TryIt';
 import { Users } from './pages/Users';
 
@@ -84,7 +85,9 @@ function AppRoutes() {
           <Route path="integrations/:id" element={<IntegrationDetail />} />
           <Route path="audit" element={<Audit />} />
           <Route path="try-it" element={<TryIt />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="settings" element={<Navigate to="/settings/sso" replace />} />
+          <Route path="settings/sso" element={<Settings />} />
+          <Route path="settings/tags" element={<TagsManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}
