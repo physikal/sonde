@@ -4,6 +4,14 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { packRegistry } from '@sonde/packs';
 import { buildEnabledPacks, handlePacksCommand } from './cli/packs.js';
+import {
+  getServiceStatus,
+  installService,
+  isServiceInstalled,
+  restartService,
+  stopService,
+  uninstallService,
+} from './cli/service.js';
 import { checkForUpdate, performUpdate } from './cli/update.js';
 import {
   type AgentConfig,
@@ -40,6 +48,7 @@ function printUsage(): void {
   console.log('  restart   Restart the agent in background');
   console.log('  status    Show agent status');
   console.log('  packs     Manage packs (list, scan, install, uninstall)');
+  console.log('  service   Manage systemd service (install, uninstall, status)');
   console.log('  update    Check for and install agent updates');
   console.log('  mcp-bridge  stdio MCP bridge (for Claude Code integration)');
   console.log('');
@@ -199,7 +208,7 @@ function cmdStart(): void {
 
   connection.start();
   writePidFile(process.pid);
-  process.stdin.unref();
+  process.stdin.unref?.();
 
   const shutdown = () => {
     console.log('\nShutting down...');
@@ -247,6 +256,12 @@ async function cmdManager(): Promise<void> {
 }
 
 function cmdStop(): void {
+  if (isServiceInstalled() && getServiceStatus() === 'active') {
+    const result = stopService();
+    console.log(result.message);
+    return;
+  }
+
   if (stopRunningAgent()) {
     console.log('Agent stopped.');
   } else {
@@ -255,24 +270,61 @@ function cmdStop(): void {
 }
 
 function cmdRestart(): void {
+  if (isServiceInstalled() && getServiceStatus() === 'active') {
+    const result = restartService();
+    console.log(result.message);
+    return;
+  }
+
   stopRunningAgent();
   const pid = spawnBackgroundAgent();
   console.log(`Agent restarted in background (PID: ${pid}).`);
 }
 
-function cmdStatus(): void {
-  const config = loadConfig();
-  if (!config) {
-    console.log('Status: Not enrolled');
-    console.log(`Run "sonde enroll" to get started.`);
-    return;
-  }
+async function cmdStatus(): Promise<void> {
+  const { render } = await import('ink');
+  const { createElement } = await import('react');
+  const { StatusApp } = await import('./tui/status/StatusApp.js');
+  const { waitUntilExit } = render(
+    createElement(StatusApp, { respawnAgent: spawnBackgroundAgent }),
+  );
+  await waitUntilExit();
+}
 
-  console.log(`Sonde Agent v${VERSION}`);
-  console.log(`  Name:     ${config.agentName}`);
-  console.log(`  Hub:      ${config.hubUrl}`);
-  console.log(`  Agent ID: ${config.agentId ?? '(not yet assigned)'}`);
-  console.log(`  Config:   ${getConfigPath()}`);
+function handleServiceCommand(subArgs: string[]): void {
+  const sub = subArgs[0];
+
+  switch (sub) {
+    case 'install': {
+      const result = installService();
+      console.log(result.message);
+      if (!result.success) process.exit(1);
+      break;
+    }
+    case 'uninstall': {
+      const result = uninstallService();
+      console.log(result.message);
+      if (!result.success) process.exit(1);
+      break;
+    }
+    case 'status': {
+      const status = getServiceStatus();
+      console.log(`sonde-agent service: ${status}`);
+      break;
+    }
+    default:
+      console.log('Usage: sonde service <command>');
+      console.log('');
+      console.log('Commands:');
+      console.log('  install    Install systemd service (starts on boot)');
+      console.log('  uninstall  Remove systemd service');
+      console.log('  status     Show service status');
+      if (sub) {
+        console.error(`\nUnknown subcommand: ${sub}`);
+        process.exit(1);
+      }
+      break;
+  }
 }
 
 async function cmdInstall(): Promise<void> {
@@ -334,10 +386,16 @@ switch (command) {
     cmdRestart();
     break;
   case 'status':
-    cmdStatus();
+    cmdStatus().catch((err: Error) => {
+      console.error(err.message);
+      process.exit(1);
+    });
     break;
   case 'packs':
     handlePacksCommand(args.slice(1));
+    break;
+  case 'service':
+    handleServiceCommand(args.slice(1));
     break;
   case 'update':
     cmdUpdate().catch((err: Error) => {

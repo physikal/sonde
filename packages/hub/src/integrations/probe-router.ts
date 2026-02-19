@@ -1,4 +1,4 @@
-import type { ProbeResponse } from '@sonde/shared';
+import type { IntegrationPack, ProbeResponse } from '@sonde/shared';
 import type { SondeDb } from '../db/index.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
 import type { IntegrationExecutor } from './executor.js';
@@ -8,13 +8,15 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+export interface CallerContext {
+  apiKeyId?: string;
+}
+
 export interface ProbeRouterOptions {
   cacheTtlMs?: number;
 }
 
-function stableStringify(
-  params: Record<string, unknown> | undefined,
-): string {
+function stableStringify(params: Record<string, unknown> | undefined): string {
   if (!params) return '';
   const sorted = Object.keys(params).sort();
   const obj: Record<string, unknown> = {};
@@ -32,18 +34,21 @@ export class ProbeRouter {
     private dispatcher: AgentDispatcher,
     private integrationExecutor: IntegrationExecutor,
     private db?: SondeDb,
-    private resolveIntegrationId?: (
-      packName: string,
-    ) => string | undefined,
+    private resolveIntegrationId?: (packName: string) => string | undefined,
     options?: ProbeRouterOptions,
   ) {
     this.cacheTtlMs = options?.cacheTtlMs ?? 10_000;
+  }
+
+  getIntegrationPacks(): IntegrationPack[] {
+    return this.integrationExecutor.getRegisteredPacks();
   }
 
   async execute(
     probe: string,
     params?: Record<string, unknown>,
     agent?: string,
+    caller?: CallerContext,
   ): Promise<ProbeResponse> {
     const cacheKey = `${probe}:${stableStringify(params)}:${agent ?? ''}`;
 
@@ -55,7 +60,7 @@ export class ProbeRouter {
       this.cache.delete(cacheKey);
     }
 
-    const response = await this.executeProbe(probe, params, agent);
+    const response = await this.executeProbe(probe, params, agent, caller);
 
     if (response.status === 'success') {
       this.cache.set(cacheKey, {
@@ -71,19 +76,17 @@ export class ProbeRouter {
     probe: string,
     params?: Record<string, unknown>,
     agent?: string,
+    caller?: CallerContext,
   ): Promise<ProbeResponse> {
     if (this.integrationExecutor.isIntegrationProbe(probe)) {
       const startTime = Date.now();
-      const result =
-        await this.integrationExecutor.executeProbe(probe, params);
-      this.logProbeExecution(probe, result, Date.now() - startTime);
+      const result = await this.integrationExecutor.executeProbe(probe, params);
+      this.logProbeExecution(probe, result, Date.now() - startTime, params, caller);
       return result;
     }
 
     if (!agent) {
-      throw new Error(
-        `Agent name or ID is required for agent probe '${probe}'`,
-      );
+      throw new Error(`Agent name or ID is required for agent probe '${probe}'`);
     }
 
     return this.dispatcher.sendProbe(agent, probe, params);
@@ -93,6 +96,8 @@ export class ProbeRouter {
     probe: string,
     result: ProbeResponse,
     durationMs: number,
+    params?: Record<string, unknown>,
+    caller?: CallerContext,
   ): void {
     if (!this.db || !this.resolveIntegrationId) return;
 
@@ -102,16 +107,30 @@ export class ProbeRouter {
     const integrationId = this.resolveIntegrationId(packName);
     if (!integrationId) return;
 
+    const detail: Record<string, unknown> = {
+      probe,
+      durationMs,
+      status: result.status,
+    };
+    if (params && Object.keys(params).length > 0) {
+      detail.params = params;
+    }
+    if (caller?.apiKeyId) {
+      detail.callerApiKeyId = caller.apiKeyId;
+    }
+    if (result.status !== 'success') {
+      const data = result.data as Record<string, unknown> | undefined;
+      if (data?.error) {
+        detail.error = data.error;
+      }
+    }
+
     this.db.logIntegrationEvent({
       integrationId,
       eventType: 'probe_execution',
       status: result.status === 'success' ? 'success' : 'error',
       message: `Probe ${probe} ${result.status} (${durationMs}ms)`,
-      detailJson: JSON.stringify({
-        probe,
-        durationMs,
-        status: result.status,
-      }),
+      detailJson: JSON.stringify(detail),
     });
   }
 }

@@ -43,3 +43,14 @@ If the connection is working, Claude will call the `list_agents` tool and return
 - **list_capabilities** -- Discover all agents, integrations, and diagnostic categories
 - **health_check** -- Run diagnostics across all agents and integrations in parallel
 - **query_logs** -- Query logs from agents (Docker, systemd, nginx) or the hub audit trail
+
+## Tag filtering
+
+Use `#tagname` in your prompts to filter agents and integrations by tag:
+
+```
+> Show me #prod agents
+> Run diagnostics on #database #linux
+```
+
+The `#` prefix is required — without it, words are treated as natural language and no tag filtering occurs. Multiple tags use AND logic (all must match). Tags are assigned by admins in the dashboard.

@@ -7,8 +7,9 @@ import { StepHub } from './StepHub.js';
 import { StepPacks } from './StepPacks.js';
 import { StepPermissions } from './StepPermissions.js';
 import { StepScan } from './StepScan.js';
+import { StepService } from './StepService.js';
 
-type Step = 'hub' | 'scan' | 'packs' | 'permissions' | 'complete';
+type Step = 'hub' | 'scan' | 'packs' | 'permissions' | 'service' | 'complete';
 
 export interface HubConfig {
   hubUrl: string;
@@ -21,6 +22,7 @@ const STEP_LABELS: Record<Step, string> = {
   scan: 'System Scan',
   packs: 'Pack Selection',
   permissions: 'Permissions',
+  service: 'Systemd Service',
   complete: 'Complete',
 };
 
@@ -75,10 +77,12 @@ export function InstallerApp({ initialHubUrl }: InstallerAppProps): JSX.Element 
       {step === 'permissions' && (
         <StepPermissions
           selectedPacks={selectedPacks}
-          onNext={() => setStep('complete')}
+          onNext={() => setStep('service')}
           onBack={() => setStep('packs')}
         />
       )}
+
+      {step === 'service' && <StepService onNext={() => setStep('complete')} />}
 
       {step === 'complete' && <StepComplete hubConfig={hubConfig} selectedPacks={selectedPacks} />}
     </Box>

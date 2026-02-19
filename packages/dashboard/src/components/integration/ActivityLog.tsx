@@ -12,6 +12,7 @@ interface IntegrationEvent {
 
 interface ActivityLogProps {
   events: IntegrationEvent[];
+  apiKeyNames?: Map<string, string>;
 }
 
 const TYPE_BADGES: Record<string, { bg: string; text: string; label: string }> = {
@@ -56,7 +57,46 @@ function relativeTime(isoDate: string): string {
   return `${days}d ago`;
 }
 
-function EventRow({ event }: { event: IntegrationEvent }) {
+function formatDetailValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function resolveCallerName(
+  apiKeyId: string,
+  apiKeyNames?: Map<string, string>,
+): string {
+  if (!apiKeyNames) return apiKeyId.slice(0, 8);
+  return apiKeyNames.get(apiKeyId) ?? apiKeyId.slice(0, 8);
+}
+
+function ProbeParams({ params }: { params: Record<string, unknown> }) {
+  const entries = Object.entries(params);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {entries.map(([key, value]) => (
+        <span
+          key={key}
+          className="inline-flex items-center rounded bg-gray-800 px-1.5 py-0.5 text-xs"
+        >
+          <span className="text-gray-500">{key}:</span>
+          <span className="ml-1 text-gray-300">{String(value)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EventRow({
+  event,
+  apiKeyNames,
+}: {
+  event: IntegrationEvent;
+  apiKeyNames?: Map<string, string>;
+}) {
   const [expanded, setExpanded] = useState(false);
   const hasDetail = !!event.detailJson;
 
@@ -69,6 +109,17 @@ function EventRow({ event }: { event: IntegrationEvent }) {
     }
   }
 
+  const isProbe = event.eventType === 'probe_execution';
+  const probeParams = isProbe && detail?.params
+    ? (detail.params as Record<string, unknown>)
+    : null;
+  const callerApiKeyId = isProbe && typeof detail?.callerApiKeyId === 'string'
+    ? detail.callerApiKeyId
+    : null;
+  const errorMsg = isProbe && event.status === 'error' && typeof detail?.error === 'string'
+    ? detail.error
+    : null;
+
   return (
     <div className="border-b border-gray-800 last:border-b-0">
       <div
@@ -79,18 +130,33 @@ function EventRow({ event }: { event: IntegrationEvent }) {
         <TypeBadge eventType={event.eventType} status={event.status} />
         <StatusDot status={event.status} />
         <span className="truncate text-sm text-gray-300">{event.message ?? ''}</span>
+        {callerApiKeyId && (
+          <span className="shrink-0 text-xs text-gray-500">
+            by {resolveCallerName(callerApiKeyId, apiKeyNames)}
+          </span>
+        )}
         {hasDetail && (
           <span className="ml-auto shrink-0 text-xs text-gray-600">
             {expanded ? '\u25BC' : '\u25B6'}
           </span>
         )}
       </div>
+      {isProbe && (probeParams || errorMsg) && (
+        <div className="px-3 pb-2 flex flex-col gap-1.5">
+          {probeParams && <ProbeParams params={probeParams} />}
+          {errorMsg && (
+            <span className="text-xs text-red-400">{errorMsg}</span>
+          )}
+        </div>
+      )}
       {expanded && detail && (
         <div className="mx-3 mb-2 rounded bg-gray-950 p-3 font-mono text-xs text-gray-400">
           {Object.entries(detail).map(([key, value]) => (
             <div key={key} className="flex gap-2">
               <span className="shrink-0 text-gray-500">{key}:</span>
-              <span className="break-all text-gray-300">{String(value)}</span>
+              <span className="break-all whitespace-pre-wrap text-gray-300">
+                {formatDetailValue(value)}
+              </span>
             </div>
           ))}
         </div>
@@ -99,7 +165,7 @@ function EventRow({ event }: { event: IntegrationEvent }) {
   );
 }
 
-export function ActivityLog({ events }: ActivityLogProps) {
+export function ActivityLog({ events, apiKeyNames }: ActivityLogProps) {
   const [collapsed, setCollapsed] = useState(true);
 
   return (
@@ -120,7 +186,9 @@ export function ActivityLog({ events }: ActivityLogProps) {
           {events.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">No events recorded yet.</p>
           ) : (
-            events.map((event) => <EventRow key={event.id} event={event} />)
+            events.map((event) => (
+              <EventRow key={event.id} event={event} apiKeyNames={apiKeyNames} />
+            ))
           )}
         </div>
       )}

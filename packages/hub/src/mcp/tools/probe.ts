@@ -27,7 +27,8 @@ export async function handleProbe(
       }
     }
 
-    const response = await probeRouter.execute(args.probe, args.params, args.agent);
+    const caller = auth?.keyId ? { apiKeyId: auth.keyId } : undefined;
+    const response = await probeRouter.execute(args.probe, args.params, args.agent, caller);
 
     db.logAudit({
       apiKeyId: auth?.keyId,

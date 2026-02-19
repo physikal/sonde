@@ -123,12 +123,14 @@ export function createMcpHandler(
       'list_agents',
       {
         description:
-          'List all registered agents with their status, packs, tags, and last seen time. Optionally filter by tags (AND logic).',
+          'List all registered agents with their status, packs, tags, and last seen time. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax in their message (e.g. "show #prod agents"). Do NOT infer tags from natural language — words like "linux" or "database" in a sentence are not tag filters unless prefixed with #.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
             .optional()
-            .describe('Filter to agents matching ALL specified tags'),
+            .describe(
+              'Filter to agents matching ALL specified tags. Only use when user explicitly references #tagname. Pass tag names without the # prefix.',
+            ),
         }),
       },
       async (args) => {
@@ -154,12 +156,14 @@ export function createMcpHandler(
       'list_capabilities',
       {
         description:
-          'Discover available agents, integrations, and diagnostic categories with their tags. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks. Agents run probes on remote machines. Integrations run probes server-side on the hub via external APIs (no agent involved). Optionally filter by tags (AND logic).',
+          'Discover available agents, integrations, and diagnostic categories with their tags. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks. Agents run probes on remote machines. Integrations run probes server-side on the hub via external APIs (no agent involved). Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "check #prod #database"). Do NOT infer tags from natural language.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
             .optional()
-            .describe('Filter agents and integrations to those matching ALL specified tags'),
+            .describe(
+              'Filter agents and integrations to those matching ALL specified tags. Only use when user explicitly references #tagname. Pass tag names without the # prefix.',
+            ),
         }),
       },
       (args) => {
@@ -181,10 +185,7 @@ export function createMcpHandler(
         description:
           'Run a comprehensive health check across all applicable diagnostics in parallel. Auto-discovers available runbooks for the specified agent and active integrations. Returns unified findings sorted by severity (critical → warning → info). Skips categories that require user-provided parameters. Agent categories (e.g. system, docker) run on the specified agent machine. Integration categories (e.g. proxmox-cluster) run server-side on the hub via external APIs — they do NOT execute on any agent.',
         inputSchema: z.object({
-          agent: z
-            .string()
-            .optional()
-            .describe('Agent name or ID for agent-specific checks'),
+          agent: z.string().optional().describe('Agent name or ID for agent-specific checks'),
           categories: z
             .array(z.string())
             .optional()
@@ -211,7 +212,7 @@ export function createMcpHandler(
       'query_logs',
       {
         description:
-          'Query logs from agents or the hub audit trail. For agent logs (systemd, docker, nginx), specify the agent — these run on the agent machine. For audit logs, no agent is needed — this queries the hub\'s activity log.',
+          "Query logs from agents or the hub audit trail. For agent logs (systemd, docker, nginx), specify the agent — these run on the agent machine. For audit logs, no agent is needed — this queries the hub's activity log.",
         inputSchema: z.object({
           source: z
             .enum(['systemd', 'docker', 'nginx', 'audit'])
@@ -221,9 +222,7 @@ export function createMcpHandler(
           agent: z
             .string()
             .optional()
-            .describe(
-              'Agent name or ID (required for systemd/docker/nginx, ignored for audit)',
-            ),
+            .describe('Agent name or ID (required for systemd/docker/nginx, ignored for audit)'),
           params: z
             .record(z.unknown())
             .optional()
@@ -234,10 +233,7 @@ export function createMcpHandler(
       },
       async (args) => {
         const online = dispatcher.getOnlineAgents();
-        const connectedAgents = [
-          ...online.map((a) => a.name),
-          ...online.map((a) => a.id),
-        ];
+        const connectedAgents = [...online.map((a) => a.name), ...online.map((a) => a.id)];
         return handleQueryLogs(args, probeRouter, db, auth, connectedAgents);
       },
     );
