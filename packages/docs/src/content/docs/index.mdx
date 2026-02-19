@@ -5,7 +5,23 @@ description: AI infrastructure agent. Give Claude eyes into your servers.
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## How It Works
+## What is Sonde and How Does It Work?
+
+Sonde gives AI assistants like Claude direct, read-only visibility into your infrastructure. Instead of the copy-paste loop — run a command, paste the output, wait for the next question, repeat — Claude queries your servers directly through Sonde and gets answers in seconds.
+
+Under the hood, Sonde uses a **real-time push model** over persistent WebSocket connections. There is no polling, no scheduled telemetry collection, and no delay waiting for the next check-in cycle. When Claude asks a question, the answer comes back immediately:
+
+1. **Claude calls an MCP tool** — e.g. "check disk usage on web-server-01"
+2. **The hub receives the request** and looks up which agent is connected for that server
+3. **The hub pushes a probe request** directly to the agent over its already-open WebSocket connection
+4. **The agent executes the probe** locally (a structured, read-only operation — never a raw shell command), scrubs sensitive data from the output, and sends the result back over the same WebSocket
+5. **The hub returns the result to Claude** as structured JSON
+
+The entire round-trip is typically under a second. Agents maintain a persistent outbound WebSocket connection to the hub with a 30-second heartbeat to keep it alive. If the connection drops, the agent automatically reconnects with exponential backoff. The hub can push probe requests to any connected agent at any time — no waiting required.
+
+This is what makes Sonde feel like a conversation, not a batch job. Claude can fire off multiple diagnostic probes in rapid succession, each one executing in real-time on the target machine.
+
+## Get Started
 
 <CardGrid>
   <Card title="Deploy a Hub" icon="rocket">
