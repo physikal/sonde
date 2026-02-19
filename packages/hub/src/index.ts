@@ -6,6 +6,8 @@ import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import {
+  a10Pack,
+  checkpointPack,
   citrixPack,
   datadogPack,
   graphPack,
@@ -106,6 +108,8 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [pagerdutyPack.manifest.name, pagerdutyPack],
   [thousandeyesPack.manifest.name, thousandeyesPack],
   [merakiPack.manifest.name, merakiPack],
+  [checkpointPack.manifest.name, checkpointPack],
+  [a10Pack.manifest.name, a10Pack],
 ]);
 const integrationManager = new IntegrationManager(
   db,

@@ -46,6 +46,8 @@ export { jiraPack } from './integrations/jira.js';
 export { pagerdutyPack } from './integrations/pagerduty.js';
 export { thousandeyesPack } from './integrations/thousandeyes.js';
 export { merakiPack } from './integrations/meraki.js';
+export { checkpointPack } from './integrations/checkpoint.js';
+export { a10Pack } from './integrations/a10.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
 export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 

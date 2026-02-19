@@ -385,6 +385,46 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'checkpoint',
+    label: 'Check Point',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          tooltip: 'SmartConsole admin with read-only permissions',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          sensitive: true,
+          tooltip: 'Password or API key for the admin account',
+        },
+      ],
+    },
+  },
+  {
+    value: 'a10',
+    label: 'A10 Networks',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          tooltip: 'A10 ACOS admin account with read-only partition access',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          sensitive: true,
+          tooltip: 'Password for the admin account',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     authMethods: ['api_key', 'bearer_token', 'oauth2'],

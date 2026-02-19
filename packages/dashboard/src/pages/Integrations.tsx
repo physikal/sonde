@@ -433,6 +433,54 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'checkpoint',
+    label: 'Check Point',
+    description:
+      'Firewall gateways, access policies, network objects, and management tasks',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'SmartConsole admin username',
+          tooltip: 'SmartConsole admin with read-only permissions',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Admin account password',
+          sensitive: true,
+          tooltip: 'Password or API key for the admin account',
+        },
+      ],
+    },
+  },
+  {
+    value: 'a10',
+    label: 'A10 Networks',
+    description:
+      'Load balancer diagnostics — virtual servers, service groups, real server health',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'A10 ACOS admin username',
+          tooltip: 'A10 ACOS admin account with read-only partition access',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Admin account password',
+          sensitive: true,
+          tooltip: 'Password for the admin account',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     description: 'Connect to any REST API',
@@ -470,6 +518,8 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   loki: 'https://logs-prod-us-central1.grafana.net',
   thousandeyes: 'https://api.thousandeyes.com',
   meraki: 'https://api.meraki.com',
+  checkpoint: 'https://mgmt-server.corp.local',
+  a10: 'https://thunder01.corp.local',
   custom: 'https://api.example.com',
 };
 
@@ -492,6 +542,8 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
   loki: 'Grafana Cloud: logs-prod-<region>.grafana.net. Self-hosted: your Loki HTTP URL.',
   thousandeyes: 'Always https://api.thousandeyes.com for all accounts',
   meraki: 'Always https://api.meraki.com for all accounts',
+  checkpoint: 'Check Point Management Server IP/hostname. Default port 443.',
+  a10: 'A10 Thunder/vThunder management IP. Default port 443.',
 };
 
 const AUTH_METHOD_LABELS: Record<string, string> = {
