@@ -57,13 +57,13 @@ Restart Claude Desktop after saving the file.
 
 Once connected, Claude Desktop will have access to:
 
-- **list_agents** -- List all agents with connection status
-- **agent_overview** -- Detailed info for a specific agent
-- **probe** -- Execute a probe on a target agent or integration
-- **diagnose** -- Run a diagnostic runbook against an agent or integration
-- **list_capabilities** -- Discover all agents, integrations, and diagnostic categories
-- **health_check** -- Run diagnostics across all agents and integrations in parallel
-- **query_logs** -- Query logs from agents (Docker, systemd, nginx) or the hub audit trail
+- **health_check** -- Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group (e.g. `#prod`, `#storefront`).
+- **list_capabilities** -- Discover all agents, integrations, their individual probes, and diagnostic categories. Use to find what specific probes are available for follow-up.
+- **diagnose** -- Deep investigation of a specific category on an agent or integration (e.g. "check docker on server-1").
+- **probe** -- Run a single targeted probe for a specific measurement. Good for follow-up after diagnose.
+- **list_agents** -- List all agents with connection status, packs, and tags.
+- **agent_overview** -- Detailed info for a specific agent.
+- **query_logs** -- Investigate root cause by checking logs (Docker, systemd, nginx) or the hub audit trail.
 
 ## Tag filtering
 
@@ -71,16 +71,21 @@ Use `#tagname` in your prompts to filter agents and integrations by tag:
 
 - "Show me #prod agents"
 - "Run a health check on #database #linux"
+- "What's wrong with the #storefront servers?"
 
 The `#` prefix is required — without it, words are treated as natural language and no tag filtering occurs. Multiple tags use AND logic (all must match).
+
+Tag filtering works with `list_agents`, `list_capabilities`, and `health_check`. When `health_check` is called with tags, it runs diagnostics across all matching agents in parallel and returns unified findings.
 
 ## Example prompts
 
 - "List all connected sonde agents"
 - "Show me #prod agents"
+- "What's wrong with the #storefront servers?"
 - "Check disk usage on my-server"
 - "Run a docker diagnostic on my-server"
 - "What's the memory usage on my-server?"
+- "What diagnostics can you run on my-server?"
 
 ## Troubleshooting
 

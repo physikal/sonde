@@ -46,6 +46,22 @@ End an MCP session.
 - `Authorization: Bearer <api-key>` (required)
 - `Mcp-Session-Id: <session-id>` (required)
 
+### MCP Tools
+
+The following tools are available to AI clients via `tools/list` and `tools/call`:
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `health_check` | Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group. | Optional `agent`, `categories`, `tags` |
+| `list_capabilities` | Discover all agents, integrations, their individual probes, and diagnostic categories. | Optional `tags` |
+| `diagnose` | Deep investigation of a specific category on an agent or integration. | `agent` or `integration`, `category` |
+| `probe` | Run a single targeted probe for a specific measurement. | `agent` or `integration`, `probe` |
+| `list_agents` | List all agents with connection status, packs, and tags. | Optional `tags` |
+| `agent_overview` | Detailed info for a specific agent. | `agent` (name or ID) |
+| `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail. | `source`, optional `agent`, filters |
+
+The `tags` parameter accepts an array of tag names (without `#` prefix). When provided, results are filtered to agents and integrations matching **all** specified tags (AND logic).
+
 ## REST API
 
 ### Health

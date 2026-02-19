@@ -22,16 +22,18 @@ Sonde works with any MCP-compatible client. This page covers the protocol detail
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `list_agents` | List all agents with status | Optional `tags` filter (use `#tagname` in prompt) |
-| `agent_overview` | Detailed info for one agent | `agent` (name or ID) |
-| `probe` | Execute a probe | `agent`, `probe` (e.g. `system.disk.usage`) |
-| `diagnose` | Run a diagnostic runbook | `agent`, `category` (e.g. `docker`) |
-| `list_capabilities` | Discover agents, integrations, categories | Optional `tags` filter (use `#tagname` in prompt) |
-| `health_check` | Run diagnostics across fleet in parallel | Optional `agent`, `categories` |
-| `query_logs` | Query logs from agents or audit trail | `source`, `agent`, optional filters |
+| `health_check` | Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group. | Optional `agent`, `categories`, `tags` |
+| `list_capabilities` | Discover all agents, integrations, their individual probes, and diagnostic categories. Use to find what specific probes are available for follow-up. | Optional `tags` filter |
+| `diagnose` | Deep investigation of a specific category on an agent or integration (e.g. "check docker on server-1"). | `agent`, `category` (e.g. `docker`) |
+| `probe` | Run a single targeted probe for a specific measurement. Good for follow-up after diagnose. | `agent`, `probe` (e.g. `system.disk.usage`) |
+| `list_agents` | List all agents with connection status, packs, and tags. | Optional `tags` filter |
+| `agent_overview` | Detailed info for a specific agent. | `agent` (name or ID) |
+| `query_logs` | Investigate root cause by checking logs (Docker, systemd, nginx) or the hub audit trail. | `source`, `agent`, optional filters |
 
 :::tip[Tag filtering]
-Use `#tagname` syntax in your prompts to filter by tags. For example: *"List #prod agents"* or *"Check capabilities for #database #linux"*. Without the `#` prefix, words are treated as natural language and no filtering occurs.
+Use `#tagname` syntax in your prompts to filter by tags. For example: *"List #prod agents"*, *"Check capabilities for #database #linux"*, or *"What's wrong with the #storefront servers?"*. The `#` prefix is required — without it, words are treated as natural language and no filtering occurs. Multiple tags use AND logic (all must match).
+
+Tag filtering works with `list_agents`, `list_capabilities`, and `health_check`. When `health_check` is called with tags, it runs diagnostics across all matching agents in parallel and returns unified findings.
 :::
 
 ## Example with curl
