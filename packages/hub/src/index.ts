@@ -1164,6 +1164,9 @@ setupWsServer(
 // before the HTTP socket is destroyed. Default is 120s which silently
 // kills long-running tool calls like proxmox-cluster.
 server.timeout = 300_000;
+// Keep idle TCP connections alive between requests (default 5s is too
+// aggressive — forces a new TCP handshake + TLS negotiation per tool call).
+server.keepAliveTimeout = 300_000;
 
 const protocol = config.tlsEnabled ? 'https' : 'http';
 const wsProtocol = config.tlsEnabled ? 'wss' : 'ws';

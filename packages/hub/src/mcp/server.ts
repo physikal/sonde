@@ -31,11 +31,30 @@ export function createMcpHandler(
   packRegistry: ReadonlyMap<string, Pack>,
   oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
+  const SESSION_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+  const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
   // Per-session transports (sessionId → transport)
   const sessions = new Map<
     string,
-    { transport: StreamableHTTPServerTransport; auth: AuthContext }
+    {
+      transport: StreamableHTTPServerTransport;
+      auth: AuthContext;
+      lastActivity: number;
+    }
   >();
+
+  // Periodically clean up idle MCP sessions
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [sid, session] of sessions) {
+      if (now - session.lastActivity > SESSION_MAX_IDLE_MS) {
+        session.transport.close().catch(() => {});
+        sessions.delete(sid);
+      }
+    }
+  }, SESSION_CLEANUP_INTERVAL_MS);
+  cleanupTimer.unref();
 
   function createSessionServer(auth: AuthContext): {
     server: McpServer;
@@ -69,7 +88,7 @@ export function createMcpHandler(
       'diagnose',
       {
         description:
-          'Run a diagnostic runbook. For agent runbooks, specify the agent. For integration/diagnostic runbooks (e.g. proxmox-vm, proxmox-cluster, proxmox-storage), the agent can be omitted.',
+          'Run a diagnostic runbook. For agent categories (e.g. system, docker), specify the agent — these run on the agent machine. For integration categories (e.g. proxmox-vm, proxmox-cluster, proxmox-storage), do NOT specify an agent — these run server-side on the hub via external APIs and no agent is involved.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -177,6 +196,14 @@ export function createMcpHandler(
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => crypto.randomUUID(),
+      // Prefer direct JSON responses over SSE streams for tool calls.
+      // SSE streams are killed by reverse proxies (Traefik, nginx) when
+      // idle, causing Claude Desktop to hang. JSON responses use normal
+      // HTTP request/response which proxies handle correctly.
+      enableJsonResponse: true,
+      // If SSE is used (server-initiated notifications), hint the client
+      // to reconnect quickly after a stream drop.
+      retryInterval: 5_000,
     });
 
     transport.onclose = () => {
@@ -262,8 +289,9 @@ export function createMcpHandler(
     // Check for existing session
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
-      const session = sessions.get(sessionId);
-      await session?.transport.handleRequest(req, res, body);
+      const session = sessions.get(sessionId)!;
+      session.lastActivity = Date.now();
+      await session.transport.handleRequest(req, res, body);
       return;
     }
 
@@ -276,7 +304,11 @@ export function createMcpHandler(
       // Register session after handleRequest so the transport has its session ID
       const newSessionId = transport.sessionId;
       if (newSessionId) {
-        sessions.set(newSessionId, { transport, auth });
+        sessions.set(newSessionId, {
+          transport,
+          auth,
+          lastActivity: Date.now(),
+        });
       }
       return;
     }

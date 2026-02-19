@@ -22,7 +22,66 @@ export async function handleDiagnose(
   [key: string]: unknown;
 }> {
   try {
-    // Check agent access only when an agent is specified
+    // Check for diagnostic runbook first — integration probes run
+    // server-side on the hub, so agent checks are irrelevant.
+    const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(args.category);
+    if (diagnosticRunbook) {
+      const context = { connectedAgents: connectedAgents ?? [] };
+      const result = await runbookEngine.executeDiagnostic(
+        args.category,
+        args.params ?? {},
+        probeRouter,
+        context,
+      );
+
+      const output = {
+        meta: {
+          target: args.category,
+          source: 'integration' as const,
+          timestamp: new Date().toISOString(),
+          category: args.category,
+          runbookId: `${args.category}-runbook`,
+          ...result.summary,
+          truncated: result.truncated ?? false,
+          timedOut: result.timedOut ?? false,
+        },
+        probes: Object.fromEntries(
+          Object.entries(result.probeResults).map(([key, pr]) => [
+            key,
+            { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
+          ]),
+        ),
+        findings: result.findings,
+      };
+
+      // Log each probe result to audit
+      for (const [probe, probeResult] of Object.entries(result.probeResults)) {
+        if (auth) {
+          const probeDecision = evaluateProbeAccess(auth, args.category, probe);
+          if (!probeDecision.allowed) continue;
+        }
+
+        db.logAudit({
+          apiKeyId: auth?.keyId,
+          agentId: args.category,
+          probe,
+          status: probeResult.status,
+          durationMs: probeResult.durationMs,
+          requestJson: JSON.stringify({
+            agent: args.agent,
+            category: args.category,
+            params: args.params,
+          }),
+          responseJson: JSON.stringify(probeResult),
+        });
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+      };
+    }
+
+    // Simple runbook path — these run on agents, so agent checks apply.
     if (auth && args.agent) {
       const agentDecision = evaluateAgentAccess(auth, args.agent);
       if (!agentDecision.allowed) {
@@ -33,7 +92,6 @@ export async function handleDiagnose(
       }
     }
 
-    // Pre-flight: fail fast if a specific agent is requested but offline
     if (args.agent && connectedAgents && !connectedAgents.includes(args.agent)) {
       const agentRow = db.getAgent(args.agent);
       if (!agentRow) {
@@ -57,69 +115,6 @@ export async function handleDiagnose(
       };
     }
 
-    // Check for diagnostic runbook first
-    const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(args.category);
-    if (diagnosticRunbook) {
-      const context = { connectedAgents: connectedAgents ?? [] };
-      const result = await runbookEngine.executeDiagnostic(
-        args.category,
-        args.params ?? {},
-        probeRouter,
-        context,
-      );
-
-      const isDiagnosticSource = !args.agent;
-      const target = args.agent ?? args.category;
-      const output = {
-        meta: {
-          target,
-          source: isDiagnosticSource
-            ? ('integration' as const)
-            : ('agent' as const),
-          timestamp: new Date().toISOString(),
-          category: args.category,
-          runbookId: `${args.category}-runbook`,
-          ...result.summary,
-          truncated: result.truncated ?? false,
-          timedOut: result.timedOut ?? false,
-        },
-        probes: Object.fromEntries(
-          Object.entries(result.probeResults).map(([key, pr]) => [
-            key,
-            { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
-          ]),
-        ),
-        findings: result.findings,
-      };
-
-      // Log each probe result to audit
-      for (const [probe, probeResult] of Object.entries(result.probeResults)) {
-        if (auth) {
-          const probeDecision = evaluateProbeAccess(auth, target, probe);
-          if (!probeDecision.allowed) continue;
-        }
-
-        db.logAudit({
-          apiKeyId: auth?.keyId,
-          agentId: target,
-          probe,
-          status: probeResult.status,
-          durationMs: probeResult.durationMs,
-          requestJson: JSON.stringify({
-            agent: args.agent,
-            category: args.category,
-            params: args.params,
-          }),
-          responseJson: JSON.stringify(probeResult),
-        });
-      }
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
-      };
-    }
-
-    // Fall through to simple runbook path
     const runbook = runbookEngine.getRunbook(args.category);
     if (!runbook) {
       const available = runbookEngine.getCategories();
@@ -140,9 +135,7 @@ export async function handleDiagnose(
     const output = {
       meta: {
         target: simpleTarget,
-        source: args.agent
-          ? ('agent' as const)
-          : ('integration' as const),
+        source: 'agent' as const,
         timestamp: new Date().toISOString(),
         category: args.category,
         runbookId: `${args.category}-runbook`,

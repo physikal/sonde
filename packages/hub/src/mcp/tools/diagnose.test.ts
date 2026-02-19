@@ -151,8 +151,9 @@ describe('handleDiagnose', () => {
     );
 
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.meta.target).toBe('nutanix-cluster');
-    expect(parsed.meta.source).toBe('agent');
+    // Diagnostic runbooks are integration probes — agent param is ignored
+    expect(parsed.meta.target).toBe('nutanix');
+    expect(parsed.meta.source).toBe('integration');
     expect(parsed.meta.probesRun).toBe(1);
     expect(parsed.meta.truncated).toBe(false);
     expect(parsed.meta.timedOut).toBe(false);
@@ -217,7 +218,7 @@ describe('handleDiagnose', () => {
     expect(parsed.meta.probesRun).toBe(1);
   });
 
-  it('works without agent for integration probes', async () => {
+  it('works without agent for simple runbooks', async () => {
     const probeRouter = createMockProbeRouter();
     const db = createMockDb();
     const engine = createMockEngine();
@@ -227,8 +228,41 @@ describe('handleDiagnose', () => {
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0]?.text ?? '');
     expect(parsed.meta.target).toBe('docker');
-    expect(parsed.meta.source).toBe('integration');
+    expect(parsed.meta.source).toBe('agent');
 
     expect(engine.execute).toHaveBeenCalledWith('docker', undefined, probeRouter);
+  });
+
+  it('ignores agent param for diagnostic runbooks (integration probes)', async () => {
+    const engine = createMockEngine({
+      getDiagnosticRunbook: vi.fn().mockReturnValue({ category: 'proxmox-cluster' }),
+      executeDiagnostic: vi.fn().mockResolvedValue({
+        category: 'proxmox-cluster',
+        findings: [],
+        probeResults: {},
+        summary: {
+          probesRun: 1,
+          probesSucceeded: 1,
+          probesFailed: 0,
+          findingsCount: { info: 0, warning: 0, critical: 0 },
+          durationMs: 100,
+          summaryText: '',
+        },
+        truncated: false,
+        timedOut: false,
+      }),
+    });
+
+    const result = await handleDiagnose(
+      { agent: 'gmtek01', category: 'proxmox-cluster' },
+      createMockProbeRouter(),
+      engine,
+      createMockDb(),
+    );
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '');
+    // Agent param is ignored — target is the category, source is integration
+    expect(parsed.meta.target).toBe('proxmox-cluster');
+    expect(parsed.meta.source).toBe('integration');
   });
 });
