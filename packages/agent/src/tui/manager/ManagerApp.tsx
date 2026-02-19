@@ -26,11 +26,12 @@ interface Runtime {
 
 interface ManagerAppProps {
   createRuntime: (events: ConnectionEvents) => Runtime;
+  onDetach?: () => void;
 }
 
 const MAX_ACTIVITY = 50;
 
-export function ManagerApp({ createRuntime }: ManagerAppProps): JSX.Element {
+export function ManagerApp({ createRuntime, onDetach }: ManagerAppProps): JSX.Element {
   const { exit } = useApp();
   const [view, setView] = useState<View>('status');
   const [connected, setConnected] = useState(false);
@@ -91,6 +92,7 @@ export function ManagerApp({ createRuntime }: ManagerAppProps): JSX.Element {
         break;
       case 'q':
         runtimeRef.current?.connection.stop();
+        onDetach?.();
         exit();
         break;
     }
@@ -150,7 +152,7 @@ export function ManagerApp({ createRuntime }: ManagerAppProps): JSX.Element {
           a:audit
         </Text>
         <Text> </Text>
-        <Text color="gray">q:quit</Text>
+        <Text color="gray">q:detach</Text>
       </Box>
     </Box>
   );

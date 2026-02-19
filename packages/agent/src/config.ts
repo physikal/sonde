@@ -18,6 +18,7 @@ export interface AgentConfig {
 
 const CONFIG_DIR = path.join(os.homedir(), '.sonde');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const PID_FILE = path.join(CONFIG_DIR, 'agent.pid');
 
 export function getConfigPath(): string {
   return CONFIG_FILE;
@@ -74,4 +75,59 @@ export function saveCerts(
   config.certPath = certPath;
   config.keyPath = keyPath;
   config.caCertPath = caCertPath;
+}
+
+export function writePidFile(pid: number): void {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(PID_FILE, String(pid), 'utf-8');
+}
+
+/**
+ * Read PID file and verify the process is still alive.
+ * Returns undefined if file missing or process is dead.
+ */
+export function readPidFile(): number | undefined {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(PID_FILE, 'utf-8').trim();
+  } catch {
+    return undefined;
+  }
+
+  const pid = Number.parseInt(raw, 10);
+  if (Number.isNaN(pid)) return undefined;
+
+  try {
+    process.kill(pid, 0);
+    return pid;
+  } catch {
+    // Process is dead — clean up stale PID file
+    removePidFile();
+    return undefined;
+  }
+}
+
+export function removePidFile(): void {
+  try {
+    fs.unlinkSync(PID_FILE);
+  } catch {
+    // Ignore if already removed
+  }
+}
+
+/**
+ * Stop a running background agent if one exists.
+ * Returns true if an agent was stopped.
+ */
+export function stopRunningAgent(): boolean {
+  const pid = readPidFile();
+  if (pid === undefined) return false;
+
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Process already gone
+  }
+  removePidFile();
+  return true;
 }
