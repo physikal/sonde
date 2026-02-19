@@ -356,6 +356,7 @@ app.use('/api/v1/authorized-users/*', requireRole('admin'));
 app.use('/api/v1/authorized-groups/*', requireRole('admin'));
 app.use('/api/v1/access-groups/*', requireRole('admin'));
 app.use('/api/v1/audit/*', requireRole('admin'));
+app.use('/api/v1/activity/*', requireRole('admin'));
 app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
 
@@ -1069,6 +1070,19 @@ app.get('/api/v1/audit', (c) => {
 app.get('/api/v1/audit/verify', (c) => {
   const result = db.verifyAuditChain();
   return c.json(result);
+});
+
+// Global activity feeds for Overview dashboard
+app.get('/api/v1/activity/integrations', (c) => {
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const events = db.getRecentIntegrationEventsAll(limit);
+  return c.json({ events });
+});
+
+app.get('/api/v1/activity/agents', (c) => {
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const entries = db.getAuditEntriesWithNames(limit);
+  return c.json({ entries });
 });
 
 // Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
