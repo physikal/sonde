@@ -1,0 +1,224 @@
+---
+title: API Reference
+---
+
+HTTP and WebSocket endpoints exposed by the Sonde hub.
+
+## Authentication
+
+All endpoints (except where noted) require authentication via one of:
+
+- **Bearer token** in the `Authorization` header (preferred):
+  ```
+  Authorization: Bearer <api-key>
+  ```
+- **Query parameter** (fallback):
+  ```
+  ?apiKey=<api-key>
+  ```
+
+**Key types:**
+
+| Type | Scope |
+|------|-------|
+| Master API key | Full access to all endpoints and agents |
+| Scoped API key | Restricted by policy rules (specific agents and tools) |
+
+## MCP Endpoint
+
+The MCP endpoint implements the StreamableHTTP transport for AI client integration.
+
+### `POST /mcp`
+
+Send JSON-RPC messages to the MCP server. Returns JSON or SSE depending on the request.
+
+**Headers:**
+- `Authorization: Bearer <api-key>` (required)
+- `Content-Type: application/json`
+- `Accept: application/json, text/event-stream`
+- `Mcp-Session-Id: <session-id>` (required after initialization)
+
+### `DELETE /mcp`
+
+End an MCP session.
+
+**Headers:**
+- `Authorization: Bearer <api-key>` (required)
+- `Mcp-Session-Id: <session-id>` (required)
+
+## REST API
+
+### Health
+
+#### `GET /health`
+
+Health check. **No authentication required.**
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+```
+
+### Setup
+
+#### `GET /api/v1/setup/status`
+
+Get setup wizard completion status. **No authentication required.**
+
+**Response:**
+```json
+{
+  "completed": false
+}
+```
+
+#### `POST /api/v1/setup/complete`
+
+Mark setup as complete. Can only be called once; returns `409 Conflict` on subsequent calls.
+
+**Response:** `200 OK`
+
+### Agents
+
+#### `GET /api/v1/agents`
+
+List all registered agents with connection status.
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "name": "my-server",
+    "hostname": "my-server.local",
+    "os": "linux",
+    "status": "online",
+    "version": "0.3.0",
+    "packs": ["system", "docker"],
+    "lastSeen": "2026-02-16T12:00:00.000Z"
+  }
+]
+```
+
+#### `GET /api/v1/agents/:id`
+
+Get detailed information for a single agent.
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "my-server",
+  "hostname": "my-server.local",
+  "os": "linux",
+  "osVersion": "Ubuntu 22.04",
+  "arch": "x64",
+  "status": "online",
+  "version": "0.3.0",
+  "packs": ["system", "docker"],
+  "capabilities": ["system.disk.usage", "system.memory.usage", "docker.containers.list"],
+  "lastSeen": "2026-02-16T12:00:00.000Z",
+  "enrolledAt": "2026-02-15T10:00:00.000Z"
+}
+```
+
+### Audit Log
+
+#### `GET /api/v1/audit`
+
+Query the audit log. Entries are returned in reverse chronological order.
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "timestamp": "2026-02-16T12:00:00.000Z",
+    "action": "probe.request",
+    "agentId": "uuid",
+    "probe": "system.disk.usage",
+    "requestedBy": "api",
+    "status": "success",
+    "durationMs": 142,
+    "hash": "sha256-hex"
+  }
+]
+```
+
+### API Keys
+
+#### `POST /api/v1/keys`
+
+Create a new API key. Optionally scope it with policy rules.
+
+**Request:**
+```json
+{
+  "name": "ci-readonly",
+  "policy": {
+    "agents": ["my-server"],
+    "tools": ["probe", "list_agents"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "ci-readonly",
+  "key": "sonde_...",
+  "createdAt": "2026-02-16T12:00:00.000Z"
+}
+```
+
+The `key` value is only returned once at creation time.
+
+#### `GET /api/v1/keys`
+
+List all API keys (without the key values).
+
+#### `DELETE /api/v1/keys/:id`
+
+Revoke an API key. Immediately invalidates all sessions using this key.
+
+### Enrollment Tokens
+
+#### `POST /api/v1/enrollment-tokens`
+
+Create a single-use enrollment token for agent registration.
+
+**Response:**
+```json
+{
+  "token": "enroll_...",
+  "expiresAt": "2026-02-17T12:00:00.000Z"
+}
+```
+
+### Install Script
+
+#### `GET /install`
+
+Returns a bash bootstrap script for agent installation. **No authentication required.**
+
+Usage:
+```bash
+curl -fsSL https://your-hub-url:3000/install | bash
+```
+
+The script installs Node.js 22 (if needed) and `@sonde/agent`, then launches the enrollment TUI. Supports Linux (apt, dnf, yum) and macOS (Homebrew).
+
+## WebSocket Endpoints
+
+### `GET /ws/agent`
+
+Agent WebSocket connection. Authenticated via Bearer token (API key or enrollment token) during the HTTP upgrade.
+
+Protocol: JSON message envelopes as defined in the [Protocol Reference](/reference/protocol).
+
+### `GET /ws/dashboard`
+
+Dashboard WebSocket connection. Receives real-time agent status updates (connect, disconnect, heartbeat) as JSON messages. Used by the dashboard SPA for live fleet status.

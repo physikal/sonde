@@ -20,6 +20,7 @@ export const MessageType = z.enum([
   'agent.heartbeat',
   'hub.ack',
   'hub.reject',
+  'hub.update_available',
 ]);
 export type MessageType = z.infer<typeof MessageType>;
 

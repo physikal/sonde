@@ -23,22 +23,12 @@ export function hashApiKey(raw: string): string {
  * Validate an incoming request against API key auth.
  *
  * 1. Extract bearer token
- * 2. If token === legacyApiKey → full access (empty policy)
- * 3. Else hash → lookup in api_keys table → check not expired/revoked → return with policy
- * 4. Else undefined (caller should check OAuth next)
+ * 2. Hash → lookup in api_keys table → check not expired/revoked → return with policy
+ * 3. Else undefined (caller should check OAuth next)
  */
-export function validateAuth(
-  req: http.IncomingMessage,
-  db: SondeDb,
-  legacyApiKey: string,
-): AuthContext | undefined {
+export function validateAuth(req: http.IncomingMessage, db: SondeDb): AuthContext | undefined {
   const token = extractApiKey(req);
   if (!token) return undefined;
-
-  // Legacy key check
-  if (token === legacyApiKey) {
-    return { type: 'api_key', keyId: 'legacy', policy: {} };
-  }
 
   // Scoped key lookup
   const keyHash = hashApiKey(token);

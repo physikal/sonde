@@ -2,22 +2,87 @@ import type { SondeDb } from '../../db/index.js';
 import type { AuthContext } from '../../engine/policy.js';
 import { evaluateAgentAccess, evaluateProbeAccess } from '../../engine/policy.js';
 import type { RunbookEngine } from '../../engine/runbooks.js';
-import type { AgentDispatcher } from '../../ws/dispatcher.js';
+import type { ProbeRouter } from '../../integrations/probe-router.js';
 
 export async function handleDiagnose(
-  args: { agent: string; category: string; description?: string },
-  dispatcher: AgentDispatcher,
+  args: {
+    agent?: string;
+    category: string;
+    description?: string;
+    params?: Record<string, unknown>;
+  },
+  probeRouter: ProbeRouter,
   runbookEngine: RunbookEngine,
   db: SondeDb,
   auth?: AuthContext,
+  connectedAgents?: string[],
 ): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
   [key: string]: unknown;
 }> {
   try {
-    // Check agent access
-    if (auth) {
+    // Check for diagnostic runbook first — integration probes run
+    // server-side on the hub, so agent checks are irrelevant.
+    const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(args.category);
+    if (diagnosticRunbook) {
+      const context = { connectedAgents: connectedAgents ?? [] };
+      const result = await runbookEngine.executeDiagnostic(
+        args.category,
+        args.params ?? {},
+        probeRouter,
+        context,
+      );
+
+      const output = {
+        meta: {
+          target: args.category,
+          source: 'integration' as const,
+          timestamp: new Date().toISOString(),
+          category: args.category,
+          runbookId: `${args.category}-runbook`,
+          ...result.summary,
+          truncated: result.truncated ?? false,
+          timedOut: result.timedOut ?? false,
+        },
+        probes: Object.fromEntries(
+          Object.entries(result.probeResults).map(([key, pr]) => [
+            key,
+            { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
+          ]),
+        ),
+        findings: result.findings,
+      };
+
+      // Log each probe result to audit
+      for (const [probe, probeResult] of Object.entries(result.probeResults)) {
+        if (auth) {
+          const probeDecision = evaluateProbeAccess(auth, args.category, probe);
+          if (!probeDecision.allowed) continue;
+        }
+
+        db.logAudit({
+          apiKeyId: auth?.keyId,
+          agentId: args.category,
+          probe,
+          status: probeResult.status,
+          durationMs: probeResult.durationMs,
+          requestJson: JSON.stringify({
+            agent: args.agent,
+            category: args.category,
+            params: args.params,
+          }),
+          responseJson: JSON.stringify(probeResult),
+        });
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+      };
+    }
+
+    // Simple runbook path — these run on agents, so agent checks apply.
+    if (auth && args.agent) {
       const agentDecision = evaluateAgentAccess(auth, args.agent);
       if (!agentDecision.allowed) {
         return {
@@ -25,6 +90,29 @@ export async function handleDiagnose(
           isError: true,
         };
       }
+    }
+
+    if (args.agent && connectedAgents && !connectedAgents.includes(args.agent)) {
+      const agentRow = db.getAgent(args.agent);
+      if (!agentRow) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Error: Agent "${args.agent}" is not registered with the hub.`,
+          }],
+          isError: true,
+        };
+      }
+      const lastSeen = agentRow.lastSeen
+        ? ` Last seen: ${agentRow.lastSeen}.`
+        : '';
+      return {
+        content: [{
+          type: 'text',
+          text: `Error: Agent "${args.agent}" is offline.${lastSeen} Check that the agent process is running and can reach the hub.`,
+        }],
+        isError: true,
+      };
     }
 
     const runbook = runbookEngine.getRunbook(args.category);
@@ -41,27 +129,36 @@ export async function handleDiagnose(
       };
     }
 
-    const result = await runbookEngine.execute(args.category, args.agent, dispatcher);
+    const result = await runbookEngine.execute(args.category, args.agent, probeRouter);
 
+    const simpleTarget = args.agent ?? args.category;
     const output = {
-      agent: args.agent,
-      timestamp: new Date().toISOString(),
-      category: args.category,
-      runbookId: `${args.category}-runbook`,
-      findings: result.findings,
-      summary: result.summary,
+      meta: {
+        target: simpleTarget,
+        source: 'agent' as const,
+        timestamp: new Date().toISOString(),
+        category: args.category,
+        runbookId: `${args.category}-runbook`,
+        ...result.summary,
+      },
+      probes: Object.fromEntries(
+        Object.entries(result.findings).map(([key, pr]) => [
+          key,
+          { status: pr.status, data: pr.data, durationMs: pr.durationMs, error: pr.error },
+        ]),
+      ),
     };
 
     // Log each probe result to audit, skip probes denied by policy
     for (const [probe, finding] of Object.entries(result.findings)) {
       if (auth) {
-        const probeDecision = evaluateProbeAccess(auth, args.agent, probe, 'observe');
+        const probeDecision = evaluateProbeAccess(auth, simpleTarget, probe);
         if (!probeDecision.allowed) continue;
       }
 
       db.logAudit({
         apiKeyId: auth?.keyId,
-        agentId: args.agent,
+        agentId: simpleTarget,
         probe,
         status: finding.status,
         durationMs: finding.durationMs,

@@ -1,7 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
+import { apiFetch } from '../lib/api';
+
+type KeyType = 'mcp' | 'agent';
 
 interface ApiKey {
   id: string;
@@ -11,23 +12,22 @@ interface ApiKey {
   revokedAt: string | null;
   policyJson: string;
   lastUsedAt: string | null;
+  role: string;
+  keyType: KeyType;
 }
 
 export function ApiKeys() {
-  return <ApiKeyGate>{(apiKey) => <ApiKeysInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function ApiKeysInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<KeyType>('mcp');
   const [showCreate, setShowCreate] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyRole, setNewKeyRole] = useState('member');
   const [newAgentScope, setNewAgentScope] = useState('');
   const [newProbeScope, setNewProbeScope] = useState('');
-  const [newCapLevel, setNewCapLevel] = useState('');
-  const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name: string } | null>(
+  const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name?: string } | null>(
     null,
   );
   const [creating, setCreating] = useState(false);
@@ -35,7 +35,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
   const fetchKeys = useCallback(() => {
     setLoading(true);
     setError(null);
-    authFetch<{ keys: ApiKey[] }>('/api-keys', apiKey)
+    apiFetch<{ keys: ApiKey[] }>('/api-keys')
       .then((data) => setKeys(data.keys))
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Failed to load API keys';
@@ -43,11 +43,13 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
         toast(msg, 'error');
       })
       .finally(() => setLoading(false));
-  }, [apiKey, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  const filteredKeys = keys.filter((k) => k.keyType === activeTab);
 
   const handleCreate = (e: FormEvent) => {
     e.preventDefault();
@@ -65,21 +67,21 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
       .filter(Boolean);
     if (agentList.length > 0) policy.allowedAgents = agentList;
     if (probeList.length > 0) policy.allowedProbes = probeList;
-    if (newCapLevel) policy.maxCapabilityLevel = newCapLevel;
 
-    authFetch<{ id: string; key: string; name: string }>('/api-keys', apiKey, {
+    apiFetch<{ id: string; key: string; name: string }>('/api-keys', {
       method: 'POST',
       body: JSON.stringify({
         name: newKeyName.trim(),
+        role: newKeyRole,
         ...(Object.keys(policy).length > 0 ? { policy } : {}),
       }),
     })
       .then((data) => {
         setCreatedKey(data);
         setNewKeyName('');
+        setNewKeyRole('member');
         setNewAgentScope('');
         setNewProbeScope('');
-        setNewCapLevel('');
         setShowCreate(false);
         fetchKeys();
         toast(`API key "${data.name}" created`, 'success');
@@ -91,13 +93,25 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
   };
 
   const handleRevoke = (id: string) => {
-    authFetch(`/api-keys/${id}`, apiKey, { method: 'DELETE' })
+    apiFetch(`/api-keys/${id}`, { method: 'DELETE' })
       .then(() => {
         fetchKeys();
         toast('API key revoked', 'success');
       })
       .catch((err: unknown) =>
         toast(err instanceof Error ? err.message : 'Failed to revoke key', 'error'),
+      );
+  };
+
+  const handleRotate = (id: string) => {
+    apiFetch<{ id: string; key: string }>(`/api-keys/${id}/rotate`, { method: 'POST' })
+      .then((data) => {
+        setCreatedKey(data);
+        fetchKeys();
+        toast('API key rotated', 'success');
+      })
+      .catch((err: unknown) =>
+        toast(err instanceof Error ? err.message : 'Failed to rotate key', 'error'),
       );
   };
 
@@ -121,42 +135,93 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
     );
   }
 
+  const activeCount = filteredKeys.filter((k) => !k.revokedAt).length;
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">API Keys</h1>
           <p className="mt-1 text-sm text-gray-400">
-            {keys.filter((k) => !k.revokedAt).length} active key
-            {keys.filter((k) => !k.revokedAt).length !== 1 ? 's' : ''}
+            {activeCount} active key{activeCount !== 1 ? 's' : ''}
           </p>
         </div>
+        {activeTab === 'mcp' && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(!showCreate)}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            Create Key
+          </button>
+        )}
+      </div>
+
+      {/* Tab bar */}
+      <div className="mt-4 flex border-b border-gray-800">
         <button
           type="button"
-          onClick={() => setShowCreate(!showCreate)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          onClick={() => setActiveTab('mcp')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === 'mcp'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
         >
-          Create Key
+          MCP Keys
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('agent')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === 'agent'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          Agent Keys
         </button>
       </div>
 
-      {/* Create form */}
-      {showCreate && (
+      {/* Agent tab info note */}
+      {activeTab === 'agent' && (
+        <p className="mt-4 text-sm text-gray-400">
+          These keys are auto-created when agents enroll. They authenticate agent WebSocket
+          connections to the hub.
+        </p>
+      )}
+
+      {/* Create form (MCP tab only) */}
+      {activeTab === 'mcp' && showCreate && (
         <form
           onSubmit={handleCreate}
           className="mt-4 space-y-3 rounded-xl border border-gray-800 bg-gray-900 p-4"
         >
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase mb-1">Key Name</p>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g. claude-desktop"
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Key Name</p>
+              <input
+                type="text"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="e.g. claude-desktop"
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Role</p>
+              <select
+                value={newKeyRole}
+                onChange={(e) => setNewKeyRole(e.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              >
+                <option value="member">Member (MCP only)</option>
+                <option value="admin">Admin (MCP + Dashboard)</option>
+                <option value="owner">Owner (Full access)</option>
+              </select>
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase mb-1">
                 Agent Scope (comma-separated)
@@ -181,19 +246,6 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
                 className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase mb-1">Max Capability</p>
-              <select
-                value={newCapLevel}
-                onChange={(e) => setNewCapLevel(e.target.value)}
-                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">Unlimited</option>
-                <option value="observe">Observe</option>
-                <option value="interact">Interact</option>
-                <option value="manage">Manage</option>
-              </select>
-            </div>
           </div>
           <button
             type="submit"
@@ -205,12 +257,14 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
         </form>
       )}
 
-      {/* Newly created key (shown once) */}
+      {/* Newly created / rotated key (shown once) */}
       {createdKey && (
         <div className="mt-4 rounded-xl border border-amber-800 bg-amber-950/30 p-5">
-          <p className="text-sm font-medium text-amber-300">Key created: {createdKey.name}</p>
+          <p className="text-sm font-medium text-amber-300">
+            {createdKey.name ? `Key created: ${createdKey.name}` : 'Key rotated'}
+          </p>
           <p className="mt-1 text-xs text-amber-400/70">
-            Copy this key now. It will not be shown again.
+            Save this key now. You won't be able to see it again.
           </p>
           <code className="mt-2 block rounded-lg bg-gray-800 px-4 py-2.5 text-sm text-gray-200 font-mono break-all">
             {createdKey.key}
@@ -231,6 +285,7 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
           <thead className="bg-gray-900 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Policy</th>
               <th className="px-4 py-3">Created</th>
@@ -239,19 +294,26 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {keys.length === 0 ? (
+            {filteredKeys.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                  No API keys created yet.
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  {activeTab === 'mcp'
+                    ? 'No MCP keys created yet.'
+                    : 'No agent keys yet. Keys appear here when agents enroll.'}
                 </td>
               </tr>
             ) : (
-              keys.map((k) => {
+              filteredKeys.map((k) => {
                 const policy = safeParse(k.policyJson);
                 const isRevoked = !!k.revokedAt;
                 return (
                   <tr key={k.id} className="bg-gray-950">
                     <td className="px-4 py-3 font-medium text-white">{k.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-300">
+                        {k.role}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       {isRevoked ? (
                         <span className="text-red-400">revoked</span>
@@ -268,15 +330,24 @@ function ApiKeysInner({ apiKey }: { apiKey: string }) {
                     <td className="px-4 py-3 text-gray-400 text-xs">
                       {k.lastUsedAt ? relativeTime(k.lastUsedAt) : 'Never'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 space-x-2">
                       {!isRevoked && (
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(k.id)}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          Revoke
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleRotate(k.id)}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Rotate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRevoke(k.id)}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Revoke
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -317,9 +388,6 @@ function describePolicyBrief(policy: Record<string, unknown>): string {
   }
   if (Array.isArray(policy.allowedProbes) && policy.allowedProbes.length > 0) {
     parts.push(`${policy.allowedProbes.length} probe pattern(s)`);
-  }
-  if (policy.maxCapabilityLevel) {
-    parts.push(`cap: ${policy.maxCapabilityLevel}`);
   }
   return parts.length > 0 ? parts.join(' \u00B7 ') : 'No restrictions';
 }

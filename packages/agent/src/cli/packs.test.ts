@@ -4,6 +4,7 @@ import type { SystemChecker } from '../system/scanner.js';
 import {
   type PackCommandDeps,
   type PackState,
+  buildEnabledPacks,
   cmdPacksInstall,
   cmdPacksList,
   cmdPacksScan,
@@ -52,6 +53,7 @@ function createDeps(overrides: Partial<PackCommandDeps> = {}): PackCommandDeps {
     checker: createMockChecker(),
     getUserGroups: () => [],
     log: vi.fn(),
+    persist: vi.fn(),
     ...overrides,
   };
 }
@@ -209,5 +211,68 @@ describe('cmdPacksUninstall', () => {
     expect(result).toBe(false);
     const log = deps.log as ReturnType<typeof vi.fn>;
     expect(log).toHaveBeenCalledWith('Error: Pack "docker" is not installed.');
+  });
+
+  it('persists disabled packs on uninstall', () => {
+    const deps = createDeps();
+    cmdPacksUninstall('system', deps);
+
+    const persist = deps.persist as ReturnType<typeof vi.fn>;
+    expect(persist).toHaveBeenCalledTimes(1);
+    const firstCall = persist.mock.calls[0] as unknown[];
+    const disabled = firstCall[0] as string[];
+    expect(disabled).toContain('system');
+    expect(disabled).toContain('docker');
+  });
+});
+
+describe('cmdPacksInstall persistence', () => {
+  it('persists disabled packs on install', () => {
+    const deps = createDeps();
+    cmdPacksInstall('docker', deps);
+
+    const persist = deps.persist as ReturnType<typeof vi.fn>;
+    expect(persist).toHaveBeenCalledTimes(1);
+    const firstCall = persist.mock.calls[0] as unknown[];
+    const disabled = firstCall[0] as string[];
+    expect(disabled).not.toContain('docker');
+    expect(disabled).not.toContain('system');
+  });
+
+  it('does not persist when install fails', () => {
+    const deps = createDeps();
+    cmdPacksInstall('nonexistent', deps);
+
+    const persist = deps.persist as ReturnType<typeof vi.fn>;
+    expect(persist).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildEnabledPacks', () => {
+  it('returns all packs when none disabled', () => {
+    const registry = new Map([
+      ['system', createMockPack('system')],
+      ['docker', createMockPack('docker')],
+    ]);
+    const result = buildEnabledPacks(registry, []);
+    expect([...result.keys()]).toEqual(['system', 'docker']);
+  });
+
+  it('filters out disabled packs', () => {
+    const registry = new Map([
+      ['system', createMockPack('system')],
+      ['docker', createMockPack('docker')],
+      ['nginx', createMockPack('nginx')],
+    ]);
+    const result = buildEnabledPacks(registry, ['docker', 'nginx']);
+    expect([...result.keys()]).toEqual(['system']);
+  });
+
+  it('ignores disabled names not in registry', () => {
+    const registry = new Map([
+      ['system', createMockPack('system')],
+    ]);
+    const result = buildEnabledPacks(registry, ['nonexistent']);
+    expect([...result.keys()]).toEqual(['system']);
   });
 });

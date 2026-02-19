@@ -1,42 +1,37 @@
-# Phase 5: Hub Installer & Deployment Configs
+# Current Status
 
-## Implementation
+**Branch:** `dev`
+**Last session:** 2026-02-17
 
-- [x] Create `scripts/install-hub.sh` (750 lines)
-  - [x] Step 1: Header + utilities (colors, pipe detection, generate_key, validate_domain)
-  - [x] Step 2: OS/arch/distro/package manager detection
-  - [x] Step 3: Prerequisite checks (Docker, Docker Compose, git, port checks)
-  - [x] Step 4: Networking mode selection (Traefik / Cloudflare / Local+Tailscale)
-  - [x] Step 5: Install directory + git clone (idempotent update on re-run)
-  - [x] Step 6: .env generation (preserves existing API key)
-  - [x] Step 7: Compose file generation (3 templates: local, traefik, cloudflare)
-  - [x] Step 8: Build + launch (docker compose build + up -d)
-  - [x] Step 9: Health check wait loop (curl for local/traefik, docker inspect for cloudflare)
-  - [x] Step 10: Summary output (URL, API key, enrollment instructions, useful commands)
-- [x] shellcheck — zero warnings
-- [ ] Functional test — local mode on dev machine (requires Docker)
-- [x] Fix macOS grep bug (`grep -oP` → portable `sed -n`)
-- [x] Self-signed cert HTTPS option for local mode (`local-tls` with Caddy sidecar)
-- [x] Create `docker/docker-compose.dokploy.yml` (Traefik labels for Dokploy)
-- [x] Create `docker/docker-compose.cloudflare.yml` (standalone Cloudflare Tunnel)
+## Completed
 
-## Verification
+- [x] Phase 7 — Integration framework + httpbin pack + end-to-end tests
+- [x] Phase 8a — Session-based auth (local login, session middleware, dashboard auth guard)
+- [x] ApiKeyGate removal — all 7 dashboard pages use `apiFetch()` with session cookie, deleted `ApiKeyGate.tsx` + `useApiKey.ts`
+- [x] Login bug fixes — falsy password check, post-login SPA redirect (`window.location.href`)
+- [x] Docs site — Astro + Starlight (`@sonde/docs`)
+- [x] CLAUDE.md updated with phase 8a completion
+- [x] Phase 8b.1 — Entra ID SSO integration
 
-| Check | Status |
-|-------|--------|
-| `shellcheck scripts/install-hub.sh` | Pass (0 warnings) |
-| `npm run build` | Pass (5/5 packages) |
-| `npm run test` | Pass (192 tests) |
-| `npm run lint` | Pass (133 files, 0 issues) |
-| Local mode test | Pending (needs Docker) |
-| Idempotency (re-run) | Pending |
+### Phase 8b.1 Details
+- [x] Migration 005: `sso_config` + `authorized_users` tables
+- [x] DB methods: SSO config CRUD, authorized users CRUD
+- [x] Entra OIDC auth flow: `/auth/entra/login` (redirect), `/auth/entra/callback` (token exchange + session)
+- [x] REST endpoints: SSO config (`/api/v1/sso/*`), authorized users (`/api/v1/authorized-users/*`)
+- [x] Dashboard Login page: SSO button with Microsoft logo, error handling for SSO redirects
+- [x] Dashboard Settings page: SSO configuration form + authorized users management table
+- [x] Unit tests: 8 tests for Entra auth (login redirect, callback flows, error cases)
+- [x] All 173 tests passing, build clean, biome clean
 
-## Review
+## Up Next — Phase 8b.2: RBAC
 
-**Installer script** (`scripts/install-hub.sh`): ~800 lines. Three networking modes (local, traefik, cloudflare) plus a local-tls sub-option. macOS grep bug fixed (line 453: `grep -oP` → `sed -n`). Self-signed cert option generates EC P-256 x509 cert via openssl and runs Caddy as a reverse proxy sidecar.
+### 8b.2 — Role-Based Access Control (RBAC)
+- [ ] Activate `minimumRole` filtering on Sidebar items (already wired)
+- [ ] Enforce roles on API endpoints (admin-only: API Keys, Policies, Enrollment)
+- [ ] Role assignment from Entra ID groups or local config
 
-**Dokploy compose** (`docker/docker-compose.dokploy.yml`): Builds from source with Traefik labels for Dokploy's built-in Traefik. Comment header with step-by-step Dokploy UI instructions. Required env vars: `SONDE_API_KEY`, `SONDE_HUB_URL`, `SONDE_DOMAIN`.
-
-**Cloudflare compose** (`docker/docker-compose.cloudflare.yml`): Standalone compose with `cloudflared` sidecar. No exposed ports. Comment header with tunnel setup instructions. Uses `.env` file for config.
-
-**No hub, dashboard, or package source code changes.** Only the installer script and two new Docker Compose files.
+### Other Backlog
+- [ ] Deploy updated hub to Dokploy (includes session auth + integration framework + SSO)
+- [ ] Test live with gmtek01 agent after deploy
+- [ ] Playwright e2e tests for login flow
+- [ ] Update CLAUDE.md with phase 8b.1 completion

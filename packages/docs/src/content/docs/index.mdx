@@ -1,0 +1,80 @@
+---
+title: Sonde Documentation
+description: AI infrastructure agent. Give Claude eyes into your servers.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is Sonde and How Does It Work?
+
+Sonde gives AI assistants like Claude direct, read-only visibility into your infrastructure. Instead of the copy-paste loop — run a command, paste the output, wait for the next question, repeat — Claude queries your servers directly through Sonde and gets answers in seconds.
+
+Under the hood, Sonde uses a **real-time push model** over persistent WebSocket connections. There is no polling, no scheduled telemetry collection, and no delay waiting for the next check-in cycle. When Claude asks a question, the answer comes back immediately:
+
+1. **Claude calls an MCP tool** — e.g. "check disk usage on web-server-01"
+2. **The hub receives the request** and looks up which agent is connected for that server
+3. **The hub pushes a probe request** directly to the agent over its already-open WebSocket connection
+4. **The agent executes the probe** locally (a structured, read-only operation — never a raw shell command), scrubs sensitive data from the output, and sends the result back over the same WebSocket
+5. **The hub returns the result to Claude** as structured JSON
+
+The entire round-trip is typically under a second. Agents maintain a persistent outbound WebSocket connection to the hub with a 30-second heartbeat to keep it alive. If the connection drops, the agent automatically reconnects with exponential backoff. The hub can push probe requests to any connected agent at any time — no waiting required.
+
+This is what makes Sonde feel like a conversation, not a batch job. Claude can fire off multiple diagnostic probes in rapid succession, each one executing in real-time on the target machine.
+
+## Get Started
+
+<CardGrid>
+  <Card title="Deploy a Hub" icon="rocket">
+    Run the hub with Docker or from source. It serves the MCP endpoint that AI assistants connect to, plus a dashboard for management.
+  </Card>
+  <Card title="Enroll Agents" icon="laptop">
+    Install lightweight agents on your servers. They connect outbound to the hub via WebSocket — no inbound ports needed.
+  </Card>
+  <Card title="Ask Claude" icon="magnifier">
+    Claude calls Sonde tools to check disk usage, list containers, query logs, and diagnose issues across your fleet.
+  </Card>
+</CardGrid>
+
+## Features
+
+<CardGrid>
+  <Card title="Strictly Read-Only" icon="approve-check">
+    Agents execute structured probe descriptors, never raw shell commands. All probes are read-only — Sonde never modifies your infrastructure.
+  </Card>
+  <Card title="8 Built-in Packs" icon="puzzle">
+    System metrics, Docker, systemd, Nginx, PostgreSQL, Redis, MySQL, and Proxmox. Auto-detection finds what's installed and suggests relevant packs.
+  </Card>
+  <Card title="Defense in Depth" icon="shield">
+    Nine security layers: privilege dropping, no raw shell execution, read-only probes, mTLS, payload signing, output scrubbing, pack signing, attestation, and audit logging.
+  </Card>
+  <Card title="MCP Native" icon="setting">
+    Built on the Model Context Protocol. Works with Claude Desktop, Claude Code, and any MCP-compatible client.
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+Deploy the hub:
+
+```bash
+docker run -d --name sonde-hub \
+  -p 3000:3000 \
+  -e SONDE_SECRET=your-secret-key-min-16-chars \
+  -v sonde-data:/data \
+  ghcr.io/sonde-dev/hub:latest
+```
+
+Install an agent on a target machine:
+
+```bash
+curl -fsSL https://sondeapp.com/install | bash
+```
+
+Add Sonde to Claude Code:
+
+```bash
+claude mcp add sonde --transport http https://your-hub:3000/mcp \
+  --header "Authorization: Bearer your-api-key"
+```
+
+Then ask: *"What's the disk usage on my-server?"*

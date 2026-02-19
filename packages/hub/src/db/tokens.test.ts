@@ -54,10 +54,25 @@ describe('Enrollment tokens', () => {
 });
 
 describe('Hub CA store', () => {
-  it('stores and retrieves CA cert/key', () => {
+  const secret = 'test-secret-at-least-16';
+
+  it('stores and retrieves CA cert/key (encrypted)', () => {
     const db = new SondeDb(':memory:');
 
-    expect(db.getCa()).toBeUndefined();
+    expect(db.getCa(secret)).toBeUndefined();
+
+    db.storeCa('---CERT---', '---KEY---', secret);
+    const ca = db.getCa(secret);
+
+    expect(ca).toBeDefined();
+    expect(ca?.certPem).toBe('---CERT---');
+    expect(ca?.keyPem).toBe('---KEY---');
+
+    db.close();
+  });
+
+  it('stores and retrieves CA cert/key (unencrypted fallback)', () => {
+    const db = new SondeDb(':memory:');
 
     db.storeCa('---CERT---', '---KEY---');
     const ca = db.getCa();
@@ -72,10 +87,10 @@ describe('Hub CA store', () => {
   it('overwrites existing CA on re-store', () => {
     const db = new SondeDb(':memory:');
 
-    db.storeCa('cert-1', 'key-1');
-    db.storeCa('cert-2', 'key-2');
+    db.storeCa('cert-1', 'key-1', secret);
+    db.storeCa('cert-2', 'key-2', secret);
 
-    const ca = db.getCa();
+    const ca = db.getCa(secret);
     expect(ca?.certPem).toBe('cert-2');
     expect(ca?.keyPem).toBe('key-2');
 

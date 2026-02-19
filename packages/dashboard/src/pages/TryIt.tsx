@@ -1,7 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { ApiKeyGate } from '../components/common/ApiKeyGate';
 import { useToast } from '../components/common/Toast';
-import { authFetch } from '../hooks/useApiKey';
 import { apiFetch } from '../lib/api';
 
 interface Agent {
@@ -58,10 +56,6 @@ const CAP_COLORS: Record<string, string> = {
 };
 
 export function TryIt() {
-  return <ApiKeyGate>{(apiKey) => <TryItInner apiKey={apiKey} />}</ApiKeyGate>;
-}
-
-function TryItInner({ apiKey }: { apiKey: string }) {
   const { toast } = useToast();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [packs, setPacks] = useState<PackDef[]>([]);
@@ -150,7 +144,7 @@ function TryItInner({ apiKey }: { apiKey: string }) {
         setExecuting(false);
         return;
       }
-      authFetch<DiagnoseResult>('/diagnose', apiKey, {
+      apiFetch<DiagnoseResult>('/diagnose', {
         method: 'POST',
         body: JSON.stringify({ agent: selectedAgent, category: selectedCategory }),
       })
@@ -186,7 +180,7 @@ function TryItInner({ apiKey }: { apiKey: string }) {
       }
 
       setExecutedProbeName(qualifiedName);
-      authFetch<ProbeResult>('/probe', apiKey, {
+      apiFetch<ProbeResult>('/probe', {
         method: 'POST',
         body: JSON.stringify({
           agent: selectedAgent,

@@ -7,6 +7,7 @@ export function handleListAgents(
   db: SondeDb,
   dispatcher: AgentDispatcher,
   auth?: AuthContext,
+  filterTags?: string[],
 ): {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
@@ -14,8 +15,9 @@ export function handleListAgents(
 } {
   const agents = db.getAllAgents();
   const onlineIds = new Set(dispatcher.getOnlineAgentIds());
+  const allTags = db.getAllAgentTags();
 
-  const result = agents
+  let result = agents
     .filter((agent) => {
       if (!auth) return true;
       return (
@@ -30,7 +32,14 @@ export function handleListAgents(
       packs: agent.packs,
       os: agent.os,
       agentVersion: agent.agentVersion,
+      tags: allTags.get(agent.id) ?? [],
     }));
+
+  if (filterTags && filterTags.length > 0) {
+    result = result.filter((agent) =>
+      filterTags.every((t) => agent.tags.includes(t)),
+    );
+  }
 
   return {
     content: [{ type: 'text', text: JSON.stringify({ agents: result }, null, 2) }],

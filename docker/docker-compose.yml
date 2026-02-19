@@ -4,8 +4,10 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     environment:
-      SONDE_API_KEY: test-key-123
+      SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET env var}
       SONDE_DB_PATH: /data/sonde.db
+      # SONDE_ADMIN_USER: admin
+      # SONDE_ADMIN_PASSWORD: changeme
     volumes:
       - hub-data:/data
     ports:

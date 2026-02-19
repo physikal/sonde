@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
+import { decrypt, encrypt } from '../integrations/crypto.js';
+import { runMigrations } from './migrator.js';
 
 export interface AgentRow {
   id: string;
@@ -12,6 +14,86 @@ export interface AgentRow {
   attestationJson?: string;
   attestationMismatch?: number;
   certPem?: string;
+}
+
+export interface IntegrationRow {
+  id: string;
+  type: string;
+  name: string;
+  configEncrypted: string;
+  status: string;
+  lastTestedAt: string | null;
+  lastTestResult: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionRow {
+  id: string;
+  authMethod: string;
+  userId: string;
+  email: string | null;
+  displayName: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface SsoConfigRow {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  clientSecretEnc: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthorizedUserRow {
+  id: string;
+  email: string;
+  roleId: string;
+  displayName: string;
+  entraObjectId: string | null;
+  enabled: boolean;
+  createdBy: string;
+  lastLoginAt: string | null;
+  loginCount: number;
+  createdAt: string;
+}
+
+export interface AuthorizedGroupRow {
+  id: string;
+  entraGroupId: string;
+  entraGroupName: string;
+  roleId: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface RoleRow {
+  id: string;
+  displayName: string;
+  level: number;
+  permissionsJson: string;
+}
+
+export interface AccessGroupRow {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface IntegrationEventRow {
+  id: number;
+  integrationId: string;
+  eventType: string;
+  status: string | null;
+  message: string | null;
+  detailJson: string | null;
+  createdAt: string;
 }
 
 export interface AuditEntry {
@@ -31,147 +113,7 @@ export class SondeDb {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    this.migrate();
-  }
-
-  private migrate(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS agents (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE,
-        status TEXT NOT NULL DEFAULT 'offline',
-        last_seen TEXT NOT NULL,
-        os TEXT NOT NULL DEFAULT '',
-        agent_version TEXT NOT NULL DEFAULT '',
-        packs_json TEXT NOT NULL DEFAULT '[]',
-        cert_fingerprint TEXT NOT NULL DEFAULT '',
-        attestation_json TEXT NOT NULL DEFAULT '{}',
-        attestation_mismatch INTEGER NOT NULL DEFAULT 0,
-        cert_pem TEXT NOT NULL DEFAULT ''
-      )
-    `);
-
-    // Add columns to existing agents tables that lack them
-    const cols = this.db.prepare("PRAGMA table_info('agents')").all() as Array<{ name: string }>;
-    const colNames = new Set(cols.map((c) => c.name));
-    if (!colNames.has('cert_fingerprint')) {
-      this.db.exec("ALTER TABLE agents ADD COLUMN cert_fingerprint TEXT NOT NULL DEFAULT ''");
-    }
-    if (!colNames.has('attestation_json')) {
-      this.db.exec("ALTER TABLE agents ADD COLUMN attestation_json TEXT NOT NULL DEFAULT '{}'");
-    }
-    if (!colNames.has('attestation_mismatch')) {
-      this.db.exec('ALTER TABLE agents ADD COLUMN attestation_mismatch INTEGER NOT NULL DEFAULT 0');
-    }
-    if (!colNames.has('cert_pem')) {
-      this.db.exec("ALTER TABLE agents ADD COLUMN cert_pem TEXT NOT NULL DEFAULT ''");
-    }
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS hub_ca (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        cert_pem TEXT NOT NULL,
-        key_pem TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `);
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS enrollment_tokens (
-        token TEXT PRIMARY KEY,
-        created_at TEXT NOT NULL,
-        expires_at TEXT NOT NULL,
-        used_at TEXT,
-        used_by_agent TEXT
-      )
-    `);
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS audit_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL,
-        api_key_id TEXT NOT NULL DEFAULT '',
-        agent_id TEXT NOT NULL,
-        probe TEXT NOT NULL,
-        status TEXT NOT NULL,
-        duration_ms INTEGER NOT NULL DEFAULT 0,
-        request_json TEXT,
-        response_json TEXT,
-        prev_hash TEXT NOT NULL DEFAULT ''
-      )
-    `);
-
-    // Add prev_hash column to existing audit_log tables
-    const auditCols = this.db.prepare("PRAGMA table_info('audit_log')").all() as Array<{
-      name: string;
-    }>;
-    const auditColNames = new Set(auditCols.map((c) => c.name));
-    if (!auditColNames.has('prev_hash')) {
-      this.db.exec("ALTER TABLE audit_log ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''");
-    }
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        key_hash TEXT NOT NULL UNIQUE,
-        policy_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        expires_at TEXT,
-        revoked_at TEXT
-      )
-    `);
-
-    // Add last_used_at column to existing api_keys tables
-    const apiKeyCols = this.db.prepare("PRAGMA table_info('api_keys')").all() as Array<{
-      name: string;
-    }>;
-    const apiKeyColNames = new Set(apiKeyCols.map((c) => c.name));
-    if (!apiKeyColNames.has('last_used_at')) {
-      this.db.exec('ALTER TABLE api_keys ADD COLUMN last_used_at TEXT');
-    }
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS oauth_clients (
-        client_id TEXT PRIMARY KEY,
-        client_secret TEXT,
-        client_secret_expires_at INTEGER,
-        client_id_issued_at INTEGER NOT NULL,
-        metadata_json TEXT NOT NULL
-      )
-    `);
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS oauth_codes (
-        code TEXT PRIMARY KEY,
-        client_id TEXT NOT NULL,
-        challenge TEXT NOT NULL,
-        redirect_uri TEXT NOT NULL,
-        scopes_json TEXT NOT NULL DEFAULT '[]',
-        resource TEXT,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
-      )
-    `);
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS oauth_tokens (
-        token TEXT PRIMARY KEY,
-        client_id TEXT NOT NULL,
-        scopes_json TEXT NOT NULL DEFAULT '[]',
-        resource TEXT,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
-      )
-    `);
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS setup (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `);
+    runMigrations(this.db);
   }
 
   upsertAgent(agent: AgentRow): void {
@@ -358,20 +300,42 @@ export class SondeDb {
     return { valid: true };
   }
 
-  getCa(): { certPem: string; keyPem: string } | undefined {
-    const row = this.db.prepare('SELECT cert_pem, key_pem FROM hub_ca WHERE id = 1').get() as
-      | { cert_pem: string; key_pem: string }
+  getCa(secret?: string): { certPem: string; keyPem: string } | undefined {
+    const row = this.db
+      .prepare('SELECT cert_pem, key_pem, key_pem_enc FROM hub_ca WHERE id = 1')
+      .get() as
+      | { cert_pem: string; key_pem: string | null; key_pem_enc: string | null }
       | undefined;
     if (!row) return undefined;
-    return { certPem: row.cert_pem, keyPem: row.key_pem };
+
+    // Prefer encrypted key; fall back to plaintext for backward compatibility
+    let keyPem: string;
+    if (row.key_pem_enc && secret) {
+      keyPem = decrypt(row.key_pem_enc, secret);
+    } else if (row.key_pem) {
+      keyPem = row.key_pem;
+    } else {
+      return undefined;
+    }
+
+    return { certPem: row.cert_pem, keyPem };
   }
 
-  storeCa(certPem: string, keyPem: string): void {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, created_at) VALUES (1, ?, ?, ?)',
-      )
-      .run(certPem, keyPem, new Date().toISOString());
+  storeCa(certPem: string, keyPem: string, secret?: string): void {
+    if (secret) {
+      const keyPemEnc = encrypt(keyPem, secret);
+      this.db
+        .prepare(
+          'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, key_pem_enc, created_at) VALUES (1, ?, NULL, ?, ?)',
+        )
+        .run(certPem, keyPemEnc, new Date().toISOString());
+    } else {
+      this.db
+        .prepare(
+          'INSERT OR REPLACE INTO hub_ca (id, cert_pem, key_pem, created_at) VALUES (1, ?, ?, ?)',
+        )
+        .run(certPem, keyPem, new Date().toISOString());
+    }
   }
 
   createEnrollmentToken(token: string, expiresAt: string): void {
@@ -405,7 +369,8 @@ export class SondeDb {
       if (r.used_at) status = 'used';
       else if (new Date(r.expires_at) < now) status = 'expired';
       return {
-        token: r.token,
+        // Mask active tokens — only show prefix for identification
+        token: status === 'active' ? `${r.token.slice(0, 8)}...` : r.token,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
         usedAt: r.used_at,
@@ -467,12 +432,33 @@ export class SondeDb {
 
   // --- API Key management ---
 
-  createApiKey(id: string, name: string, keyHash: string, policyJson: string): void {
+  countApiKeys(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM api_keys WHERE revoked_at IS NULL')
+      .get() as { count: number };
+    return row.count;
+  }
+
+  createApiKey(
+    id: string,
+    name: string,
+    keyHash: string,
+    policyJson: string,
+    roleId?: string,
+    keyType: 'mcp' | 'agent' = 'mcp',
+  ): void {
     this.db
       .prepare(
-        'INSERT INTO api_keys (id, name, key_hash, policy_json, created_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO api_keys (id, name, key_hash, policy_json, role_id, key_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(id, name, keyHash, policyJson, new Date().toISOString());
+      .run(id, name, keyHash, policyJson, roleId ?? 'member', keyType, new Date().toISOString());
+  }
+
+  rotateApiKey(id: string, newKeyHash: string): boolean {
+    const result = this.db
+      .prepare('UPDATE api_keys SET key_hash = ? WHERE id = ? AND revoked_at IS NULL')
+      .run(newKeyHash, id);
+    return result.changes > 0;
   }
 
   getApiKeyByHash(keyHash: string):
@@ -482,11 +468,12 @@ export class SondeDb {
         policyJson: string;
         expiresAt: string | null;
         revokedAt: string | null;
+        roleId: string;
       }
     | undefined {
     const row = this.db
       .prepare(
-        'SELECT id, name, policy_json, expires_at, revoked_at FROM api_keys WHERE key_hash = ?',
+        'SELECT id, name, policy_json, expires_at, revoked_at, role_id FROM api_keys WHERE key_hash = ?',
       )
       .get(keyHash) as
       | {
@@ -495,6 +482,7 @@ export class SondeDb {
           policy_json: string;
           expires_at: string | null;
           revoked_at: string | null;
+          role_id: string | null;
         }
       | undefined;
     if (!row) return undefined;
@@ -504,6 +492,7 @@ export class SondeDb {
       policyJson: row.policy_json,
       expiresAt: row.expires_at,
       revokedAt: row.revoked_at,
+      roleId: row.role_id ?? 'member',
     };
   }
 
@@ -534,10 +523,11 @@ export class SondeDb {
     revokedAt: string | null;
     policyJson: string;
     lastUsedAt: string | null;
+    keyType: 'mcp' | 'agent';
   }> {
     const rows = this.db
       .prepare(
-        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at FROM api_keys',
+        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at, key_type FROM api_keys',
       )
       .all() as Array<{
       id: string;
@@ -547,6 +537,7 @@ export class SondeDb {
       expires_at: string | null;
       revoked_at: string | null;
       last_used_at: string | null;
+      key_type: string;
     }>;
     return rows.map((r) => ({
       id: r.id,
@@ -556,6 +547,7 @@ export class SondeDb {
       revokedAt: r.revoked_at,
       policyJson: r.policy_json,
       lastUsedAt: r.last_used_at,
+      keyType: (r.key_type === 'agent' ? 'agent' : 'mcp') as 'mcp' | 'agent',
     }));
   }
 
@@ -698,6 +690,835 @@ export class SondeDb {
         'INSERT INTO setup (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
       )
       .run(key, value, new Date().toISOString());
+  }
+
+  // --- Hub Settings ---
+
+  getHubSetting(key: string): string | undefined {
+    const row = this.db.prepare('SELECT value FROM hub_settings WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value;
+  }
+
+  setHubSetting(key: string, value: string): void {
+    this.db
+      .prepare(
+        'INSERT INTO hub_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+      )
+      .run(key, value, new Date().toISOString());
+  }
+
+  // --- Integrations ---
+
+  createIntegration(row: IntegrationRow): void {
+    this.db
+      .prepare(
+        'INSERT INTO integrations (id, type, name, config_encrypted, status, last_tested_at, last_test_result, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        row.id,
+        row.type,
+        row.name,
+        row.configEncrypted,
+        row.status,
+        row.lastTestedAt,
+        row.lastTestResult,
+        row.createdAt,
+        row.updatedAt,
+      );
+  }
+
+  getIntegration(id: string): IntegrationRow | undefined {
+    const row = this.db.prepare('SELECT * FROM integrations WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      type: row.type as string,
+      name: row.name as string,
+      configEncrypted: row.config_encrypted as string,
+      status: row.status as string,
+      lastTestedAt: row.last_tested_at as string | null,
+      lastTestResult: row.last_test_result as string | null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  listIntegrations(): IntegrationRow[] {
+    const rows = this.db.prepare('SELECT * FROM integrations').all() as Array<
+      Record<string, unknown>
+    >;
+    return rows.map((row) => ({
+      id: row.id as string,
+      type: row.type as string,
+      name: row.name as string,
+      configEncrypted: row.config_encrypted as string,
+      status: row.status as string,
+      lastTestedAt: row.last_tested_at as string | null,
+      lastTestResult: row.last_test_result as string | null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    }));
+  }
+
+  updateIntegration(
+    id: string,
+    fields: {
+      configEncrypted?: string;
+      status?: string;
+      lastTestedAt?: string;
+      lastTestResult?: string;
+    },
+  ): boolean {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (fields.configEncrypted !== undefined) {
+      sets.push('config_encrypted = ?');
+      params.push(fields.configEncrypted);
+    }
+    if (fields.status !== undefined) {
+      sets.push('status = ?');
+      params.push(fields.status);
+    }
+    if (fields.lastTestedAt !== undefined) {
+      sets.push('last_tested_at = ?');
+      params.push(fields.lastTestedAt);
+    }
+    if (fields.lastTestResult !== undefined) {
+      sets.push('last_test_result = ?');
+      params.push(fields.lastTestResult);
+    }
+
+    if (sets.length === 0) return false;
+
+    sets.push('updated_at = ?');
+    params.push(new Date().toISOString());
+    params.push(id);
+
+    const result = this.db
+      .prepare(`UPDATE integrations SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+    return result.changes > 0;
+  }
+
+  deleteIntegration(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM integrations WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  // --- Sessions ---
+
+  createSession(session: {
+    id: string;
+    authMethod: string;
+    userId: string;
+    email?: string | null;
+    displayName: string;
+    role: string;
+    expiresAt: string;
+  }): void {
+    this.db
+      .prepare(
+        'INSERT INTO sessions (id, auth_method, user_id, email, display_name, role, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        session.id,
+        session.authMethod,
+        session.userId,
+        session.email ?? null,
+        session.displayName,
+        session.role,
+        session.expiresAt,
+      );
+  }
+
+  getSession(id: string): SessionRow | undefined {
+    const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      authMethod: row.auth_method as string,
+      userId: row.user_id as string,
+      email: row.email as string | null,
+      displayName: row.display_name as string,
+      role: row.role as string,
+      expiresAt: row.expires_at as string,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  deleteSession(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  touchSession(id: string, newExpiresAt: string): boolean {
+    const result = this.db
+      .prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
+      .run(newExpiresAt, id);
+    return result.changes > 0;
+  }
+
+  cleanExpiredSessions(): number {
+    const result = this.db
+      .prepare('DELETE FROM sessions WHERE expires_at < ?')
+      .run(new Date().toISOString());
+    return result.changes;
+  }
+
+  // --- SSO Config ---
+
+  getSsoConfig(): SsoConfigRow | undefined {
+    const row = this.db.prepare('SELECT * FROM sso_config WHERE id = ?').get('entra') as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      tenantId: row.tenant_id as string,
+      clientId: row.client_id as string,
+      clientSecretEnc: row.client_secret_enc as string,
+      enabled: (row.enabled as number) === 1,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  upsertSsoConfig(
+    tenantId: string,
+    clientId: string,
+    clientSecretEnc: string,
+    enabled: boolean,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO sso_config (id, tenant_id, client_id, client_secret_enc, enabled, created_at, updated_at)
+         VALUES ('entra', ?, ?, ?, ?, datetime('now'), datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           tenant_id = excluded.tenant_id,
+           client_id = excluded.client_id,
+           client_secret_enc = excluded.client_secret_enc,
+           enabled = excluded.enabled,
+           updated_at = datetime('now')`,
+      )
+      .run(tenantId, clientId, clientSecretEnc, enabled ? 1 : 0);
+  }
+
+  // --- Authorized Users ---
+
+  getAuthorizedUserByEmail(email: string): AuthorizedUserRow | undefined {
+    const row = this.db.prepare('SELECT * FROM authorized_users WHERE email = ?').get(email) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedUserRow(row);
+  }
+
+  getAuthorizedUserByOid(oid: string): AuthorizedUserRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM authorized_users WHERE entra_object_id = ?')
+      .get(oid) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedUserRow(row);
+  }
+
+  listAuthorizedUsers(): AuthorizedUserRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM authorized_users ORDER BY created_at DESC')
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((row) => this.mapAuthorizedUserRow(row));
+  }
+
+  createAuthorizedUser(
+    id: string,
+    email: string,
+    roleId: string,
+    opts?: {
+      displayName?: string;
+      entraObjectId?: string;
+      createdBy?: string;
+    },
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO authorized_users (id, email, role_id, display_name, entra_object_id, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        id,
+        email,
+        roleId,
+        opts?.displayName ?? '',
+        opts?.entraObjectId ?? null,
+        opts?.createdBy ?? 'manual',
+      );
+  }
+
+  updateAuthorizedUserRole(id: string, roleId: string): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_users SET role_id = ? WHERE id = ?')
+      .run(roleId, id);
+    return result.changes > 0;
+  }
+
+  updateAuthorizedUserLogin(
+    id: string,
+    fields: {
+      displayName?: string;
+      entraObjectId?: string;
+    },
+  ): void {
+    const sets: string[] = ['last_login_at = ?', 'login_count = login_count + 1'];
+    const params: unknown[] = [new Date().toISOString()];
+
+    if (fields.displayName !== undefined) {
+      sets.push('display_name = ?');
+      params.push(fields.displayName);
+    }
+    if (fields.entraObjectId !== undefined) {
+      sets.push('entra_object_id = ?');
+      params.push(fields.entraObjectId);
+    }
+
+    params.push(id);
+    this.db.prepare(`UPDATE authorized_users SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+  }
+
+  updateAuthorizedUserEnabled(id: string, enabled: boolean): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_users SET enabled = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, id);
+    return result.changes > 0;
+  }
+
+  deleteAuthorizedUser(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM authorized_users WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  private mapAuthorizedUserRow(row: Record<string, unknown>): AuthorizedUserRow {
+    return {
+      id: row.id as string,
+      email: row.email as string,
+      roleId: row.role_id as string,
+      displayName: (row.display_name as string) ?? '',
+      entraObjectId: (row.entra_object_id as string) ?? null,
+      enabled: (row.enabled as number) !== 0,
+      createdBy: (row.created_by as string) ?? 'manual',
+      lastLoginAt: (row.last_login_at as string) ?? null,
+      loginCount: (row.login_count as number) ?? 0,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  // --- Roles ---
+
+  getRole(id: string): RoleRow | undefined {
+    const row = this.db.prepare('SELECT * FROM roles WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      displayName: row.display_name as string,
+      level: row.level as number,
+      permissionsJson: row.permissions_json as string,
+    };
+  }
+
+  listRoles(): RoleRow[] {
+    const rows = this.db.prepare('SELECT * FROM roles ORDER BY level ASC').all() as Array<
+      Record<string, unknown>
+    >;
+    return rows.map((row) => ({
+      id: row.id as string,
+      displayName: row.display_name as string,
+      level: row.level as number,
+      permissionsJson: row.permissions_json as string,
+    }));
+  }
+
+  // --- Authorized Groups ---
+
+  createAuthorizedGroup(
+    id: string,
+    entraGroupId: string,
+    entraGroupName: string,
+    roleId: string,
+    createdBy?: string,
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO authorized_groups (id, entra_group_id, entra_group_name, role_id, created_by) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(id, entraGroupId, entraGroupName, roleId, createdBy ?? 'manual');
+  }
+
+  getAuthorizedGroupByEntraId(entraGroupId: string): AuthorizedGroupRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM authorized_groups WHERE entra_group_id = ?')
+      .get(entraGroupId) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return this.mapAuthorizedGroupRow(row);
+  }
+
+  listAuthorizedGroups(): AuthorizedGroupRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM authorized_groups ORDER BY created_at DESC')
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((row) => this.mapAuthorizedGroupRow(row));
+  }
+
+  updateAuthorizedGroupRole(id: string, roleId: string): boolean {
+    const result = this.db
+      .prepare('UPDATE authorized_groups SET role_id = ? WHERE id = ?')
+      .run(roleId, id);
+    return result.changes > 0;
+  }
+
+  deleteAuthorizedGroup(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM authorized_groups WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  countAuthorizedGroups(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM authorized_groups').get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
+  private mapAuthorizedGroupRow(row: Record<string, unknown>): AuthorizedGroupRow {
+    return {
+      id: row.id as string,
+      entraGroupId: row.entra_group_id as string,
+      entraGroupName: row.entra_group_name as string,
+      roleId: row.role_id as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    };
+  }
+
+  // --- Access Groups ---
+
+  createAccessGroup(id: string, name: string, description: string, createdBy?: string): void {
+    this.db
+      .prepare('INSERT INTO access_groups (id, name, description, created_by) VALUES (?, ?, ?, ?)')
+      .run(id, name, description, createdBy ?? 'manual');
+  }
+
+  getAccessGroup(id: string): AccessGroupRow | undefined {
+    const row = this.db.prepare('SELECT * FROM access_groups WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    };
+  }
+
+  listAccessGroups(): AccessGroupRow[] {
+    const rows = this.db.prepare('SELECT * FROM access_groups ORDER BY name ASC').all() as Array<
+      Record<string, unknown>
+    >;
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    }));
+  }
+
+  updateAccessGroup(id: string, fields: { name?: string; description?: string }): boolean {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (fields.name !== undefined) {
+      sets.push('name = ?');
+      params.push(fields.name);
+    }
+    if (fields.description !== undefined) {
+      sets.push('description = ?');
+      params.push(fields.description);
+    }
+    if (sets.length === 0) return false;
+
+    params.push(id);
+    const result = this.db
+      .prepare(`UPDATE access_groups SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+    return result.changes > 0;
+  }
+
+  deleteAccessGroup(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM access_groups WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  // Access group sub-resources
+
+  addAccessGroupAgent(accessGroupId: string, agentPattern: string): void {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO access_group_agents (access_group_id, agent_pattern) VALUES (?, ?)',
+      )
+      .run(accessGroupId, agentPattern);
+  }
+
+  removeAccessGroupAgent(accessGroupId: string, agentPattern: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM access_group_agents WHERE access_group_id = ? AND agent_pattern = ?')
+      .run(accessGroupId, agentPattern);
+    return result.changes > 0;
+  }
+
+  getAccessGroupAgents(accessGroupId: string): Array<{ agentPattern: string }> {
+    const rows = this.db
+      .prepare('SELECT agent_pattern FROM access_group_agents WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ agent_pattern: string }>;
+    return rows.map((r) => ({ agentPattern: r.agent_pattern }));
+  }
+
+  addAccessGroupIntegration(accessGroupId: string, integrationId: string): void {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO access_group_integrations (access_group_id, integration_id) VALUES (?, ?)',
+      )
+      .run(accessGroupId, integrationId);
+  }
+
+  removeAccessGroupIntegration(accessGroupId: string, integrationId: string): boolean {
+    const result = this.db
+      .prepare(
+        'DELETE FROM access_group_integrations WHERE access_group_id = ? AND integration_id = ?',
+      )
+      .run(accessGroupId, integrationId);
+    return result.changes > 0;
+  }
+
+  getAccessGroupIntegrations(accessGroupId: string): Array<{ integrationId: string }> {
+    const rows = this.db
+      .prepare('SELECT integration_id FROM access_group_integrations WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ integration_id: string }>;
+    return rows.map((r) => ({ integrationId: r.integration_id }));
+  }
+
+  addAccessGroupUser(accessGroupId: string, userId: string): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO access_group_users (access_group_id, user_id) VALUES (?, ?)')
+      .run(accessGroupId, userId);
+  }
+
+  removeAccessGroupUser(accessGroupId: string, userId: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM access_group_users WHERE access_group_id = ? AND user_id = ?')
+      .run(accessGroupId, userId);
+    return result.changes > 0;
+  }
+
+  getAccessGroupUsers(accessGroupId: string): Array<{ userId: string }> {
+    const rows = this.db
+      .prepare('SELECT user_id FROM access_group_users WHERE access_group_id = ?')
+      .all(accessGroupId) as Array<{ user_id: string }>;
+    return rows.map((r) => ({ userId: r.user_id }));
+  }
+
+  /** Get all access groups a user is assigned to. */
+  getAccessGroupsForUser(userId: string): AccessGroupRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT ag.* FROM access_groups ag
+         INNER JOIN access_group_users agu ON ag.id = agu.access_group_id
+         WHERE agu.user_id = ?`,
+      )
+      .all(userId) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      createdBy: row.created_by as string,
+    }));
+  }
+
+  // --- Integration Events ---
+
+  logIntegrationEvent(event: {
+    integrationId: string;
+    eventType: string;
+    status?: string;
+    message?: string;
+    detailJson?: string;
+  }): void {
+    this.db
+      .prepare(
+        'INSERT INTO integration_events (integration_id, event_type, status, message, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        event.integrationId,
+        event.eventType,
+        event.status ?? null,
+        event.message ?? null,
+        event.detailJson ?? null,
+        new Date().toISOString(),
+      );
+  }
+
+  getIntegrationEvents(
+    integrationId: string,
+    opts?: { limit?: number; offset?: number },
+  ): IntegrationEventRow[] {
+    const limit = opts?.limit ?? 50;
+    const offset = opts?.offset ?? 0;
+
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM integration_events WHERE integration_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+      )
+      .all(integrationId, limit, offset) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: row.id as number,
+      integrationId: row.integration_id as string,
+      eventType: row.event_type as string,
+      status: (row.status as string) ?? null,
+      message: (row.message as string) ?? null,
+      detailJson: (row.detail_json as string) ?? null,
+      createdAt: row.created_at as string,
+    }));
+  }
+
+  // --- Agent Tags ---
+
+  getAgentTags(agentId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT tag FROM agent_tags WHERE agent_id = ? ORDER BY tag')
+      .all(agentId) as Array<{ tag: string }>;
+    return rows.map((r) => r.tag);
+  }
+
+  setAgentTags(agentId: string, tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM agent_tags WHERE agent_id = ?')
+        .run(agentId);
+      const insert = this.db.prepare(
+        'INSERT INTO agent_tags (agent_id, tag) VALUES (?, ?)',
+      );
+      for (const tag of tags) {
+        insert.run(agentId, tag);
+      }
+    });
+    tx();
+  }
+
+  addAgentTags(agentIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO agent_tags (agent_id, tag) VALUES (?, ?)',
+      );
+      for (const id of agentIds) {
+        for (const tag of tags) {
+          insert.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  removeAgentTags(agentIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const del = this.db.prepare(
+        'DELETE FROM agent_tags WHERE agent_id = ? AND tag = ?',
+      );
+      for (const id of agentIds) {
+        for (const tag of tags) {
+          del.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  getAllAgentTags(): Map<string, string[]> {
+    const rows = this.db
+      .prepare('SELECT agent_id, tag FROM agent_tags ORDER BY agent_id, tag')
+      .all() as Array<{ agent_id: string; tag: string }>;
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      const existing = map.get(row.agent_id);
+      if (existing) {
+        existing.push(row.tag);
+      } else {
+        map.set(row.agent_id, [row.tag]);
+      }
+    }
+    return map;
+  }
+
+  // --- Integration Tags ---
+
+  getIntegrationTags(integrationId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT tag FROM integration_tags WHERE integration_id = ? ORDER BY tag')
+      .all(integrationId) as Array<{ tag: string }>;
+    return rows.map((r) => r.tag);
+  }
+
+  setIntegrationTags(integrationId: string, tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM integration_tags WHERE integration_id = ?')
+        .run(integrationId);
+      const insert = this.db.prepare(
+        'INSERT INTO integration_tags (integration_id, tag) VALUES (?, ?)',
+      );
+      for (const tag of tags) {
+        insert.run(integrationId, tag);
+      }
+    });
+    tx();
+  }
+
+  addIntegrationTags(integrationIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO integration_tags (integration_id, tag) VALUES (?, ?)',
+      );
+      for (const id of integrationIds) {
+        for (const tag of tags) {
+          insert.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  removeIntegrationTags(integrationIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const del = this.db.prepare(
+        'DELETE FROM integration_tags WHERE integration_id = ? AND tag = ?',
+      );
+      for (const id of integrationIds) {
+        for (const tag of tags) {
+          del.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  /** Returns all unique tags with per-source (agent/integration) counts. */
+  getAllTagsWithCounts(): Array<{
+    tag: string;
+    agentCount: number;
+    integrationCount: number;
+    totalCount: number;
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT tag, source, COUNT(*) as cnt FROM (
+           SELECT tag, 'agent' as source FROM agent_tags
+           UNION ALL
+           SELECT tag, 'integration' as source FROM integration_tags
+         ) GROUP BY tag, source ORDER BY tag`,
+      )
+      .all() as Array<{ tag: string; source: string; cnt: number }>;
+
+    const map = new Map<string, { agentCount: number; integrationCount: number }>();
+    for (const row of rows) {
+      const entry = map.get(row.tag) ?? { agentCount: 0, integrationCount: 0 };
+      if (row.source === 'agent') {
+        entry.agentCount = row.cnt;
+      } else {
+        entry.integrationCount = row.cnt;
+      }
+      map.set(row.tag, entry);
+    }
+
+    return [...map.entries()].map(([tag, counts]) => ({
+      tag,
+      agentCount: counts.agentCount,
+      integrationCount: counts.integrationCount,
+      totalCount: counts.agentCount + counts.integrationCount,
+    }));
+  }
+
+  /** Deletes a tag from all agents and integrations. Returns rows affected per source. */
+  deleteTagGlobally(tag: string): { agents: number; integrations: number } {
+    let agents = 0;
+    let integrations = 0;
+    const tx = this.db.transaction(() => {
+      agents = this.db
+        .prepare('DELETE FROM agent_tags WHERE tag = ?')
+        .run(tag).changes;
+      integrations = this.db
+        .prepare('DELETE FROM integration_tags WHERE tag = ?')
+        .run(tag).changes;
+    });
+    tx();
+    return { agents, integrations };
+  }
+
+  /**
+   * Renames a tag globally across agents and integrations.
+   * Handles merge: if an entity already has newTag, the old row is just removed.
+   */
+  renameTagGlobally(
+    oldTag: string,
+    newTag: string,
+  ): { agents: number; integrations: number } {
+    let agents = 0;
+    let integrations = 0;
+    const tx = this.db.transaction(() => {
+      // Insert newTag for each entity that has oldTag (ignore if already exists)
+      this.db
+        .prepare(
+          'INSERT OR IGNORE INTO agent_tags (agent_id, tag) SELECT agent_id, ? FROM agent_tags WHERE tag = ?',
+        )
+        .run(newTag, oldTag);
+      this.db
+        .prepare(
+          'INSERT OR IGNORE INTO integration_tags (integration_id, tag) SELECT integration_id, ? FROM integration_tags WHERE tag = ?',
+        )
+        .run(newTag, oldTag);
+
+      // Delete old tag rows
+      agents = this.db
+        .prepare('DELETE FROM agent_tags WHERE tag = ?')
+        .run(oldTag).changes;
+      integrations = this.db
+        .prepare('DELETE FROM integration_tags WHERE tag = ?')
+        .run(oldTag).changes;
+    });
+    tx();
+    return { agents, integrations };
+  }
+
+  getAllIntegrationTags(): Map<string, string[]> {
+    const rows = this.db
+      .prepare('SELECT integration_id, tag FROM integration_tags ORDER BY integration_id, tag')
+      .all() as Array<{ integration_id: string; tag: string }>;
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      const existing = map.get(row.integration_id);
+      if (existing) {
+        existing.push(row.tag);
+      } else {
+        map.set(row.integration_id, [row.tag]);
+      }
+    }
+    return map;
   }
 
   close(): void {

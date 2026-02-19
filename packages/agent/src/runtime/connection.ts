@@ -22,6 +22,7 @@ export interface ConnectionEvents {
   onError?: (error: Error) => void;
   onRegistered?: (agentId: string) => void;
   onProbeCompleted?: (probe: string, status: string, durationMs: number) => void;
+  onUpdateAvailable?: (latestVersion: string, currentVersion: string) => void;
 }
 
 /** Minimum/maximum reconnect delays */
@@ -119,11 +120,25 @@ export function enrollWithHub(
       }
     });
 
-    ws.on('error', (err) => {
+    ws.on('error', (err: Error & { code?: string }) => {
       clearTimeout(timeout);
-      reject(err);
+      reject(new Error(humanizeWsError(err, config.hubUrl)));
     });
   });
+}
+
+/** Map low-level WebSocket/network error codes to actionable messages. */
+function humanizeWsError(err: Error & { code?: string }, hubUrl: string): string {
+  switch (err.code) {
+    case 'ECONNREFUSED':
+      return `Could not connect to hub at ${hubUrl}. Verify the hub is running.`;
+    case 'ENOTFOUND':
+      return `Hub hostname not found: ${hubUrl}. Check the URL.`;
+    case 'ETIMEDOUT':
+      return `Connection to hub at ${hubUrl} timed out. The hub may be unreachable.`;
+    default:
+      return err.message;
+  }
 }
 
 /** Build WebSocket options, including TLS client cert if available. */
@@ -139,7 +154,7 @@ function buildWsOptions(config: AgentConfig): WebSocket.ClientOptions {
       options.cert = fs.readFileSync(config.certPath, 'utf-8');
       options.key = fs.readFileSync(config.keyPath, 'utf-8');
       options.ca = [fs.readFileSync(config.caCertPath, 'utf-8')];
-      options.rejectUnauthorized = false; // Hub uses self-signed CA cert
+      options.rejectUnauthorized = true; // Verify hub cert against our CA
     } catch {
       // Cert files missing or unreadable — fall back to API key only
     }
@@ -224,16 +239,21 @@ export class AgentConnection {
       this.handleMessage(data.toString());
     });
 
-    this.ws.on('close', () => {
+    this.ws.on('close', (code) => {
       this.clearTimers();
+      if (code === 4001) {
+        this.events.onError?.(
+          new Error("Authentication rejected by hub. Run 'sonde enroll' to re-authenticate."),
+        );
+      }
       this.events.onDisconnected?.();
       if (this.running) {
         this.scheduleReconnect();
       }
     });
 
-    this.ws.on('error', (err) => {
-      this.events.onError?.(err);
+    this.ws.on('error', (err: Error & { code?: string }) => {
+      this.events.onError?.(new Error(humanizeWsError(err, this.config.hubUrl)));
     });
   }
 
@@ -261,6 +281,14 @@ export class AgentConnection {
       case 'probe.request':
         this.handleProbeRequest(envelope);
         break;
+      case 'hub.update_available': {
+        const updatePayload = envelope.payload as {
+          latestVersion: string;
+          currentVersion: string;
+        };
+        this.events.onUpdateAvailable?.(updatePayload.latestVersion, updatePayload.currentVersion);
+        break;
+      }
       default:
         break;
     }

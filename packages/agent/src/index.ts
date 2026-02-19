@@ -1,12 +1,24 @@
 #!/usr/bin/env node
 
+import { spawn } from 'node:child_process';
 import os from 'node:os';
-import { handlePacksCommand } from './cli/packs.js';
-import { type AgentConfig, getConfigPath, loadConfig, saveConfig } from './config.js';
+import { packRegistry } from '@sonde/packs';
+import { buildEnabledPacks, handlePacksCommand } from './cli/packs.js';
+import { checkForUpdate, performUpdate } from './cli/update.js';
+import {
+  type AgentConfig,
+  getConfigPath,
+  loadConfig,
+  removePidFile,
+  saveConfig,
+  stopRunningAgent,
+  writePidFile,
+} from './config.js';
 import { AgentConnection, type ConnectionEvents, enrollWithHub } from './runtime/connection.js';
 import { ProbeExecutor } from './runtime/executor.js';
 import { checkNotRoot } from './runtime/privilege.js';
 import { buildPatterns } from './runtime/scrubber.js';
+import { createSystemChecker, scanForSoftware } from './system/scanner.js';
 import { VERSION } from './version.js';
 
 const args = process.argv.slice(2);
@@ -24,8 +36,12 @@ function printUsage(): void {
   console.log('  install   Interactive guided setup (enroll + scan + packs)');
   console.log('  enroll    Enroll this agent with a hub');
   console.log('  start     Start the agent (TUI by default, --headless for daemon)');
+  console.log('  stop      Stop the background agent');
+  console.log('  restart   Restart the agent in background');
   console.log('  status    Show agent status');
   console.log('  packs     Manage packs (list, scan, install, uninstall)');
+  console.log('  update    Check for and install agent updates');
+  console.log('  mcp-bridge  stdio MCP bridge (for Claude Code integration)');
   console.log('');
   console.log('Enroll options:');
   console.log('  --hub <url>      Hub URL (e.g. http://localhost:3000)');
@@ -58,10 +74,28 @@ function createRuntime(events: ConnectionEvents): Runtime {
     process.exit(1);
   }
 
-  const executor = new ProbeExecutor(undefined, undefined, buildPatterns(config.scrubPatterns));
+  const enabledPacks = buildEnabledPacks(
+    packRegistry, config.disabledPacks ?? [],
+  );
+  const executor = new ProbeExecutor(enabledPacks, undefined, buildPatterns(config.scrubPatterns));
   const connection = new AgentConnection(config, executor, events);
 
   return { config, executor, connection };
+}
+
+async function cmdUpdate(): Promise<void> {
+  console.log(`Current version: v${VERSION}`);
+  console.log('Checking for updates...');
+
+  const { latestVersion, updateAvailable } = await checkForUpdate();
+
+  if (!updateAvailable) {
+    console.log(`Already on the latest version (v${latestVersion}).`);
+    return;
+  }
+
+  console.log(`New version available: v${latestVersion}`);
+  performUpdate(latestVersion);
 }
 
 async function cmdEnroll(): Promise<void> {
@@ -102,6 +136,20 @@ async function cmdEnroll(): Promise<void> {
   config.enrollmentToken = undefined;
   saveConfig(config);
 
+  // Auto-detect packs
+  const manifests = [...packRegistry.values()].map((p) => p.manifest);
+  const checker = createSystemChecker();
+  const scanResults = scanForSoftware(manifests, checker);
+  const detectedNames = scanResults
+    .filter((r) => r.detected)
+    .map((r) => r.packName);
+  const allNames = manifests.map((m) => m.name);
+  const enabledNames = ['system', ...detectedNames.filter((n) => n !== 'system')];
+  const disabledNames = allNames.filter((n) => !enabledNames.includes(n));
+
+  config.disabledPacks = disabledNames;
+  saveConfig(config);
+
   console.log('Agent enrolled successfully.');
   console.log(`  Hub:      ${hubUrl}`);
   console.log(`  Name:     ${agentName}`);
@@ -109,6 +157,14 @@ async function cmdEnroll(): Promise<void> {
   console.log(`  Config:   ${getConfigPath()}`);
   if (certIssued) {
     console.log('  mTLS:     Client certificate issued and saved');
+  }
+  console.log('');
+  console.log('Pack detection:');
+  for (const name of enabledNames) {
+    console.log(`  ✓ ${name}`);
+  }
+  for (const name of disabledNames) {
+    console.log(`  ✗ ${name} (not detected)`);
   }
   console.log('');
   console.log('Run "sonde start" to connect.');
@@ -129,6 +185,11 @@ function cmdStart(): void {
       config.agentId = agentId;
       saveConfig(config);
     },
+    onUpdateAvailable: (latestVersion, currentVersion) => {
+      console.log(
+        `Update available: v${currentVersion} → v${latestVersion}. Run "sonde update" to upgrade.`,
+      );
+    },
   });
 
   console.log(`Sonde Agent v${VERSION}`);
@@ -137,20 +198,66 @@ function cmdStart(): void {
   console.log('');
 
   connection.start();
+  writePidFile(process.pid);
+  process.stdin.unref();
 
-  process.on('SIGINT', () => {
+  const shutdown = () => {
     console.log('\nShutting down...');
     connection.stop();
+    removePidFile();
     process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+function spawnBackgroundAgent(): number {
+  const child = spawn(process.execPath, [process.argv[1]!, 'start', '--headless'], {
+    detached: true,
+    stdio: 'ignore',
   });
+  child.unref();
+  return child.pid!;
 }
 
 async function cmdManager(): Promise<void> {
+  stopRunningAgent();
+
+  let detached = false;
   const { render } = await import('ink');
   const { createElement } = await import('react');
   const { ManagerApp } = await import('./tui/manager/ManagerApp.js');
-  const { waitUntilExit } = render(createElement(ManagerApp, { createRuntime }));
+
+  const onDetach = () => {
+    detached = true;
+    spawnBackgroundAgent();
+  };
+
+  const { waitUntilExit } = render(
+    createElement(ManagerApp, { createRuntime, onDetach }),
+  );
   await waitUntilExit();
+
+  if (detached) {
+    console.log('Agent detached to background.');
+    console.log('  sonde stop     — stop the background agent');
+    console.log('  sonde start    — reattach the TUI');
+    console.log('  sonde restart  — restart in background');
+  }
+}
+
+function cmdStop(): void {
+  if (stopRunningAgent()) {
+    console.log('Agent stopped.');
+  } else {
+    console.log('No running agent found.');
+  }
+}
+
+function cmdRestart(): void {
+  stopRunningAgent();
+  const pid = spawnBackgroundAgent();
+  console.log(`Agent restarted in background (PID: ${pid}).`);
 }
 
 function cmdStatus(): void {
@@ -161,7 +268,7 @@ function cmdStatus(): void {
     return;
   }
 
-  console.log('Sonde Agent Status');
+  console.log(`Sonde Agent v${VERSION}`);
   console.log(`  Name:     ${config.agentName}`);
   console.log(`  Hub:      ${config.hubUrl}`);
   console.log(`  Agent ID: ${config.agentId ?? '(not yet assigned)'}`);
@@ -190,8 +297,17 @@ switch (command) {
     });
     break;
   case 'enroll':
-    cmdEnroll().catch((err: Error) => {
-      console.error(`Enrollment failed: ${err.message}`);
+    cmdEnroll().catch((err: Error & { code?: string }) => {
+      if (err.code === 'ECONNREFUSED') {
+        const hubUrl = getArg('--hub') ?? 'the hub';
+        console.error(`Could not connect to hub at ${hubUrl}. Verify the hub is running.`);
+      } else if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
+        console.error('Authentication failed. Check your API key or enrollment token.');
+      } else if (err.message?.includes('timed out')) {
+        console.error('Enrollment timed out. The hub may be unreachable.');
+      } else {
+        console.error(`Enrollment failed: ${err.message}`);
+      }
       process.exit(1);
     });
     break;
@@ -199,11 +315,23 @@ switch (command) {
     if (hasFlag('--headless')) {
       cmdStart();
     } else {
-      cmdManager().catch((err: Error) => {
-        console.error(err.message);
+      cmdManager().catch((err: Error & { code?: string }) => {
+        if (err.code === 'ECONNREFUSED') {
+          console.error(
+            'Could not connect to hub. Verify the hub is running and the URL is correct.',
+          );
+        } else {
+          console.error(err.message);
+        }
         process.exit(1);
       });
     }
+    break;
+  case 'stop':
+    cmdStop();
+    break;
+  case 'restart':
+    cmdRestart();
     break;
   case 'status':
     cmdStatus();
@@ -211,10 +339,28 @@ switch (command) {
   case 'packs':
     handlePacksCommand(args.slice(1));
     break;
+  case 'update':
+    cmdUpdate().catch((err: Error) => {
+      console.error(`Update failed: ${err.message}`);
+      process.exit(1);
+    });
+    break;
+  case 'mcp-bridge':
+    import('./cli/mcp-bridge.js').then(({ startMcpBridge }) =>
+      startMcpBridge().catch((err: Error) => {
+        process.stderr.write(`[sonde-bridge] Fatal: ${err.message}\n`);
+        process.exit(1);
+      }),
+    );
+    break;
   default:
     if (command) {
       printUsage();
-      console.error(`\nUnknown command: ${command}`);
+      if (command.startsWith('--')) {
+        console.error(`\nUnknown flag: ${command}. Did you mean "sonde start ${command}"?`);
+      } else {
+        console.error(`\nUnknown command: ${command}`);
+      }
       process.exit(1);
     } else {
       // No command: launch TUI if enrolled, otherwise show usage

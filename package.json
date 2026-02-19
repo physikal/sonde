@@ -6,7 +6,8 @@
     "packages/packs",
     "packages/hub",
     "packages/agent",
-    "packages/dashboard"
+    "packages/dashboard",
+    "packages/docs"
   ],
   "scripts": {
     "dev": "turbo dev",

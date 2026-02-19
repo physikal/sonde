@@ -194,7 +194,7 @@ Set up the GitHub Actions CI pipeline per CLAUDE.md:
    - dev: require CI pass
 
 4. Create .github/CODEOWNERS:
-   - * @your-github-username
+   - * @physikal
 
 5. Install changesets: npm install -D @changesets/cli @changesets/changelog-github
    - npx changeset init

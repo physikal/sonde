@@ -1,6 +1,7 @@
 import type { Pack } from '@sonde/packs';
 import { packRegistry } from '@sonde/packs';
 import type { PackManifest } from '@sonde/shared';
+import { loadConfig, saveConfig } from '../config.js';
 import {
   type PermissionCheck,
   type ScanResult,
@@ -9,6 +10,24 @@ import {
   createSystemChecker,
   scanForSoftware,
 } from '../system/scanner.js';
+
+/**
+ * Build a pack map filtered by a disabled list.
+ * Used by both the CLI commands and ProbeExecutor creation.
+ */
+export function buildEnabledPacks(
+  registry: ReadonlyMap<string, Pack>,
+  disabledPacks: string[],
+): Map<string, Pack> {
+  const disabled = new Set(disabledPacks);
+  const result = new Map<string, Pack>();
+  for (const [name, pack] of registry) {
+    if (!disabled.has(name)) {
+      result.set(name, pack);
+    }
+  }
+  return result;
+}
 
 export interface PackState {
   /** Packs currently loaded/active on this agent */
@@ -22,17 +41,28 @@ export interface PackCommandDeps {
   checker: SystemChecker;
   getUserGroups: () => string[];
   log: (msg: string) => void;
+  persist: (disabledPacks: string[]) => void;
 }
 
 function createDefaultDeps(): PackCommandDeps {
+  const config = loadConfig();
+  const disabledPacks = config?.disabledPacks ?? [];
   return {
     state: {
-      installed: new Map(packRegistry),
+      installed: buildEnabledPacks(packRegistry, disabledPacks),
       available: packRegistry,
     },
     checker: createSystemChecker(),
     getUserGroups: getProcessUserGroups,
     log: console.log,
+    persist: (disabled) => {
+      const current = loadConfig();
+      if (current) {
+        current.disabledPacks =
+          disabled.length > 0 ? disabled : undefined;
+        saveConfig(current);
+      }
+    },
   };
 }
 
@@ -58,17 +88,20 @@ export function cmdPacksList(deps?: PackCommandDeps): void {
     return;
   }
 
+  const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+
   log('Installed packs:');
   log('');
   for (const [name, pack] of state.installed) {
     const probeCount = pack.manifest.probes.length;
-    log(`  ${name} v${pack.manifest.version} (${probeCount} probes)`);
+    log(`  ${bold(name)} v${pack.manifest.version} (${probeCount} probes)`);
     log(`    ${pack.manifest.description}`);
     for (const probe of pack.manifest.probes) {
       log(`    - ${name}.${probe.name}: ${probe.description}`);
     }
     log('');
   }
+  log(`  Manage: sonde packs install ${bold('<name>')} | uninstall ${bold('<name>')}`);
 }
 
 export function cmdPacksScan(deps?: PackCommandDeps): ScanResult[] {
@@ -112,7 +145,8 @@ export function cmdPacksInstall(
   name: string,
   deps?: PackCommandDeps,
 ): { success: boolean; permissions?: PermissionCheck } {
-  const { state, checker, getUserGroups, log } = deps ?? createDefaultDeps();
+  const { state, checker, getUserGroups, log, persist } =
+    deps ?? createDefaultDeps();
 
   const pack = state.available.get(name);
   if (!pack) {
@@ -128,7 +162,9 @@ export function cmdPacksInstall(
 
   // Check permissions
   const userGroups = getUserGroups();
-  const permissions = checkPackPermissions(pack.manifest, checker, userGroups);
+  const permissions = checkPackPermissions(
+    pack.manifest, checker, userGroups,
+  );
 
   if (!permissions.satisfied) {
     log(`Pack "${name}" requires additional permissions:`);
@@ -150,13 +186,19 @@ export function cmdPacksInstall(
   }
 
   state.installed.set(name, pack);
+  const disabled = [...state.available.keys()]
+    .filter((k) => !state.installed.has(k));
+  persist(disabled);
   log(`Pack "${name}" installed successfully.`);
   log(`  ${pack.manifest.probes.length} probes now available.`);
   return { success: true, permissions };
 }
 
-export function cmdPacksUninstall(name: string, deps?: PackCommandDeps): boolean {
-  const { state, log } = deps ?? createDefaultDeps();
+export function cmdPacksUninstall(
+  name: string,
+  deps?: PackCommandDeps,
+): boolean {
+  const { state, log, persist } = deps ?? createDefaultDeps();
 
   if (!state.installed.has(name)) {
     log(`Error: Pack "${name}" is not installed.`);
@@ -164,19 +206,23 @@ export function cmdPacksUninstall(name: string, deps?: PackCommandDeps): boolean
   }
 
   state.installed.delete(name);
+  const disabled = [...state.available.keys()]
+    .filter((k) => !state.installed.has(k));
+  persist(disabled);
   log(`Pack "${name}" uninstalled.`);
   return true;
 }
 
 export function handlePacksCommand(subArgs: string[]): void {
   const subcommand = subArgs[0];
+  const deps = createDefaultDeps();
 
   switch (subcommand) {
     case 'list':
-      cmdPacksList();
+      cmdPacksList(deps);
       break;
     case 'scan':
-      cmdPacksScan();
+      cmdPacksScan(deps);
       break;
     case 'install': {
       const name = subArgs[1];
@@ -184,7 +230,7 @@ export function handlePacksCommand(subArgs: string[]): void {
         console.error('Usage: sonde packs install <name>');
         process.exit(1);
       }
-      const result = cmdPacksInstall(name);
+      const result = cmdPacksInstall(name, deps);
       if (!result.success) process.exit(1);
       break;
     }
@@ -194,7 +240,7 @@ export function handlePacksCommand(subArgs: string[]): void {
         console.error('Usage: sonde packs uninstall <name>');
         process.exit(1);
       }
-      if (!cmdPacksUninstall(name)) process.exit(1);
+      if (!cmdPacksUninstall(name, deps)) process.exit(1);
       break;
     }
     default:
