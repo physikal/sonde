@@ -42,6 +42,13 @@ const PROBE_STATUS_COLORS: Record<string, string> = {
   timeout: 'text-amber-400',
 };
 
+interface PackDef {
+  name: string;
+  type: string;
+  version: string;
+  description: string;
+}
+
 interface OutdatedInfo {
   latestVersion: string | null;
   outdated: Array<{ id: string; name: string; currentVersion: string; latestVersion: string }>;
@@ -54,6 +61,7 @@ export function AgentDetail() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [allAgentPacks, setAllAgentPacks] = useState<PackDef[]>([]);
   const [outdatedInfo, setOutdatedInfo] = useState<OutdatedInfo>({
     latestVersion: null,
     outdated: [],
@@ -69,6 +77,11 @@ export function AgentDetail() {
     );
     apiFetch<OutdatedInfo>('/agents/outdated')
       .then(setOutdatedInfo)
+      .catch(() => {});
+    apiFetch<{ packs: PackDef[] }>('/packs')
+      .then((data) =>
+        setAllAgentPacks(data.packs.filter((p) => p.type === 'agent')),
+      )
       .catch(() => {});
   }, [id]);
 
@@ -152,26 +165,66 @@ export function AgentDetail() {
         </div>
       )}
 
-      {/* Installed packs */}
+      {/* Packs */}
       <div className="mt-6">
-        <h2 className="text-lg font-semibold text-white">Installed Packs</h2>
-        {agent.packs.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">No packs reported.</p>
-        ) : (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {agent.packs.map((pack) => (
-              <span
-                key={pack.name}
-                className="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm"
-              >
-                <span className="text-gray-200">{pack.name}</span>
-                <span className="text-gray-500">v{pack.version}</span>
+        <h2 className="text-lg font-semibold text-white">Packs</h2>
+
+        {/* Installed */}
+        {agent.packs.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
+              Installed
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {agent.packs.map((pack) => (
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${pack.status === 'loaded' ? 'bg-emerald-400' : 'bg-gray-500'}`}
-                />
-              </span>
-            ))}
+                  key={pack.name}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-gray-200">{pack.name}</span>
+                  <span className="text-gray-500">v{pack.version}</span>
+                </span>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Available (not installed) */}
+        {(() => {
+          const installedNames = new Set(
+            agent.packs.map((p) => p.name),
+          );
+          const available = allAgentPacks.filter(
+            (p) => !installedNames.has(p.name),
+          );
+          if (available.length === 0) return null;
+          return (
+            <div className="mt-3">
+              <p className="text-xs uppercase tracking-wider text-gray-500 mb-1.5">
+                Available
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {available.map((pack) => (
+                  <span
+                    key={pack.name}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-gray-800/50 px-3 py-1.5 text-sm"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-600" />
+                    <span className="text-gray-500">
+                      {pack.name}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {agent.packs.length === 0 && allAgentPacks.length === 0 && (
+          <p className="mt-2 text-sm text-gray-500">
+            No packs reported.
+          </p>
         )}
       </div>
 
