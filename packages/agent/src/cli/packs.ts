@@ -58,17 +58,20 @@ export function cmdPacksList(deps?: PackCommandDeps): void {
     return;
   }
 
+  const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+
   log('Installed packs:');
   log('');
   for (const [name, pack] of state.installed) {
     const probeCount = pack.manifest.probes.length;
-    log(`  ${name} v${pack.manifest.version} (${probeCount} probes)`);
+    log(`  ${bold(name)} v${pack.manifest.version} (${probeCount} probes)`);
     log(`    ${pack.manifest.description}`);
     for (const probe of pack.manifest.probes) {
       log(`    - ${name}.${probe.name}: ${probe.description}`);
     }
     log('');
   }
+  log(`  Manage: sonde packs install ${bold('<name>')} | uninstall ${bold('<name>')}`);
 }
 
 export function cmdPacksScan(deps?: PackCommandDeps): ScanResult[] {
