@@ -17,6 +17,8 @@ export default defineConfig({
             { label: 'Deployment', slug: 'hub/deployment' },
             { label: 'Configuration', slug: 'hub/configuration' },
             { label: 'Docker', slug: 'hub/docker' },
+            { label: 'Dashboard Guide', slug: 'hub/dashboard' },
+            { label: 'Administration', slug: 'hub/administration' },
           ],
         },
         {
@@ -46,6 +48,7 @@ export default defineConfig({
           label: 'Integrations',
           items: [
             { label: 'Overview', slug: 'integrations/overview' },
+            { label: 'Setup Guide', slug: 'integrations/setup' },
             { label: 'TLS & Certificates', slug: 'integrations/tls' },
           ],
         },
@@ -66,6 +69,7 @@ export default defineConfig({
             { label: 'API Reference', slug: 'reference/api' },
           ],
         },
+        { label: 'Troubleshooting', slug: 'troubleshooting' },
       ],
     }),
   ],
