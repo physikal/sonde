@@ -7,15 +7,20 @@ import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import {
   citrixPack,
+  datadogPack,
   graphPack,
   httpbinPack,
+  jiraPack,
+  lokiPack,
   nutanixDiagnosticRunbooks,
   nutanixPack,
   packRegistry,
+  pagerdutyPack,
   proxmoxDiagnosticRunbooks,
   proxmoxPack,
   servicenowPack,
   splunkPack,
+  vcenterPack,
 } from '@sonde/packs';
 import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
 import { Hono } from 'hono';
@@ -91,6 +96,11 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [splunkPack.manifest.name, splunkPack],
   [proxmoxPack.manifest.name, proxmoxPack],
   [nutanixPack.manifest.name, nutanixPack],
+  [vcenterPack.manifest.name, vcenterPack],
+  [datadogPack.manifest.name, datadogPack],
+  [lokiPack.manifest.name, lokiPack],
+  [jiraPack.manifest.name, jiraPack],
+  [pagerdutyPack.manifest.name, pagerdutyPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,

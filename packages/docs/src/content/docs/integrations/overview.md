@@ -43,5 +43,10 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Microsoft Graph | Auto (from SSO) | Entra/Intune device and user data |
 | Splunk | Token / Basic | Log search, saved search results |
 | Nutanix | Basic / Token | Prism Central cluster and VM monitoring |
+| vCenter | Basic (session) | VMware VM, host, datastore, and cluster monitoring |
+| Datadog | API Key + App Key | Monitor status, hosts, events |
+| Loki | Basic / Bearer | LogQL queries, label discovery |
+| Jira | Basic (email + API token) | Issue search, project listing, change history |
+| PagerDuty | Token | Incidents, services, on-call schedules |
 
-For per-type setup instructions (required permissions, credential format, example queries), see your deployment documentation.
+For per-type setup instructions (required permissions, credential format, example queries), see the [Integration Packs Setup](/integrations/setup) page.

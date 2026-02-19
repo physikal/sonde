@@ -39,6 +39,11 @@ export { graphPack } from './integrations/graph.js';
 export { splunkPack } from './integrations/splunk.js';
 export { proxmoxPack } from './integrations/proxmox.js';
 export { nutanixPack } from './integrations/nutanix.js';
+export { vcenterPack } from './integrations/vcenter.js';
+export { datadogPack } from './integrations/datadog.js';
+export { lokiPack } from './integrations/loki.js';
+export { jiraPack } from './integrations/jira.js';
+export { pagerdutyPack } from './integrations/pagerduty.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
 export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 

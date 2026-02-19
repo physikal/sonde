@@ -184,6 +184,128 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **saved_searches** — List saved searches with schedule info
 - **health** — Splunkd health status with per-feature breakdown
 
+## vCenter
+
+### Prerequisites
+
+- VMware vCenter Server accessible over HTTPS from the hub
+- User account with read-only privileges (or a dedicated read-only role)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| vCenter URL | `https://vcenter.company.com` |
+| Auth Method | `api_key` (uses session-based auth internally) |
+| Username | `sonde@vsphere.local` (read-only account) |
+| Password | (encrypted at rest) |
+
+Session tokens are acquired automatically via `POST /api/session` and cached for 5 minutes.
+
+### Example Queries
+
+- "List all VMs in vCenter"
+- "Show me the ESXi hosts"
+- "What datastores are available?"
+- "Check vCenter health"
+
+## Datadog
+
+### Prerequisites
+
+- Datadog account with API access
+- API key and Application key (generate from Organization Settings > API Keys / Application Keys)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Datadog API URL | `https://api.datadoghq.com` (US1) or `https://api.datadoghq.eu` (EU) |
+| Auth Method | `api_key` |
+| API Key | (your Datadog API key) |
+| Application Key | (your Datadog application key) |
+
+The application key determines the scope of data access. Use a key scoped to a service account for least-privilege.
+
+### Example Queries
+
+- "Show me triggered Datadog monitors"
+- "List infrastructure hosts in Datadog"
+- "What events happened in the last 4 hours?"
+
+## Loki
+
+### Prerequisites
+
+- Grafana Loki instance accessible over HTTP/HTTPS from the hub
+- Authentication credentials (Basic auth for Grafana Cloud, Bearer token, or none for local instances)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Loki URL | `https://logs-prod.grafana.net` (Grafana Cloud) or `http://loki.local:3100` |
+| Auth Method | `api_key` (Basic) or `bearer_token` |
+| Username | Grafana Cloud instance ID (for Basic) |
+| Password / Token | Grafana Cloud API key or service token |
+
+For multi-tenant Loki, set the `X-Scope-OrgID` header via the integration's custom headers field.
+
+### Example Queries
+
+- "Query Loki for errors in the last hour: {job=\"varlogs\"} |= \"error\""
+- "What labels are available in Loki?"
+- "Show me series matching {namespace=\"production\"}"
+
+## Jira
+
+### Prerequisites
+
+- Atlassian Jira Cloud instance
+- Email address and API token (generate from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens))
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Jira URL | `https://your-domain.atlassian.net` |
+| Auth Method | `api_key` |
+| Email | (your Atlassian email) |
+| API Token | (generated API token) |
+
+The API token inherits the permissions of the associated user account. Use a service account with read-only project access for least privilege.
+
+### Example Queries
+
+- "Search Jira for open bugs: project = PROJ AND type = Bug AND status = Open"
+- "Show me the details of PROJ-123"
+- "What projects are in Jira?"
+- "Show change history for INC-456"
+
+## PagerDuty
+
+### Prerequisites
+
+- PagerDuty account with API access
+- REST API key (generate from Integrations > API Access Keys with read-only scope)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| PagerDuty API URL | `https://api.pagerduty.com` |
+| Auth Method | `bearer_token` |
+| Token | (REST API key) |
+
+Use a read-only API key. Full-access keys are not needed since Sonde only performs read operations.
+
+### Example Queries
+
+- "Show me active PagerDuty incidents"
+- "List PagerDuty services"
+- "Who is on call right now?"
+- "Show details for service P1234ABC"
+
 ## Testing Integrations
 
 After configuring any integration:
