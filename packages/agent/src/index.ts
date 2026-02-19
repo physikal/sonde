@@ -208,7 +208,7 @@ function cmdStart(): void {
 
   connection.start();
   writePidFile(process.pid);
-  process.stdin.unref();
+  process.stdin.unref?.();
 
   const shutdown = () => {
     console.log('\nShutting down...');
