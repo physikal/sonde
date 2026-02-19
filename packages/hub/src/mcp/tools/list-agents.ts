@@ -36,9 +36,8 @@ export function handleListAgents(
     }));
 
   if (filterTags && filterTags.length > 0) {
-    result = result.filter((agent) =>
-      filterTags.every((t) => agent.tags.includes(t)),
-    );
+    const normalized = filterTags.map((t) => t.replace(/^#/, ''));
+    result = result.filter((agent) => normalized.every((t) => agent.tags.includes(t)));
   }
 
   return {

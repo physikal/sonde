@@ -102,8 +102,9 @@ export function handleListCapabilities(
     });
 
   if (filterTags && filterTags.length > 0) {
+    const normalized = filterTags.map((t) => t.replace(/^#/, ''));
     agents = agents.filter((a) =>
-      filterTags.every((t) => a.tags.includes(t)),
+      normalized.every((t) => a.tags.includes(t)),
     );
   }
 
