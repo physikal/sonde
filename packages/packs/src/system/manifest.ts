@@ -7,7 +7,7 @@ export const systemManifest: PackManifest = {
   requires: {
     groups: [],
     files: [],
-    commands: ['df'],
+    commands: ['df', 'ping'],
   },
   probes: [
     {
@@ -27,6 +27,26 @@ export const systemManifest: PackManifest = {
       description: 'CPU load averages and core count',
       capability: 'observe',
       timeout: 10_000,
+    },
+    {
+      name: 'network.ping',
+      description:
+        'Ping a remote host to test ICMP reachability and measure latency',
+      capability: 'observe',
+      timeout: 20_000,
+      params: {
+        host: {
+          type: 'string',
+          description: 'Hostname or IP address to ping',
+          required: true,
+        },
+        count: {
+          type: 'number',
+          description:
+            'Number of ping packets to send (default 4, max 20)',
+          required: false,
+        },
+      },
     },
   ],
   runbook: {

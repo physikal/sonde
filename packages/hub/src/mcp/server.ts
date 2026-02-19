@@ -128,7 +128,7 @@ export function createMcpHandler(
       'list_capabilities',
       {
         description:
-          'Discover available agents, integrations, and diagnostic categories. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks.',
+          'Discover available agents, integrations, and diagnostic categories. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks. Agents run probes on remote machines. Integrations run probes server-side on the hub via external APIs (no agent involved).',
         inputSchema: z.object({}),
       },
       () => {
@@ -147,7 +147,7 @@ export function createMcpHandler(
       'health_check',
       {
         description:
-          'Run a comprehensive health check across all applicable diagnostics in parallel. Auto-discovers available runbooks for the specified agent and active integrations. Returns unified findings sorted by severity (critical → warning → info). Skips categories that require user-provided parameters.',
+          'Run a comprehensive health check across all applicable diagnostics in parallel. Auto-discovers available runbooks for the specified agent and active integrations. Returns unified findings sorted by severity (critical → warning → info). Skips categories that require user-provided parameters. Agent categories (e.g. system, docker) run on the specified agent machine. Integration categories (e.g. proxmox-cluster) run server-side on the hub via external APIs — they do NOT execute on any agent.',
         inputSchema: z.object({
           agent: z
             .string()

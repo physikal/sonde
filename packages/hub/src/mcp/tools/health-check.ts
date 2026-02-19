@@ -18,6 +18,7 @@ interface Finding {
 }
 
 interface CategoryResult {
+  source: 'agent' | 'integration';
   status: 'success' | 'error';
   durationMs: number;
   probeCount: number;
@@ -265,6 +266,7 @@ export async function handleHealthCheck(
             category: task.category,
             findings: catFindings,
             result: {
+              source: 'agent' as const,
               status: 'success' as const,
               durationMs: catDuration,
               probeCount: result.summary.probesRun,
@@ -298,6 +300,7 @@ export async function handleHealthCheck(
           category: task.category,
           findings: catFindings,
           result: {
+            source: 'integration' as const,
             status: 'success' as const,
             durationMs: catDuration,
             probeCount: result.summary.probesRun,
@@ -328,6 +331,7 @@ export async function handleHealthCheck(
             ? settled.reason.message
             : 'Unknown error';
         categoryResults[task.category] = {
+          source: task.type === 'simple' ? 'agent' : 'integration',
           status: 'error',
           durationMs: 0,
           probeCount: 0,

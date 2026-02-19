@@ -158,6 +158,9 @@ describe('handleHealthCheck', () => {
     expect(parsed.summary.probesRun).toBeGreaterThan(0);
     // engine.execute called twice (system + docker)
     expect(engine.execute).toHaveBeenCalledTimes(2);
+    // Agent categories have source: 'agent'
+    expect(parsed.categoryResults.system.source).toBe('agent');
+    expect(parsed.categoryResults.docker.source).toBe('agent');
   });
 
   it('runs matching diagnostic runbooks for integrations (no agent)', async () => {
@@ -212,6 +215,9 @@ describe('handleHealthCheck', () => {
     expect(parsed.meta.categoriesRun).toContain('proxmox-storage');
     expect(parsed.findings).toHaveLength(2); // 1 finding per category × 2
     expect(engine.executeDiagnostic).toHaveBeenCalledTimes(2);
+    // Integration categories have source: 'integration'
+    expect(parsed.categoryResults['proxmox-cluster'].source).toBe('integration');
+    expect(parsed.categoryResults['proxmox-storage'].source).toBe('integration');
   });
 
   it('applies category filter', async () => {

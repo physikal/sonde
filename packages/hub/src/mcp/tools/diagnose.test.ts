@@ -51,7 +51,8 @@ describe('handleDiagnose', () => {
 
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.meta.agent).toBe('test-agent');
+    expect(parsed.meta.target).toBe('test-agent');
+    expect(parsed.meta.source).toBe('agent');
     expect(parsed.meta.category).toBe('docker');
     expect(parsed.meta.probesRun).toBe(1);
     expect(parsed.probes['docker.containers.list'].status).toBe('success');
@@ -150,7 +151,8 @@ describe('handleDiagnose', () => {
     );
 
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.meta.agent).toBe('nutanix-cluster');
+    expect(parsed.meta.target).toBe('nutanix-cluster');
+    expect(parsed.meta.source).toBe('agent');
     expect(parsed.meta.probesRun).toBe(1);
     expect(parsed.meta.truncated).toBe(false);
     expect(parsed.meta.timedOut).toBe(false);
@@ -224,7 +226,8 @@ describe('handleDiagnose', () => {
 
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0]?.text ?? '');
-    expect(parsed.meta.agent).toBe('docker');
+    expect(parsed.meta.target).toBe('docker');
+    expect(parsed.meta.source).toBe('integration');
 
     expect(engine.execute).toHaveBeenCalledWith('docker', undefined, probeRouter);
   });

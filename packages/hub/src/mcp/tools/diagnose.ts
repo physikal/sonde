@@ -68,10 +68,14 @@ export async function handleDiagnose(
         context,
       );
 
-      const agentOrSource = args.agent ?? args.category;
+      const isDiagnosticSource = !args.agent;
+      const target = args.agent ?? args.category;
       const output = {
         meta: {
-          agent: agentOrSource,
+          target,
+          source: isDiagnosticSource
+            ? ('integration' as const)
+            : ('agent' as const),
           timestamp: new Date().toISOString(),
           category: args.category,
           runbookId: `${args.category}-runbook`,
@@ -91,13 +95,13 @@ export async function handleDiagnose(
       // Log each probe result to audit
       for (const [probe, probeResult] of Object.entries(result.probeResults)) {
         if (auth) {
-          const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe);
+          const probeDecision = evaluateProbeAccess(auth, target, probe);
           if (!probeDecision.allowed) continue;
         }
 
         db.logAudit({
           apiKeyId: auth?.keyId,
-          agentId: agentOrSource,
+          agentId: target,
           probe,
           status: probeResult.status,
           durationMs: probeResult.durationMs,
@@ -132,10 +136,13 @@ export async function handleDiagnose(
 
     const result = await runbookEngine.execute(args.category, args.agent, probeRouter);
 
-    const agentOrSource = args.agent ?? args.category;
+    const simpleTarget = args.agent ?? args.category;
     const output = {
       meta: {
-        agent: agentOrSource,
+        target: simpleTarget,
+        source: args.agent
+          ? ('agent' as const)
+          : ('integration' as const),
         timestamp: new Date().toISOString(),
         category: args.category,
         runbookId: `${args.category}-runbook`,
@@ -152,13 +159,13 @@ export async function handleDiagnose(
     // Log each probe result to audit, skip probes denied by policy
     for (const [probe, finding] of Object.entries(result.findings)) {
       if (auth) {
-        const probeDecision = evaluateProbeAccess(auth, agentOrSource, probe);
+        const probeDecision = evaluateProbeAccess(auth, simpleTarget, probe);
         if (!probeDecision.allowed) continue;
       }
 
       db.logAudit({
         apiKeyId: auth?.keyId,
-        agentId: agentOrSource,
+        agentId: simpleTarget,
         probe,
         status: finding.status,
         durationMs: finding.durationMs,
