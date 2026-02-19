@@ -281,23 +281,14 @@ function cmdRestart(): void {
   console.log(`Agent restarted in background (PID: ${pid}).`);
 }
 
-function cmdStatus(): void {
-  const config = loadConfig();
-  if (!config) {
-    console.log('Status: Not enrolled');
-    console.log(`Run "sonde enroll" to get started.`);
-    return;
-  }
-
-  console.log(`Sonde Agent v${VERSION}`);
-  console.log(`  Name:     ${config.agentName}`);
-  console.log(`  Hub:      ${config.hubUrl}`);
-  console.log(`  Agent ID: ${config.agentId ?? '(not yet assigned)'}`);
-  console.log(`  Config:   ${getConfigPath()}`);
-
-  if (isServiceInstalled()) {
-    console.log(`  Service:  ${getServiceStatus()}`);
-  }
+async function cmdStatus(): Promise<void> {
+  const { render } = await import('ink');
+  const { createElement } = await import('react');
+  const { StatusApp } = await import('./tui/status/StatusApp.js');
+  const { waitUntilExit } = render(
+    createElement(StatusApp, { respawnAgent: spawnBackgroundAgent }),
+  );
+  await waitUntilExit();
 }
 
 function handleServiceCommand(subArgs: string[]): void {
@@ -395,7 +386,10 @@ switch (command) {
     cmdRestart();
     break;
   case 'status':
-    cmdStatus();
+    cmdStatus().catch((err: Error) => {
+      console.error(err.message);
+      process.exit(1);
+    });
     break;
   case 'packs':
     handlePacksCommand(args.slice(1));
