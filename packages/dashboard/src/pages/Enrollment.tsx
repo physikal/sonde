@@ -112,15 +112,49 @@ export function Enrollment() {
           <div className="mt-2 space-y-2">
             <div>
               <p className="text-xs text-gray-500 uppercase">One-liner install command</p>
-              <code className="mt-1 block rounded-lg bg-gray-800 px-4 py-2.5 text-sm text-gray-200 font-mono break-all">
-                sonde enroll --hub {hubUrl} --token {newToken} &amp;&amp; sonde start
-              </code>
+              <div className="mt-1 flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-2.5">
+                <code className="flex-1 text-sm text-gray-200 font-mono break-all">
+                  sonde enroll --hub {hubUrl} --token {newToken} &amp;&amp; sonde start
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `sonde enroll --hub ${hubUrl} --token ${newToken} && sonde start`,
+                    );
+                    toast('Copied to clipboard', 'success');
+                  }}
+                  className="shrink-0 rounded p-1.5 text-gray-400 hover:text-white hover:bg-gray-700"
+                  title="Copy to clipboard"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                    <path fillRule="evenodd" d="M15.988 3.012A2.25 2.25 0 0 0 13.75 1h-3.5a2.25 2.25 0 0 0-2.236 2.012A2.25 2.25 0 0 0 6 5.25v10.5A2.25 2.25 0 0 0 8.25 18h7.5A2.25 2.25 0 0 0 18 15.75V5.25a2.25 2.25 0 0 0-2.012-2.238ZM13.75 2.5a.75.75 0 0 1 .75.75v.25h-5v-.25a.75.75 0 0 1 .75-.75h3.5ZM8.25 5.5a.75.75 0 0 0-.75.75v9.5c0 .414.336.75.75.75h7.5a.75.75 0 0 0 .75-.75v-9.5a.75.75 0 0 0-.75-.75h-7.5Z" clipRule="evenodd" />
+                    <path d="M3 8.25a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 3 8.25Zm0 3a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1-.75-.75Z" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase">Token (expires in 15 minutes)</p>
-              <code className="mt-1 block rounded-lg bg-gray-800 px-4 py-2.5 text-sm text-gray-200 font-mono break-all">
-                {newToken}
-              </code>
+              <div className="mt-1 flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-2.5">
+                <code className="flex-1 text-sm text-gray-200 font-mono break-all">
+                  {newToken}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(newToken);
+                    toast('Copied to clipboard', 'success');
+                  }}
+                  className="shrink-0 rounded p-1.5 text-gray-400 hover:text-white hover:bg-gray-700"
+                  title="Copy to clipboard"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                    <path fillRule="evenodd" d="M15.988 3.012A2.25 2.25 0 0 0 13.75 1h-3.5a2.25 2.25 0 0 0-2.236 2.012A2.25 2.25 0 0 0 6 5.25v10.5A2.25 2.25 0 0 0 8.25 18h7.5A2.25 2.25 0 0 0 18 15.75V5.25a2.25 2.25 0 0 0-2.012-2.238ZM13.75 2.5a.75.75 0 0 1 .75.75v.25h-5v-.25a.75.75 0 0 1 .75-.75h3.5ZM8.25 5.5a.75.75 0 0 0-.75.75v9.5c0 .414.336.75.75.75h7.5a.75.75 0 0 0 .75-.75v-9.5a.75.75 0 0 0-.75-.75h-7.5Z" clipRule="evenodd" />
+                    <path d="M3 8.25a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 3 8.25Zm0 3a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1-.75-.75Z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           <button
