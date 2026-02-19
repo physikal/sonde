@@ -31,11 +31,14 @@ export function StatusInfoView({
     );
   }
 
-  const processStatus = serviceInstalled
-    ? `service ${serviceStatus}`
+  const isServiceActive = serviceInstalled && serviceStatus === 'active';
+  const processStatus = isServiceActive
+    ? 'service active'
     : daemonPid
       ? `running (PID ${daemonPid})`
-      : 'stopped';
+      : serviceInstalled
+        ? `service ${serviceStatus}`
+        : 'stopped';
 
   return (
     <Box flexDirection="column">
@@ -66,9 +69,7 @@ export function StatusInfoView({
         </Text>
         <Text>
           {'  '}Status:{' '}
-          <Text color={daemonPid || serviceStatus === 'active' ? 'green' : 'yellow'}>
-            {processStatus}
-          </Text>
+          <Text color={isServiceActive || daemonPid ? 'green' : 'yellow'}>{processStatus}</Text>
         </Text>
       </Box>
 
