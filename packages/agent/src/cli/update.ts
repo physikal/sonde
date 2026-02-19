@@ -73,5 +73,9 @@ export function performUpdate(targetVersion: string): void {
   } else {
     console.log('Restart the agent to use the new version:');
     console.log('  sonde restart');
+    if (process.platform === 'linux') {
+      console.log('');
+      console.log('Tip: Run "sonde service install" to start on boot.');
+    }
   }
 }
