@@ -1,6 +1,6 @@
 {
   "name": "@sonde/agent",
-  "version": "0.2.4",
+  "version": "0.2.10",
   "private": false,
   "type": "module",
   "main": "dist/index.js",
