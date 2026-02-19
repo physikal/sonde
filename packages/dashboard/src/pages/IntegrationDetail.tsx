@@ -347,6 +347,44 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'thousandeyes',
+    label: 'ThousandEyes',
+    authMethods: ['bearer_token'],
+    credentialFields: {
+      bearer_token: [
+        {
+          key: 'token',
+          label: 'API Bearer Token',
+          sensitive: true,
+          tooltip:
+            'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
+        },
+      ],
+    },
+  },
+  {
+    value: 'meraki',
+    label: 'Cisco Meraki',
+    authMethods: ['bearer_token'],
+    credentialFields: {
+      bearer_token: [
+        {
+          key: 'apiKey',
+          label: 'API Key',
+          sensitive: true,
+          tooltip:
+            'Meraki Dashboard → My Profile → API access → Generate API key.',
+        },
+        {
+          key: 'orgId',
+          label: 'Organization ID',
+          tooltip:
+            'Organization → Settings → Organization Info, or from organizations.list probe.',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     authMethods: ['api_key', 'bearer_token', 'oauth2'],

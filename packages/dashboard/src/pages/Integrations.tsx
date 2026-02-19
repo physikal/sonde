@@ -390,6 +390,49 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'thousandeyes',
+    label: 'ThousandEyes',
+    description: 'Network path analysis, latency metrics, and internet outage detection',
+    authMethods: ['bearer_token'],
+    credentialFields: {
+      bearer_token: [
+        {
+          key: 'token',
+          label: 'API Bearer Token',
+          placeholder: 'ThousandEyes API bearer token',
+          sensitive: true,
+          tooltip:
+            'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
+        },
+      ],
+    },
+  },
+  {
+    value: 'meraki',
+    label: 'Cisco Meraki',
+    description: 'Device fleet status, switch port diagnostics, and network topology',
+    authMethods: ['bearer_token'],
+    credentialFields: {
+      bearer_token: [
+        {
+          key: 'apiKey',
+          label: 'API Key',
+          placeholder: 'Meraki Dashboard API key',
+          sensitive: true,
+          tooltip:
+            'Meraki Dashboard → My Profile → API access → Generate API key.',
+        },
+        {
+          key: 'orgId',
+          label: 'Organization ID',
+          placeholder: 'e.g. 549236',
+          tooltip:
+            'Organization → Settings → Organization Info, or from organizations.list probe.',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     description: 'Connect to any REST API',
@@ -425,6 +468,8 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   vcenter: 'https://vcenter.company.com',
   jira: 'https://your-domain.atlassian.net',
   loki: 'https://logs-prod-us-central1.grafana.net',
+  thousandeyes: 'https://api.thousandeyes.com',
+  meraki: 'https://api.meraki.com',
   custom: 'https://api.example.com',
 };
 
@@ -445,6 +490,8 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
   vcenter: 'vCenter Server FQDN or IP. Port 443 is default.',
   jira: 'Your Jira Cloud site URL (e.g. https://your-domain.atlassian.net)',
   loki: 'Grafana Cloud: logs-prod-<region>.grafana.net. Self-hosted: your Loki HTTP URL.',
+  thousandeyes: 'Always https://api.thousandeyes.com for all accounts',
+  meraki: 'Always https://api.meraki.com for all accounts',
 };
 
 const AUTH_METHOD_LABELS: Record<string, string> = {

@@ -12,6 +12,7 @@ import {
   httpbinPack,
   jiraPack,
   lokiPack,
+  merakiPack,
   nutanixDiagnosticRunbooks,
   nutanixPack,
   packRegistry,
@@ -20,6 +21,7 @@ import {
   proxmoxPack,
   servicenowPack,
   splunkPack,
+  thousandeyesPack,
   vcenterPack,
 } from '@sonde/packs';
 import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
@@ -102,6 +104,8 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [lokiPack.manifest.name, lokiPack],
   [jiraPack.manifest.name, jiraPack],
   [pagerdutyPack.manifest.name, pagerdutyPack],
+  [thousandeyesPack.manifest.name, thousandeyesPack],
+  [merakiPack.manifest.name, merakiPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,
