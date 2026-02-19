@@ -112,6 +112,8 @@ export interface AuditEntryWithAgentName {
   requestJson: string | null;
   responseJson: string | null;
   agentName: string | null;
+  integrationId: string | null;
+  integrationName: string | null;
 }
 
 export interface AuditEntry {
@@ -1345,9 +1347,11 @@ export class SondeDb {
     const rows = this.db
       .prepare(
         `SELECT al.id, al.timestamp, al.api_key_id, al.agent_id, al.probe, al.status,
-                al.duration_ms, al.request_json, al.response_json, a.name AS agent_name
+                al.duration_ms, al.request_json, al.response_json,
+                a.name AS agent_name, i.id AS integration_id, i.name AS integration_name
          FROM audit_log al
          LEFT JOIN agents a ON al.agent_id = a.id
+         LEFT JOIN integrations i ON al.agent_id = i.type
          ORDER BY al.id DESC
          LIMIT ?`,
       )
@@ -1364,6 +1368,8 @@ export class SondeDb {
       requestJson: (r.request_json as string) ?? null,
       responseJson: (r.response_json as string) ?? null,
       agentName: (r.agent_name as string) ?? null,
+      integrationId: (r.integration_id as string) ?? null,
+      integrationName: (r.integration_name as string) ?? null,
     }));
   }
 

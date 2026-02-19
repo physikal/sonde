@@ -31,6 +31,8 @@ interface AuditEntryWithAgentName {
   requestJson: string | null;
   responseJson: string | null;
   agentName: string | null;
+  integrationId: string | null;
+  integrationName: string | null;
 }
 
 const TYPE_BADGES: Record<string, { bg: string; text: string; label: string }> = {
@@ -217,37 +219,50 @@ export function Overview() {
         {/* Agent activity */}
         <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
           <div className="flex items-center gap-2 border-b border-gray-800 px-4 py-3">
-            <h2 className="text-sm font-semibold text-white">Agent Activity</h2>
+            <h2 className="text-sm font-semibold text-white">Probe Activity</h2>
             <span className="text-xs text-gray-500">({agentAudit.length})</span>
           </div>
           {agentAudit.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-gray-500">No agent activity yet.</p>
+            <p className="px-4 py-6 text-sm text-gray-500">No probe activity yet.</p>
           ) : (
             <div className="max-h-80 overflow-y-auto">
-              {agentAudit.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className="flex w-full items-center gap-3 border-b border-gray-800 px-4 py-2 text-left last:border-b-0 cursor-pointer hover:bg-gray-800/50"
-                  onClick={() => navigate(`/agents/${entry.agentId}`)}
-                >
-                  <span className="w-14 shrink-0 text-xs text-gray-500">
-                    {relativeTime(entry.timestamp)}
-                  </span>
-                  <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">
-                    {entry.agentName ?? entry.agentId.slice(0, 8)}
-                  </span>
-                  <span className="shrink-0 text-sm font-medium text-gray-200">{entry.probe}</span>
-                  <span
-                    className={`shrink-0 text-xs ${PROBE_STATUS_COLORS[entry.status] ?? 'text-gray-400'}`}
+              {agentAudit.map((entry) => {
+                const isIntegration = !!entry.integrationId;
+                const href = isIntegration
+                  ? `/integrations/${entry.integrationId}`
+                  : `/agents/${entry.agentId}`;
+                const sourceName =
+                  entry.agentName ?? entry.integrationName ?? entry.agentId.slice(0, 8);
+
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className="flex w-full items-center gap-3 border-b border-gray-800 px-4 py-2 text-left last:border-b-0 cursor-pointer hover:bg-gray-800/50"
+                    onClick={() => navigate(href)}
                   >
-                    {entry.status}
-                  </span>
-                  <span className="ml-auto shrink-0 text-xs text-gray-500">
-                    {entry.durationMs}ms
-                  </span>
-                </button>
-              ))}
+                    <span className="w-14 shrink-0 text-xs text-gray-500">
+                      {relativeTime(entry.timestamp)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${isIntegration ? 'bg-blue-900/50 text-blue-400' : 'bg-gray-800 text-gray-400'}`}
+                    >
+                      {sourceName}
+                    </span>
+                    <span className="shrink-0 text-sm font-medium text-gray-200">
+                      {entry.probe}
+                    </span>
+                    <span
+                      className={`shrink-0 text-xs ${PROBE_STATUS_COLORS[entry.status] ?? 'text-gray-400'}`}
+                    >
+                      {entry.status}
+                    </span>
+                    <span className="ml-auto shrink-0 text-xs text-gray-500">
+                      {entry.durationMs}ms
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
