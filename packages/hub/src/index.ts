@@ -121,8 +121,8 @@ for (const runbook of nutanixDiagnosticRunbooks) {
 }
 
 function generateInstallScript(hubUrl: string): string {
-  return `#!/usr/bin/env bash
-set -euo pipefail
+  return `#!/bin/sh
+set -eu
 
 # --- Sonde Agent Installer ---
 # Bootstraps Node.js 22 + @sonde/agent, then hands off to the interactive TUI.
