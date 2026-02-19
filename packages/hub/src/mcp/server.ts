@@ -17,6 +17,7 @@ import { handleHealthCheck } from './tools/health-check.js';
 import { handleListAgents } from './tools/list-agents.js';
 import { handleListCapabilities } from './tools/list-capabilities.js';
 import { handleProbe } from './tools/probe.js';
+import { handleQueryLogs } from './tools/query-logs.js';
 
 /**
  * Creates an MCP HTTP handler using StreamableHTTPServerTransport.
@@ -191,6 +192,41 @@ export function createMcpHandler(
           packRegistry,
           auth,
         );
+      },
+    );
+
+    server.registerTool(
+      'query_logs',
+      {
+        description:
+          'Query logs from agents or the hub audit trail. For agent logs (systemd, docker, nginx), specify the agent — these run on the agent machine. For audit logs, no agent is needed — this queries the hub\'s activity log.',
+        inputSchema: z.object({
+          source: z
+            .enum(['systemd', 'docker', 'nginx', 'audit'])
+            .describe(
+              'Log source: systemd (journal), docker (container), nginx (access/error), audit (hub activity)',
+            ),
+          agent: z
+            .string()
+            .optional()
+            .describe(
+              'Agent name or ID (required for systemd/docker/nginx, ignored for audit)',
+            ),
+          params: z
+            .record(z.unknown())
+            .optional()
+            .describe(
+              'Source-specific params — systemd: { unit, lines? }; docker: { container, lines? }; nginx: { type?: "access"|"error", logPath?, lines? }; audit: { agentId?, startDate?, endDate?, limit? }',
+            ),
+        }),
+      },
+      async (args) => {
+        const online = dispatcher.getOnlineAgents();
+        const connectedAgents = [
+          ...online.map((a) => a.name),
+          ...online.map((a) => a.id),
+        ];
+        return handleQueryLogs(args, probeRouter, db, auth, connectedAgents);
       },
     );
 
