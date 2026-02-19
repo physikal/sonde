@@ -11,7 +11,7 @@ The `system` pack provides basic operating system metrics: disk usage, memory an
 | **Pack name** | `system` |
 | **Version** | 0.1.0 |
 | **Capability** | `observe` (read-only) |
-| **Requirements** | `df` command in PATH |
+| **Requirements** | `df` and `ping` commands in PATH |
 | **Auto-detection** | `/proc/loadavg` exists |
 
 ## Probes
@@ -81,6 +81,32 @@ Returns:
   "loadAvg5": 1.50,
   "loadAvg15": 0.90,
   "cpuCount": 16
+}
+```
+
+### `system.network.ping`
+
+Ping a remote host and return packet loss and round-trip time statistics. Cross-platform (Linux and macOS).
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `host` | string | yes | -- | Hostname or IP address to ping. |
+| `count` | number | no | 4 | Number of ping packets to send (max 20). |
+
+Returns:
+
+```json
+{
+  "host": "10.0.0.1",
+  "packetsTransmitted": 4,
+  "packetsReceived": 4,
+  "packetLossPercent": 0,
+  "rttMs": {
+    "min": 0.5,
+    "avg": 1.2,
+    "max": 2.1,
+    "stddev": 0.6
+  }
 }
 ```
 

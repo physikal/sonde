@@ -32,9 +32,10 @@ A lightweight daemon installed on each target machine. Key properties:
 Capability plugins that declare available probes. Each pack defines:
 
 - Probe name, description, and parameters (Zod schema)
-- Capability level (`observe`, `interact`, or `manage`)
 - Required system permissions (groups, paths)
 - The execution logic mapping probe descriptors to local commands
+
+All probes are strictly read-only. Sonde never modifies, restarts, or changes anything on your infrastructure.
 
 ## Communication Flow
 
@@ -58,8 +59,11 @@ The hub exposes these tools to AI clients via the MCP protocol:
 |------|-------------|
 | `list_agents` | List all agents with connection status and loaded packs |
 | `agent_overview` | Detailed info for a single agent (OS, uptime, packs, recent probes) |
-| `probe` | Execute a specific probe on a named agent |
+| `probe` | Execute a specific probe on a named agent or integration |
 | `diagnose` | Run a diagnostic runbook (a battery of probes with analysis) |
+| `list_capabilities` | Discover all agents, integrations, and diagnostic categories |
+| `health_check` | Run diagnostics across all agents and integrations in parallel |
+| `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail |
 
 ## Design Rules
 

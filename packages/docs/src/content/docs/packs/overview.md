@@ -14,17 +14,9 @@ Each pack declares three things:
 
 Probes never return raw text. Every probe handler parses command output into a typed JSON structure before returning it to the hub.
 
-## Capability levels
+## Read-only by design
 
-Every probe declares a capability level that controls what it is allowed to do:
-
-| Level | Description | Examples |
-|---|---|---|
-| `observe` | Read-only data collection. This is the default and the only level used by built-in packs today. | Disk usage, container list, service status |
-| `interact` | Safe mutations that do not risk data loss. | Restart a service, scale a container |
-| `manage` | Dangerous operations that could cause data loss or downtime. | Drop a database, delete a volume |
-
-The agent's policy engine enforces these levels. Probes at higher capability levels require explicit opt-in.
+All probes are strictly read-only. Sonde never modifies, restarts, or changes anything on your infrastructure. Every probe collects diagnostic data and returns structured JSON — nothing more. This is a core design principle, not a configuration option.
 
 ## Auto-detection
 

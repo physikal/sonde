@@ -106,7 +106,7 @@ sudo apt-get install -y nodejs
 
 **Authentication failed** — Double-check credentials. For OAuth integrations, ensure the client secret hasn't expired.
 
-**SSL/TLS errors** — For self-signed certificates (common with Proxmox, vCenter, Splunk, Nutanix), check **Skip TLS certificate verification** in the integration configuration. This sets `tlsRejectUnauthorized: false` for that specific integration only.
+**SSL/TLS errors** — For self-signed certificates (common with Proxmox, Splunk, Nutanix), check **Skip TLS certificate verification** in the integration configuration. This sets `tlsRejectUnauthorized: false` for that specific integration only.
 
 Common TLS errors and what they mean:
 
@@ -145,7 +145,7 @@ The user isn't in the authorized users list or an authorized Entra group. An adm
 
 ### "AADSTS50011: Reply URL does not match"
 
-The redirect URI in your Entra app registration doesn't match the hub URL. Go to Entra portal > App registration > Authentication > update the redirect URI to `https://your-exact-hub-url/auth/callback`.
+The redirect URI in your Entra app registration doesn't match the hub URL. Go to Entra portal > App registration > Authentication > update the redirect URI to `https://your-exact-hub-url/auth/entra/callback`.
 
 ### "AADSTS65001: Consent required"
 

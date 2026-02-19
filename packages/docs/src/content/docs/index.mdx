@@ -22,14 +22,14 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Features
 
 <CardGrid>
-  <Card title="Read-Only by Default" icon="approve-check">
-    Agents execute structured probe descriptors, never raw shell commands. All probes are read-only at the default capability level.
+  <Card title="Strictly Read-Only" icon="approve-check">
+    Agents execute structured probe descriptors, never raw shell commands. All probes are read-only — Sonde never modifies your infrastructure.
   </Card>
-  <Card title="7 Built-in Packs" icon="puzzle">
-    System metrics, Docker, systemd, Nginx, PostgreSQL, Redis, and MySQL. Auto-detection finds what's installed and suggests relevant packs.
+  <Card title="8 Built-in Packs" icon="puzzle">
+    System metrics, Docker, systemd, Nginx, PostgreSQL, Redis, MySQL, and Proxmox. Auto-detection finds what's installed and suggests relevant packs.
   </Card>
   <Card title="Defense in Depth" icon="shield">
-    Nine security layers: privilege dropping, mTLS, payload signing, output scrubbing, pack signing, capability ceilings, attestation, policy engine, and audit logging.
+    Nine security layers: privilege dropping, no raw shell execution, read-only probes, mTLS, payload signing, output scrubbing, pack signing, attestation, and audit logging.
   </Card>
   <Card title="MCP Native" icon="setting">
     Built on the Model Context Protocol. Works with Claude Desktop, Claude Code, and any MCP-compatible client.

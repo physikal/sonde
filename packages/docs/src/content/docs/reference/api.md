@@ -22,7 +22,7 @@ All endpoints (except where noted) require authentication via one of:
 | Type | Scope |
 |------|-------|
 | Master API key | Full access to all endpoints and agents |
-| Scoped API key | Restricted by policy rules (specific agents, tools, capability levels) |
+| Scoped API key | Restricted by policy rules (specific agents and tools) |
 
 ## MCP Endpoint
 
@@ -159,7 +159,6 @@ Create a new API key. Optionally scope it with policy rules.
   "name": "ci-readonly",
   "policy": {
     "agents": ["my-server"],
-    "capabilities": ["observe"],
     "tools": ["probe", "list_agents"]
   }
 }

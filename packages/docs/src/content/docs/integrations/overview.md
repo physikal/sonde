@@ -2,7 +2,7 @@
 title: Integration Packs
 ---
 
-Integration packs run on the hub and connect to external REST APIs — no agent required on the remote system. They're used for platforms like Proxmox VE, ServiceNow, Citrix, Splunk, and Datadog.
+Integration packs run on the hub and connect to external REST APIs — no agent required on the remote system. They're used for platforms like Proxmox VE, ServiceNow, Citrix, Splunk, and Nutanix.
 
 ## How they work
 
@@ -42,9 +42,6 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Citrix | Basic / OAuth | VDA health, session diagnostics |
 | Microsoft Graph | Auto (from SSO) | Entra/Intune device and user data |
 | Splunk | Token / Basic | Log search, saved search results |
-| Datadog | API Key + App Key | Metric queries, monitor status |
-| PagerDuty | API Key / Token | Incident status, on-call lookup |
-| Cloudflare | API Key / Token | Zone and DNS diagnostics |
-| Custom | Any | Any REST API with standard auth |
+| Nutanix | Basic / Token | Prism Central cluster and VM monitoring |
 
 For per-type setup instructions (required permissions, credential format, example queries), see your deployment documentation.

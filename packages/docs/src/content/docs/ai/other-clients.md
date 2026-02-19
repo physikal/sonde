@@ -22,10 +22,13 @@ Sonde works with any MCP-compatible client. This page covers the protocol detail
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `list_agents` | List all agents with status | None |
+| `list_agents` | List all agents with status | None (optional `tags` filter) |
 | `agent_overview` | Detailed info for one agent | `agent` (name or ID) |
 | `probe` | Execute a probe | `agent`, `probe` (e.g. `system.disk.usage`) |
 | `diagnose` | Run a diagnostic runbook | `agent`, `category` (e.g. `docker`) |
+| `list_capabilities` | Discover agents, integrations, categories | None |
+| `health_check` | Run diagnostics across fleet in parallel | Optional `agent`, `categories` |
+| `query_logs` | Query logs from agents or audit trail | `source`, `agent`, optional filters |
 
 ## Example with curl
 

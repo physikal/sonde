@@ -92,7 +92,7 @@ export const mypackManifest: PackManifest = {
 |---|---|---|---|
 | `name` | string | yes | Probe name (combined with pack name as `<pack>.<name>`). |
 | `description` | string | yes | What this probe does. |
-| `capability` | string | yes | One of `observe`, `interact`, or `manage`. |
+| `capability` | string | yes | Must be `observe`. All probes are read-only. |
 | `params` | object | no | Parameter definitions with type, description, required, and default. |
 | `timeout` | number | no | Timeout in milliseconds (default: 30000). |
 
@@ -319,7 +319,7 @@ If any of the specified checks pass, the agent considers the pack relevant for t
 Before shipping your pack:
 
 - [ ] Manifest has a unique `name`, valid semver `version`, and descriptive `description`
-- [ ] All probes declare a `capability` level (use `observe` for read-only operations)
+- [ ] All probes set `capability: 'observe'` (all probes are read-only)
 - [ ] `requires.commands` lists every binary the probes need
 - [ ] Handler keys match `<packName>.<probeName>` exactly
 - [ ] `detect` block enables auto-discovery on target machines

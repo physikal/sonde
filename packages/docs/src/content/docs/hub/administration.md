@@ -170,13 +170,7 @@ This downloads the latest version, verifies the signature, and restarts the serv
 
 ### Pack Updates
 
-On each agent:
-
-```bash
-sonde packs update
-```
-
-If updated packs require new permissions, they enter pending state until approved.
+Packs are bundled with the agent package. Updating the agent (`sonde update` or `npm install -g @sonde/agent@latest`) includes the latest pack versions. After updating, restart the agent service.
 
 ## Scaling Considerations
 
@@ -193,7 +187,6 @@ If updated packs require new permissions, they enter pending state until approve
 | `SONDE_DB_PATH` | Recommended | Database file path. Default: `./sonde.db` |
 | `SONDE_ADMIN_USER` | Yes | Bootstrap admin username |
 | `SONDE_ADMIN_PASSWORD` | Yes | Bootstrap admin password |
-| `SONDE_ENTRA_ENABLED` | No | `true` to enable Entra SSO |
-| `SONDE_ENTRA_CLIENT_ID` | If SSO | Entra app client ID |
-| `SONDE_ENTRA_TENANT_ID` | If SSO | Entra directory tenant ID |
-| `SONDE_ENTRA_CLIENT_SECRET` | If SSO | Entra app client secret |
+| `SONDE_HUB_URL` | Recommended | Public URL for SSO callbacks and agent enrollment |
+
+Entra SSO is configured through the dashboard (**Settings** > **SSO**), not environment variables. Credentials are encrypted at rest in the database.

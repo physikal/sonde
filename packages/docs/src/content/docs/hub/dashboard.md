@@ -125,7 +125,7 @@ Useful for testing probe functionality without needing an AI client connected.
 
 ### Policies
 
-Configure per-API-key access policies: restrict to specific agents (glob patterns), tools, and capability levels.
+Configure per-API-key access policies: restrict to specific agents (glob patterns) and tools.
 
 ## Settings (Owner Only)
 

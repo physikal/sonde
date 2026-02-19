@@ -38,5 +38,8 @@ If the connection is working, Claude will call the `list_agents` tool and return
 
 - **list_agents** -- List all agents with connection status
 - **agent_overview** -- Detailed info for a specific agent
-- **probe** -- Execute a probe on a target agent
-- **diagnose** -- Run a diagnostic runbook against an agent
+- **probe** -- Execute a probe on a target agent or integration
+- **diagnose** -- Run a diagnostic runbook against an agent or integration
+- **list_capabilities** -- Discover all agents, integrations, and diagnostic categories
+- **health_check** -- Run diagnostics across all agents and integrations in parallel
+- **query_logs** -- Query logs from agents (Docker, systemd, nginx) or the hub audit trail

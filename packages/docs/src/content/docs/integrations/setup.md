@@ -8,7 +8,7 @@ For general information about how integration packs work, see the [Integration P
 
 ## TLS & Self-Signed Certificates
 
-Many on-prem systems ship with self-signed TLS certificates (Proxmox VE, vCenter, Splunk, Nutanix Prism). See the [TLS & Certificates](/integrations/tls) page for detailed guidance on handling certificate verification.
+Many on-prem systems ship with self-signed TLS certificates (Proxmox VE, Splunk, Nutanix Prism). See the [TLS & Certificates](/integrations/tls) page for detailed guidance on handling certificate verification.
 
 **Quick fix:** When adding or editing an integration, check **Skip TLS certificate verification** to accept any certificate from that specific integration. Other integrations and agent connections are unaffected.
 
@@ -139,22 +139,6 @@ Grant admin consent for all.
 
 The Graph pack detects the existing Entra SSO configuration automatically. No additional endpoint configuration needed — it reuses the client ID and secret, but with client_credentials flow instead of authorization code flow.
 
-## VMware vCenter
-
-### Prerequisites
-
-- vCenter Server accessible over HTTPS
-- Read-only user account
-
-### Configuration
-
-| Field | Value |
-|---|---|
-| vCenter URL | `https://vcenter.company.com` |
-| Username | `sonde@vsphere.local` |
-| Password | (encrypted at rest) |
-| Verify SSL | `true` or `false` |
-
 ## Nutanix
 
 ### Prerequisites
@@ -177,45 +161,28 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **nutanix-vm-health** — Single VM deep dive with storage, network, protection status
 - **nutanix-capacity-planning** — Headroom analysis for CPU, memory, and storage
 
-## Observability Packs
+## Splunk
 
-### Datadog
+### Prerequisites
 
-| Field | Value |
-|---|---|
-| DD Site | `datadoghq.com` (or `us5.datadoghq.com`, etc.) |
-| API Key | Datadog API key |
-| Application Key | Datadog application key |
+- Splunk Enterprise accessible over HTTPS from the hub
+- Authentication token or Basic auth credentials
 
-### Loki
-
-| Field | Value |
-|---|---|
-| Loki URL | `https://loki.company.com:3100` |
-| Auth | Bearer token, basic auth, or none |
-
-### Splunk
+### Configuration
 
 | Field | Value |
 |---|---|
 | Splunk URL | `https://splunk.company.com:8089` |
-| Token | Splunk auth token |
+| Auth Method | `bearer` or `basic` |
+| Token | Splunk auth token (for bearer) |
+| Username/Password | (for basic auth) |
 
-## ITSM Packs
+### Available Probes
 
-### Jira
-
-| Field | Value |
-|---|---|
-| Jira URL | `https://company.atlassian.net` |
-| Email | Jira user email |
-| API Token | Jira API token |
-
-### PagerDuty
-
-| Field | Value |
-|---|---|
-| API Key | PagerDuty API key (read-only) |
+- **search** — Run SPL queries and return results
+- **indexes** — List all indexes with size and event count
+- **saved_searches** — List saved searches with schedule info
+- **health** — Splunkd health status with per-feature breakdown
 
 ## Testing Integrations
 

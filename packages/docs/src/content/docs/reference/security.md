@@ -19,17 +19,9 @@ Packs declare their required permissions. The agent requests approval for group 
 
 There is no code path from MCP tool calls to arbitrary shell execution. The agent only accepts structured probe descriptors (e.g., `system.disk.usage` with typed parameters). Internally, the agent maps these descriptors to specific, predefined commands. An AI client cannot construct a request that results in arbitrary command execution.
 
-## Layer 3: Capability Levels
+## Layer 3: Read-Only Probes
 
-Every probe declares one of three capability levels:
-
-| Level | Description | Examples |
-|-------|-------------|----------|
-| `observe` | Read-only queries (default) | Disk usage, container list, service status |
-| `interact` | Safe mutations | Restart a service, pull an image |
-| `manage` | Dangerous operations | Delete containers, modify configs |
-
-The agent configuration sets a maximum capability ceiling. Probes above the ceiling are not loaded, regardless of what packs are installed. Most deployments use `observe` only.
+All probes are strictly read-only. Sonde never modifies, restarts, or changes anything on your infrastructure. Every probe collects diagnostic data (disk usage, container list, service status, log tails) and returns structured JSON — nothing more. This is a core design principle enforced at the pack level: there are no mutation operations in any built-in or custom pack.
 
 ## Layer 4: Wire Security (Agent to Hub)
 
@@ -44,7 +36,7 @@ AI clients authenticate to the hub MCP endpoint via:
 
 - **API keys:** Bearer token in the `Authorization` header. Master key for full access; scoped keys for restricted access.
 - **OAuth 2.0 with PKCE:** For MCP clients that support OAuth. Dynamic client registration, short-lived sessions.
-- **Policy engine:** Per-key rules restrict access to specific agents, tools, and capability levels. A scoped key can be limited to `observe` probes on a single agent.
+- **Policy engine:** Per-key rules restrict access to specific agents and tools. A scoped key can be limited to specific probes on a single agent.
 
 ## Layer 6: Output Sanitization
 

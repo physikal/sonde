@@ -98,7 +98,7 @@ Every message follows this structure:
     agentVersion: string
     packName: string
     packVersion: string
-    capabilityLevel: "observe" | "interact" | "manage"
+    capabilityLevel: "observe"
   }
 }
 ```
