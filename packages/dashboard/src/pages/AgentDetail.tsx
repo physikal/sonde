@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { TagInput } from '../components/common/TagInput';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { apiFetch } from '../lib/api';
 
@@ -11,6 +12,7 @@ interface Agent {
   os: string;
   agentVersion: string;
   packs: Array<{ name: string; version: string; status: string }>;
+  tags: string[];
 }
 
 interface AuditEntry {
@@ -67,11 +69,16 @@ export function AgentDetail() {
     outdated: [],
   });
 
-  useEffect(() => {
+  const fetchAgent = useCallback(() => {
     if (!id) return;
     apiFetch<Agent>(`/agents/${id}`)
       .then(setAgent)
       .catch(() => setError('Agent not found'));
+  }, [id]);
+
+  useEffect(() => {
+    fetchAgent();
+    if (!id) return;
     apiFetch<{ entries: AuditEntry[] }>(`/agents/${id}/audit?limit=50`).then((data) =>
       setAudit(data.entries),
     );
@@ -83,7 +90,25 @@ export function AgentDetail() {
         setAllAgentPacks(data.packs.filter((p) => p.type === 'agent')),
       )
       .catch(() => {});
-  }, [id]);
+  }, [id, fetchAgent]);
+
+  const handleTagAdd = async (tag: string) => {
+    if (!id || !agent) return;
+    await apiFetch(`/agents/${id}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags: [...agent.tags, tag] }),
+    });
+    fetchAgent();
+  };
+
+  const handleTagRemove = async (tag: string) => {
+    if (!id || !agent) return;
+    await apiFetch(`/agents/${id}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags: agent.tags.filter((t) => t !== tag) }),
+    });
+    fetchAgent();
+  };
 
   if (error) {
     return (
@@ -152,6 +177,12 @@ export function AgentDetail() {
             </dd>
           </div>
         </dl>
+      </div>
+
+      {/* Tags */}
+      <div className="mt-4">
+        <h2 className="text-sm font-medium text-gray-400 mb-2">Tags</h2>
+        <TagInput tags={agent.tags} onAdd={handleTagAdd} onRemove={handleTagRemove} />
       </div>
 
       {/* Update available banner */}

@@ -834,7 +834,10 @@ app.get('/api/v1/integrations/:id', (c) => {
   if (!integration) {
     return c.json({ error: 'Integration not found' }, 404);
   }
-  return c.json(integration);
+  return c.json({
+    ...integration,
+    tags: db.getIntegrationTags(c.req.param('id')),
+  });
 });
 
 app.put('/api/v1/integrations/:id', async (c) => {
@@ -1021,6 +1024,7 @@ app.get('/api/v1/agents/:id', (c) => {
       : agent.status === 'degraded'
         ? 'degraded'
         : 'offline',
+    tags: db.getAgentTags(agent.id),
   });
 });
 
