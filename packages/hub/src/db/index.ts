@@ -1298,6 +1298,142 @@ export class SondeDb {
     }));
   }
 
+  // --- Agent Tags ---
+
+  getAgentTags(agentId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT tag FROM agent_tags WHERE agent_id = ? ORDER BY tag')
+      .all(agentId) as Array<{ tag: string }>;
+    return rows.map((r) => r.tag);
+  }
+
+  setAgentTags(agentId: string, tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM agent_tags WHERE agent_id = ?')
+        .run(agentId);
+      const insert = this.db.prepare(
+        'INSERT INTO agent_tags (agent_id, tag) VALUES (?, ?)',
+      );
+      for (const tag of tags) {
+        insert.run(agentId, tag);
+      }
+    });
+    tx();
+  }
+
+  addAgentTags(agentIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO agent_tags (agent_id, tag) VALUES (?, ?)',
+      );
+      for (const id of agentIds) {
+        for (const tag of tags) {
+          insert.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  removeAgentTags(agentIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const del = this.db.prepare(
+        'DELETE FROM agent_tags WHERE agent_id = ? AND tag = ?',
+      );
+      for (const id of agentIds) {
+        for (const tag of tags) {
+          del.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  getAllAgentTags(): Map<string, string[]> {
+    const rows = this.db
+      .prepare('SELECT agent_id, tag FROM agent_tags ORDER BY agent_id, tag')
+      .all() as Array<{ agent_id: string; tag: string }>;
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      const existing = map.get(row.agent_id);
+      if (existing) {
+        existing.push(row.tag);
+      } else {
+        map.set(row.agent_id, [row.tag]);
+      }
+    }
+    return map;
+  }
+
+  // --- Integration Tags ---
+
+  getIntegrationTags(integrationId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT tag FROM integration_tags WHERE integration_id = ? ORDER BY tag')
+      .all(integrationId) as Array<{ tag: string }>;
+    return rows.map((r) => r.tag);
+  }
+
+  setIntegrationTags(integrationId: string, tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM integration_tags WHERE integration_id = ?')
+        .run(integrationId);
+      const insert = this.db.prepare(
+        'INSERT INTO integration_tags (integration_id, tag) VALUES (?, ?)',
+      );
+      for (const tag of tags) {
+        insert.run(integrationId, tag);
+      }
+    });
+    tx();
+  }
+
+  addIntegrationTags(integrationIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        'INSERT OR IGNORE INTO integration_tags (integration_id, tag) VALUES (?, ?)',
+      );
+      for (const id of integrationIds) {
+        for (const tag of tags) {
+          insert.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  removeIntegrationTags(integrationIds: string[], tags: string[]): void {
+    const tx = this.db.transaction(() => {
+      const del = this.db.prepare(
+        'DELETE FROM integration_tags WHERE integration_id = ? AND tag = ?',
+      );
+      for (const id of integrationIds) {
+        for (const tag of tags) {
+          del.run(id, tag);
+        }
+      }
+    });
+    tx();
+  }
+
+  getAllIntegrationTags(): Map<string, string[]> {
+    const rows = this.db
+      .prepare('SELECT integration_id, tag FROM integration_tags ORDER BY integration_id, tag')
+      .all() as Array<{ integration_id: string; tag: string }>;
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      const existing = map.get(row.integration_id);
+      if (existing) {
+        existing.push(row.tag);
+      } else {
+        map.set(row.integration_id, [row.tag]);
+      }
+    }
+    return map;
+  }
+
   close(): void {
     this.db.close();
   }

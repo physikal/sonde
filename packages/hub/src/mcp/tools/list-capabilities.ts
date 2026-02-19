@@ -13,6 +13,7 @@ interface AgentCapability {
   lastSeen: string;
   packs: Array<{ name: string; version: string }>;
   runbookCategories: string[];
+  tags: string[];
 }
 
 interface IntegrationCapability {
@@ -20,6 +21,7 @@ interface IntegrationCapability {
   type: string;
   status: string;
   diagnosticCategories: string[];
+  tags: string[];
 }
 
 interface RunbookCategoryInfo {
@@ -45,6 +47,7 @@ export function handleListCapabilities(
   integrationManager: IntegrationManager,
   packRegistry: ReadonlyMap<string, Pack>,
   auth?: AuthContext,
+  filterTags?: string[],
 ): {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
@@ -52,6 +55,8 @@ export function handleListCapabilities(
 } {
   const onlineIds = new Set(dispatcher.getOnlineAgentIds());
   const allAgents = db.getAllAgents();
+  const agentTagMap = db.getAllAgentTags();
+  const integrationTagMap = db.getAllIntegrationTags();
 
   // Build pack name → runbook category mapping from agent packs
   const packToCategory = new Map<string, string>();
@@ -61,7 +66,7 @@ export function handleListCapabilities(
     }
   }
 
-  const agents: AgentCapability[] = allAgents
+  let agents: AgentCapability[] = allAgents
     .filter((agent) => {
       if (!auth) return true;
       return (
@@ -92,8 +97,15 @@ export function handleListCapabilities(
           version: p.version,
         })),
         runbookCategories: matchingCategories,
+        tags: agentTagMap.get(agent.id) ?? [],
       };
     });
+
+  if (filterTags && filterTags.length > 0) {
+    agents = agents.filter((a) =>
+      filterTags.every((t) => a.tags.includes(t)),
+    );
+  }
 
   // Build integration type → diagnostic categories mapping
   const activeIntegrations = integrationManager.list();
@@ -114,6 +126,7 @@ export function handleListCapabilities(
         type: integration.type,
         status: integration.status,
         diagnosticCategories: matchingCategories,
+        tags: integrationTagMap.get(integration.id) ?? [],
       };
     },
   );

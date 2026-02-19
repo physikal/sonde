@@ -122,11 +122,17 @@ export function createMcpHandler(
     server.registerTool(
       'list_agents',
       {
-        description: 'List all registered agents with their status, packs, and last seen time.',
-        inputSchema: z.object({}),
+        description:
+          'List all registered agents with their status, packs, tags, and last seen time. Optionally filter by tags (AND logic).',
+        inputSchema: z.object({
+          tags: z
+            .array(z.string())
+            .optional()
+            .describe('Filter to agents matching ALL specified tags'),
+        }),
       },
-      async () => {
-        return handleListAgents(db, dispatcher, auth);
+      async (args) => {
+        return handleListAgents(db, dispatcher, auth, args.tags);
       },
     );
 
@@ -148,10 +154,15 @@ export function createMcpHandler(
       'list_capabilities',
       {
         description:
-          'Discover available agents, integrations, and diagnostic categories. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks. Agents run probes on remote machines. Integrations run probes server-side on the hub via external APIs (no agent involved).',
-        inputSchema: z.object({}),
+          'Discover available agents, integrations, and diagnostic categories with their tags. No probes executed — returns metadata only. Use this first to understand what diagnostics are available before running probes or health checks. Agents run probes on remote machines. Integrations run probes server-side on the hub via external APIs (no agent involved). Optionally filter by tags (AND logic).',
+        inputSchema: z.object({
+          tags: z
+            .array(z.string())
+            .optional()
+            .describe('Filter agents and integrations to those matching ALL specified tags'),
+        }),
       },
-      () => {
+      (args) => {
         return handleListCapabilities(
           db,
           dispatcher,
@@ -159,6 +170,7 @@ export function createMcpHandler(
           integrationManager,
           packRegistry,
           auth,
+          args.tags,
         );
       },
     );

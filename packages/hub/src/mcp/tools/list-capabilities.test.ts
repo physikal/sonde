@@ -11,6 +11,8 @@ function createMockDb(
 ): SondeDb {
   return {
     getAllAgents: vi.fn().mockReturnValue(agents),
+    getAllAgentTags: vi.fn().mockReturnValue(new Map()),
+    getAllIntegrationTags: vi.fn().mockReturnValue(new Map()),
   } as unknown as SondeDb;
 }
 

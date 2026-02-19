@@ -50,12 +50,15 @@ import {
   AccessGroupIntegrationBody,
   AccessGroupUserBody,
   ActivateGraphBody,
+  BulkTagsBody,
   CreateAccessGroupBody,
   CreateApiKeyBody,
   CreateAuthorizedGroupBody,
   CreateAuthorizedUserBody,
   CreateIntegrationBody,
   CreateSsoBody,
+  SetTagsBody,
+  TagImportBody,
   UpdateAccessGroupBody,
   UpdateApiKeyPolicyBody,
   UpdateAuthorizedGroupBody,
@@ -754,7 +757,13 @@ app.get('/api/v1/integrations', (c) => {
     integrations = filterIntegrationsByAccess(db, user.id, integrations);
   }
 
-  return c.json({ integrations });
+  const allTags = db.getAllIntegrationTags();
+  const withTags = integrations.map((i) => ({
+    ...i,
+    tags: allTags.get(i.id) ?? [],
+  }));
+
+  return c.json({ integrations: withTags });
 });
 
 app.get('/api/v1/integrations/:id', (c) => {
@@ -812,10 +821,86 @@ app.get('/api/v1/integrations/:id/events', (c) => {
   return c.json({ events });
 });
 
+// --- Tag management endpoints ---
+
+app.put('/api/v1/agents/:id/tags', requireRole('admin'), async (c) => {
+  const parsed = parseBody(SetTagsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const agent = db.getAgent(c.req.param('id'));
+  if (!agent) return c.json({ error: 'Agent not found' }, 404);
+
+  db.setAgentTags(agent.id, parsed.data.tags);
+  return c.json({ ok: true });
+});
+
+app.patch('/api/v1/agents/tags', requireRole('admin'), async (c) => {
+  const parsed = parseBody(BulkTagsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  if (parsed.data.add) db.addAgentTags(parsed.data.ids, parsed.data.add);
+  if (parsed.data.remove) db.removeAgentTags(parsed.data.ids, parsed.data.remove);
+  return c.json({ ok: true });
+});
+
+app.put('/api/v1/integrations/:id/tags', requireRole('admin'), async (c) => {
+  const parsed = parseBody(SetTagsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const integration = integrationManager.get(c.req.param('id'));
+  if (!integration) return c.json({ error: 'Integration not found' }, 404);
+
+  db.setIntegrationTags(c.req.param('id'), parsed.data.tags);
+  return c.json({ ok: true });
+});
+
+app.patch('/api/v1/integrations/tags', requireRole('admin'), async (c) => {
+  const parsed = parseBody(BulkTagsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  if (parsed.data.add) db.addIntegrationTags(parsed.data.ids, parsed.data.add);
+  if (parsed.data.remove) db.removeIntegrationTags(parsed.data.ids, parsed.data.remove);
+  return c.json({ ok: true });
+});
+
+app.post('/api/v1/tags/import', requireRole('admin'), async (c) => {
+  const parsed = parseBody(TagImportBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const notFound: string[] = [];
+  let updated = 0;
+
+  for (const entry of parsed.data.entries) {
+    if (parsed.data.type === 'agent') {
+      const agent = db.getAgent(entry.name);
+      if (!agent) {
+        notFound.push(entry.name);
+        continue;
+      }
+      db.setAgentTags(agent.id, entry.tags);
+      updated++;
+    } else {
+      const integration = db
+        .listIntegrations()
+        .find((i) => i.name === entry.name);
+      if (!integration) {
+        notFound.push(entry.name);
+        continue;
+      }
+      db.setIntegrationTags(integration.id, entry.tags);
+      updated++;
+    }
+  }
+
+  return c.json({ updated, notFound });
+});
+
 // Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)
 app.get('/api/v1/agents', (c) => {
+  const allTags = db.getAllAgentTags();
   let agents = db.getAllAgents().map((a) => ({
     ...a,
+    tags: allTags.get(a.id) ?? [],
     status: dispatcher.isAgentOnline(a.id)
       ? 'online'
       : a.status === 'degraded'

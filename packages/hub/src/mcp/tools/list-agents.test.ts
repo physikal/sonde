@@ -6,6 +6,7 @@ import { handleListAgents } from './list-agents.js';
 function createMockDb(agents: Array<Record<string, unknown>> = []): SondeDb {
   return {
     getAllAgents: vi.fn().mockReturnValue(agents),
+    getAllAgentTags: vi.fn().mockReturnValue(new Map()),
   } as unknown as SondeDb;
 }
 

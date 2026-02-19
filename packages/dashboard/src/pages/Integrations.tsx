@@ -1,5 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CsvImportModal } from '../components/common/CsvImportModal';
+import { TagInput } from '../components/common/TagInput';
 import { useToast } from '../components/common/Toast';
 import { apiFetch } from '../lib/api';
 
@@ -301,6 +303,20 @@ interface Integration {
   lastTestedAt: string | null;
   lastTestResult: string | null;
   createdAt: string;
+  tags: string[];
+}
+
+function matchesSearch(integration: Integration, query: string): boolean {
+  const q = query.toLowerCase();
+  const typeLabel =
+    INTEGRATION_TYPES.find((t) => t.value === integration.type)?.label ?? integration.type;
+  return (
+    integration.name.toLowerCase().includes(q) ||
+    integration.type.toLowerCase().includes(q) ||
+    typeLabel.toLowerCase().includes(q) ||
+    integration.status.toLowerCase().includes(q) ||
+    integration.tags.some((t) => t.toLowerCase().includes(q))
+  );
 }
 
 export function Integrations() {
@@ -310,6 +326,11 @@ export function Integrations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'add' | 'remove' | null>(null);
+  const [bulkTagValue, setBulkTagValue] = useState('');
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   // Multi-step form state
   const [step, setStep] = useState(1);
@@ -480,6 +501,88 @@ export function Integrations() {
     selectedType === 'graph'
       ? !!(ssoStatus?.configured && ssoStatus?.enabled)
       : !!authMethod && currentFields.every((f) => !!credentialValues[f.key]?.trim());
+
+  const filtered = search
+    ? integrations.filter((i) => matchesSearch(i, search))
+    : integrations;
+
+  const allVisibleSelected =
+    filtered.length > 0 && filtered.every((i) => selected.has(i.id));
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((i) => i.id)));
+    }
+  };
+
+  const handleTagAdd = async (integrationId: string, tag: string) => {
+    try {
+      await apiFetch(`/integrations/${integrationId}/tags`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          tags: [
+            ...(integrations.find((i) => i.id === integrationId)?.tags ?? []),
+            tag,
+          ],
+        }),
+      });
+      fetchIntegrations();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to add tag', 'error');
+    }
+  };
+
+  const handleTagRemove = async (integrationId: string, tag: string) => {
+    const integration = integrations.find((i) => i.id === integrationId);
+    if (!integration) return;
+    try {
+      await apiFetch(`/integrations/${integrationId}/tags`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          tags: integration.tags.filter((t) => t !== tag),
+        }),
+      });
+      fetchIntegrations();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to remove tag', 'error');
+    }
+  };
+
+  const handleBulkTag = async () => {
+    const tag = bulkTagValue.trim();
+    if (!tag || selected.size === 0) return;
+
+    try {
+      await apiFetch('/integrations/tags', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ids: [...selected],
+          ...(bulkAction === 'add' ? { add: [tag] } : { remove: [tag] }),
+        }),
+      });
+      toast(
+        `Tag '${tag}' ${bulkAction === 'add' ? 'added to' : 'removed from'} ${selected.size} integration${selected.size !== 1 ? 's' : ''}`,
+        'success',
+      );
+      setBulkAction(null);
+      setBulkTagValue('');
+      setSelected(new Set());
+      fetchIntegrations();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Bulk tag operation failed', 'error');
+    }
+  };
 
   if (loading) {
     return <div className="p-8 text-gray-400">Loading...</div>;
@@ -835,27 +938,119 @@ export function Integrations() {
         </div>
       )}
 
+      {/* Search + bulk actions */}
+      <div className="mt-4 flex items-center gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search integrations..."
+          className="w-64 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+        />
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">
+              {selected.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setBulkAction('add');
+                setBulkTagValue('');
+              }}
+              className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 hover:bg-gray-700"
+            >
+              Add Tag
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBulkAction('remove');
+                setBulkTagValue('');
+              }}
+              className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 hover:bg-gray-700"
+            >
+              Remove Tag
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowCsvImport(true)}
+          className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          Import CSV
+        </button>
+      </div>
+
+      {/* Bulk tag input */}
+      {bulkAction && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {bulkAction === 'add' ? 'Add' : 'Remove'} tag:
+          </span>
+          <input
+            type="text"
+            value={bulkTagValue}
+            onChange={(e) => setBulkTagValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleBulkTag();
+              if (e.key === 'Escape') setBulkAction(null);
+            }}
+            placeholder="tag name"
+            autoFocus
+            className="w-32 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleBulkTag}
+            disabled={!bulkTagValue.trim()}
+            className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            {bulkAction === 'add' ? 'Add' : 'Remove'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBulkAction(null)}
+            className="text-xs text-gray-500 hover:text-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Integrations table */}
-      <div className="mt-6 overflow-x-auto rounded-xl border border-gray-800">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-900 text-xs uppercase text-gray-500">
             <tr>
+              <th className="px-3 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                />
+              </th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Tags</th>
               <th className="px-4 py-3">Last Tested</th>
               <th className="px-4 py-3">Created</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {integrations.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                  No integrations configured yet.
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  {search
+                    ? 'No integrations match your search.'
+                    : 'No integrations configured yet.'}
                 </td>
               </tr>
             ) : (
-              integrations.map((intg) => {
+              filtered.map((intg) => {
                 const typeLabel =
                   INTEGRATION_TYPES.find((t) => t.value === intg.type)?.label ?? intg.type;
                 return (
@@ -867,6 +1062,18 @@ export function Integrations() {
                     }}
                     className="cursor-pointer bg-gray-950 transition-colors hover:bg-gray-900"
                   >
+                    <td className="px-3 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(intg.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelect(intg.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-white">{intg.name}</td>
                     <td className="px-4 py-3 text-gray-400">{typeLabel}</td>
                     <td className="px-4 py-3">
@@ -878,6 +1085,13 @@ export function Integrations() {
                           {intg.status}
                         </span>
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TagInput
+                        tags={intg.tags}
+                        onAdd={(tag) => handleTagAdd(intg.id, tag)}
+                        onRemove={(tag) => handleTagRemove(intg.id, tag)}
+                      />
                     </td>
                     <td className="px-4 py-3 text-gray-400">
                       {intg.lastTestedAt ? relativeTime(intg.lastTestedAt) : 'Never'}
@@ -892,6 +1106,14 @@ export function Integrations() {
           </tbody>
         </table>
       </div>
+
+      {showCsvImport && (
+        <CsvImportModal
+          type="integration"
+          onClose={() => setShowCsvImport(false)}
+          onImported={fetchIntegrations}
+        />
+      )}
     </div>
   );
 }

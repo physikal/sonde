@@ -128,6 +128,32 @@ export const UpdateIntegrationBody = z.object({
   credentials: CredentialsSchema.optional(),
 });
 
+// --- Tags ---
+
+export const SetTagsBody = z.object({
+  tags: z.array(z.string().min(1)).max(50),
+});
+
+export const BulkTagsBody = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1),
+    add: z.array(z.string().min(1)).optional(),
+    remove: z.array(z.string().min(1)).optional(),
+  })
+  .refine((d) => (d.add && d.add.length > 0) || (d.remove && d.remove.length > 0), {
+    message: 'add or remove is required',
+  });
+
+export const TagImportBody = z.object({
+  type: z.enum(['agent', 'integration']),
+  entries: z.array(
+    z.object({
+      name: z.string().min(1),
+      tags: z.array(z.string().min(1)),
+    }),
+  ),
+});
+
 // --- Probes / Diagnostics ---
 // Reuse ProbeInput and DiagnoseInput from @sonde/shared (exported via mcp.ts)
 
