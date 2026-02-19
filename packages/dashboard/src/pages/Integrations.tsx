@@ -10,6 +10,7 @@ interface CredentialFieldDef {
   label: string;
   placeholder?: string;
   sensitive?: boolean;
+  tooltip?: string;
 }
 
 interface IntegrationTypeDef {
@@ -29,12 +30,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
-        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'rest_api_user',
+          tooltip: 'ServiceNow user with snc_read_only and itil roles',
+        },
         {
           key: 'password',
           label: 'Password',
           placeholder: 'ServiceNow account password',
           sensitive: true,
+          tooltip: 'Password for the ServiceNow user account',
         },
       ],
       oauth2: [
@@ -42,19 +49,32 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'clientId',
           label: 'Client ID',
           placeholder: 'e.g. 0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d',
+          tooltip: 'From System OAuth → Application Registry in ServiceNow',
         },
-        { key: 'clientSecret', label: 'Client Secret', sensitive: true },
-        { key: 'username', label: 'Username', placeholder: 'rest_api_user' },
+        {
+          key: 'clientSecret',
+          label: 'Client Secret',
+          sensitive: true,
+          tooltip: 'Client secret from the OAuth application',
+        },
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'rest_api_user',
+          tooltip: 'ServiceNow user with snc_read_only and itil roles',
+        },
         {
           key: 'password',
           label: 'Password',
           placeholder: 'ServiceNow account password',
           sensitive: true,
+          tooltip: 'Password for the ServiceNow user account',
         },
         {
           key: 'tokenUrl',
           label: 'Token URL',
           placeholder: 'https://instance.service-now.com/oauth_token.do',
+          tooltip: 'Usually https://<instance>.service-now.com/oauth_token.do',
         },
       ],
     },
@@ -71,12 +91,16 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Key',
           placeholder: 'Datadog API key (32 hex characters)',
           sensitive: true,
+          tooltip:
+            'Organization Settings → API Keys. Identifies your Datadog organization.',
         },
         {
           key: 'appKey',
           label: 'Application Key',
           placeholder: 'Datadog Application key (40 characters)',
           sensitive: true,
+          tooltip:
+            "Organization Settings → Application Keys. Scoped to the creating user's permissions.",
         },
       ],
     },
@@ -85,22 +109,16 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     value: 'pagerduty',
     label: 'PagerDuty',
     description: 'Incident management and alerting',
-    authMethods: ['api_key', 'bearer_token'],
+    authMethods: ['bearer_token'],
     credentialFields: {
-      api_key: [
-        {
-          key: 'apiKey',
-          label: 'REST API Key',
-          placeholder: 'e.g. y_NbAkKc66ryYTWUXYEu',
-          sensitive: true,
-        },
-      ],
       bearer_token: [
         {
           key: 'token',
-          label: 'OAuth Token',
-          placeholder: 'e.g. pdus+_0XBPWQQ_39435d07-...',
+          label: 'REST API Key',
+          placeholder: 'e.g. y_NbAkKc66ryYTWUXYEu',
           sensitive: true,
+          tooltip:
+            'Integrations → Developer Tools → API Access Keys. Use a General Access or Personal REST API key (20 chars). NOT an Events API key.',
         },
       ],
     },
@@ -112,12 +130,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'bearer_token'],
     credentialFields: {
       api_key: [
-        { key: 'email', label: 'Account Email', placeholder: 'user@example.com' },
+        {
+          key: 'email',
+          label: 'Account Email',
+          placeholder: 'user@example.com',
+          tooltip: 'Email address associated with your Cloudflare account',
+        },
         {
           key: 'apiKey',
           label: 'Global API Key',
           placeholder: 'Cloudflare Global API Key (37 hex characters)',
           sensitive: true,
+          tooltip: 'Profile → API Tokens → Global API Key',
         },
       ],
       bearer_token: [
@@ -126,6 +150,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Token',
           placeholder: 'Scoped API token from Cloudflare dashboard',
           sensitive: true,
+          tooltip: 'Profile → API Tokens → Create Token with scoped permissions',
         },
       ],
     },
@@ -150,23 +175,41 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'domain',
           label: 'Domain',
           placeholder: 'CORP (NTLM domain for Director auth)',
+          tooltip: 'Active Directory domain for NTLM authentication (e.g. CORP)',
         },
-        { key: 'username', label: 'Username', placeholder: 'read_only_admin' },
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'read_only_admin',
+          tooltip: 'Director admin account with read-only monitoring access',
+        },
         {
           key: 'password',
           label: 'Password',
           placeholder: 'Director account password',
           sensitive: true,
+          tooltip: 'Password for the Director admin account',
         },
       ],
       oauth2: [
-        { key: 'customerId', label: 'Customer ID', placeholder: 'e.g. a1b2c3d4e5f6' },
-        { key: 'clientId', label: 'Client ID', placeholder: 'API client ID from Citrix Cloud' },
+        {
+          key: 'customerId',
+          label: 'Customer ID',
+          placeholder: 'e.g. a1b2c3d4e5f6',
+          tooltip: 'Citrix Cloud → Identity and Access Management → API Access',
+        },
+        {
+          key: 'clientId',
+          label: 'Client ID',
+          placeholder: 'API client ID from Citrix Cloud',
+          tooltip: 'API client ID from the Citrix Cloud console',
+        },
         {
           key: 'clientSecret',
           label: 'Client Secret',
           placeholder: 'API client secret',
           sensitive: true,
+          tooltip: 'API client secret — shown once at creation',
         },
       ],
     },
@@ -184,15 +227,24 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'Splunk Token',
           placeholder: 'Settings > Tokens (NOT a HEC token)',
           sensitive: true,
+          tooltip:
+            'Settings → Tokens → New Token. Requires search and rest_properties_get capabilities. NOT a HEC token.',
         },
       ],
       api_key: [
-        { key: 'username', label: 'Username', placeholder: 'sonde_svc' },
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'sonde_svc',
+          tooltip:
+            'Splunk local user with search and rest_properties_get capabilities',
+        },
         {
           key: 'password',
           label: 'Password',
           placeholder: 'Splunk account password',
           sensitive: true,
+          tooltip: 'Password for the Splunk user account',
         },
       ],
     },
@@ -205,12 +257,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
-        { key: 'tokenId', label: 'API Token ID', placeholder: 'sonde@pve!sonde-token' },
+        {
+          key: 'tokenId',
+          label: 'API Token ID',
+          placeholder: 'sonde@pve!sonde-token',
+          tooltip: 'Format: user@realm!token-name (e.g. sonde@pve!sonde-token)',
+        },
         {
           key: 'tokenSecret',
           label: 'API Token Secret',
           placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
           sensitive: true,
+          tooltip: 'Shown once at token creation. UUID format.',
         },
       ],
     },
@@ -223,12 +281,18 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     authMethods: ['api_key', 'bearer_token'],
     credentialFields: {
       api_key: [
-        { key: 'username', label: 'Username', placeholder: 'sonde_viewer' },
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'sonde_viewer',
+          tooltip: 'Prism Central local user with Viewer role',
+        },
         {
           key: 'password',
           label: 'Password',
           placeholder: 'Prism Central account password',
           sensitive: true,
+          tooltip: 'Password for the Prism Central user account',
         },
       ],
       bearer_token: [
@@ -237,6 +301,90 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Key',
           placeholder: 'Prism Central IAM API key',
           sensitive: true,
+          tooltip: 'Prism Central → Admin → IAM → API Keys',
+        },
+      ],
+    },
+  },
+  {
+    value: 'vcenter',
+    label: 'VMware vCenter',
+    description:
+      'VMware vCenter — VMs, ESXi hosts, datastores, clusters, and health. Requires a read-only vSphere account.',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'sonde@vsphere.local',
+          tooltip: 'vSphere SSO account (e.g. sonde@vsphere.local) with a read-only role',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'vSphere SSO account password',
+          sensitive: true,
+          tooltip: 'Password for the vSphere SSO account',
+        },
+      ],
+    },
+  },
+  {
+    value: 'jira',
+    label: 'Jira',
+    description:
+      'Atlassian Jira Cloud — JQL search, issue details, changelog, and projects. Requires an API token.',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'email',
+          label: 'Email',
+          placeholder: 'user@example.com',
+          tooltip: 'Atlassian account email that owns the API token',
+        },
+        {
+          key: 'apiToken',
+          label: 'API Token',
+          placeholder: 'Atlassian API token',
+          sensitive: true,
+          tooltip: 'id.atlassian.com → Security → API tokens. Max 365-day expiry.',
+        },
+      ],
+    },
+  },
+  {
+    value: 'loki',
+    label: 'Grafana Loki',
+    description:
+      'Grafana Loki — LogQL queries, label discovery, and series matching. Supports Grafana Cloud and self-hosted.',
+    authMethods: ['api_key', 'bearer_token'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'Loki instance ID or username',
+          tooltip:
+            'Grafana Cloud: Loki instance ID (numeric). Self-hosted: proxy-configured username.',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Service account token or password',
+          sensitive: true,
+          tooltip:
+            'Grafana Cloud: service account token. Self-hosted: proxy-configured password.',
+        },
+      ],
+      bearer_token: [
+        {
+          key: 'token',
+          label: 'Bearer Token',
+          placeholder: 'Service account token',
+          sensitive: true,
+          tooltip: 'Bearer token for auth. Grafana Cloud: use a service account token.',
         },
       ],
     },
@@ -274,7 +422,29 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   splunk: 'https://splunk.company.com:8089',
   proxmox: 'https://pve01.local:8006',
   nutanix: 'https://prism-central.company.com:9440',
+  vcenter: 'https://vcenter.company.com',
+  jira: 'https://your-domain.atlassian.net',
+  loki: 'https://logs-prod-us-central1.grafana.net',
   custom: 'https://api.example.com',
+};
+
+const ENDPOINT_TOOLTIPS: Record<string, string> = {
+  servicenow: 'Your ServiceNow instance URL',
+  datadog:
+    'US1: api.datadoghq.com · EU: api.datadoghq.eu · US3/US5/AP1/AP2/Gov also available',
+  pagerduty: 'Always https://api.pagerduty.com for all accounts',
+  cloudflare: 'Always https://api.cloudflare.com/client/v4',
+  citrix:
+    'On-prem: Director server URL. Cloud: https://api.cloud.com/monitorodata',
+  splunk:
+    'Splunk management port — typically :8089, not the web UI port (:8000)',
+  proxmox:
+    'Any PVE node or cluster VIP. Default port 8006. Self-signed cert is common.',
+  nutanix:
+    'Prism Central URL. Default port 9440. Self-signed cert is common.',
+  vcenter: 'vCenter Server FQDN or IP. Port 443 is default.',
+  jira: 'Your Jira Cloud site URL (e.g. https://your-domain.atlassian.net)',
+  loki: 'Grafana Cloud: logs-prod-<region>.grafana.net. Self-hosted: your Loki HTTP URL.',
 };
 
 const AUTH_METHOD_LABELS: Record<string, string> = {
@@ -724,6 +894,9 @@ export function Integrations() {
                       placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
                       className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                     />
+                    {ENDPOINT_TOOLTIPS[selectedType] && (
+                      <p className="mt-0.5 text-xs text-gray-500">{ENDPOINT_TOOLTIPS[selectedType]}</p>
+                    )}
                     <label className="mt-2 flex items-center gap-2 text-sm text-gray-400">
                       <input
                         type="checkbox"
@@ -832,6 +1005,9 @@ export function Integrations() {
                           </button>
                         )}
                       </div>
+                      {field.tooltip && (
+                        <p className="mt-0.5 text-xs text-gray-500">{field.tooltip}</p>
+                      )}
                     </div>
                   ))}
                 </div>
