@@ -487,6 +487,7 @@ export function IntegrationDetail() {
   const { toast } = useToast();
   const [integration, setIntegration] = useState<Integration | null>(null);
   const [events, setEvents] = useState<IntegrationEvent[]>([]);
+  const [apiKeyNames, setApiKeyNames] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   // Test connection
@@ -529,6 +530,9 @@ export function IntegrationDetail() {
   useEffect(() => {
     fetchIntegration();
     fetchEvents();
+    apiFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys')
+      .then((data) => setApiKeyNames(new Map(data.keys.map((k) => [k.id, k.name]))))
+      .catch(() => {});
   }, [fetchIntegration, fetchEvents]);
 
   const typeDef = integration ? INTEGRATION_TYPES.find((t) => t.value === integration.type) : null;
@@ -954,7 +958,7 @@ export function IntegrationDetail() {
       </div>
 
       {/* Activity Log */}
-      <ActivityLog events={events} />
+      <ActivityLog events={events} apiKeyNames={apiKeyNames} />
 
       {/* Danger Zone */}
       <div className="mt-8 rounded-xl border border-red-900/50 bg-red-950/10 p-6">
