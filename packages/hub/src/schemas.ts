@@ -22,14 +22,20 @@ export const CreateAdminBody = z.object({
 
 // --- API Keys ---
 
+export const ApiKeyPolicySchema = z.object({
+  allowedAgents: z.array(z.string().min(1)).optional(),
+  allowedProbes: z.array(z.string().min(1)).optional(),
+  allowedClients: z.array(z.string().min(1)).optional(),
+});
+
 export const CreateApiKeyBody = z.object({
   name: z.string().min(1, 'name is required'),
-  policy: z.record(z.unknown()).optional(),
+  policy: ApiKeyPolicySchema.optional(),
   role: RoleSchema.default('member'),
 });
 
 export const UpdateApiKeyPolicyBody = z.object({
-  policy: z.record(z.unknown()).default({}),
+  policy: ApiKeyPolicySchema.default({}),
 });
 
 // --- SSO / Entra ---

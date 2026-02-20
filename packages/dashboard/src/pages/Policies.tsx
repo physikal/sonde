@@ -1,4 +1,12 @@
-import { Fragment, type FormEvent, useCallback, useEffect, useState } from 'react';
+import {
+  type FormEvent,
+  Fragment,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useToast } from '../components/common/Toast';
 import { apiFetch } from '../lib/api';
 
@@ -19,6 +27,13 @@ interface Policy {
   allowedClients?: string[];
 }
 
+interface PackDef {
+  name: string;
+  probes: Array<{ name: string }>;
+}
+
+const KNOWN_CLIENTS = ['claude-desktop', 'claude-code', 'cursor', 'windsurf', 'cline', 'continue'];
+
 function timeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);
@@ -31,9 +46,7 @@ function timeAgo(isoString: string): string {
   return `${days}d ago`;
 }
 
-function getPolicyStatus(
-  policyJson: string,
-): 'restricted' | 'unrestricted' {
+function getPolicyStatus(policyJson: string): 'restricted' | 'unrestricted' {
   const policy = safeParse(policyJson);
   const agents = (policy.allowedAgents as string[] | undefined) ?? [];
   const probes = (policy.allowedProbes as string[] | undefined) ?? [];
@@ -68,6 +81,139 @@ function matchesSearch(key: ApiKey, query: string): boolean {
   );
 }
 
+function TagInput({
+  values,
+  onChange,
+  suggestions,
+  placeholder,
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  suggestions: string[];
+  placeholder: string;
+}) {
+  const [input, setInput] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = input.trim()
+    ? suggestions.filter(
+        (s) => s.toLowerCase().includes(input.toLowerCase()) && !values.includes(s),
+      )
+    : suggestions.filter((s) => !values.includes(s));
+
+  const addValue = (val: string) => {
+    const trimmed = val.trim();
+    if (trimmed && !values.includes(trimmed)) {
+      onChange([...values, trimmed]);
+    }
+    setInput('');
+    setHighlighted(0);
+    inputRef.current?.focus();
+  };
+
+  const removeValue = (val: string) => {
+    onChange(values.filter((v) => v !== val));
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open && filtered.length > 0 && highlighted < filtered.length) {
+        addValue(filtered[highlighted]);
+      } else if (input.trim()) {
+        addValue(input);
+      }
+    } else if (e.key === 'Backspace' && !input && values.length > 0) {
+      removeValue(values[values.length - 1]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlighted((h) => (h < filtered.length - 1 ? h + 1 : h));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted((h) => (h > 0 ? h - 1 : 0));
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: click delegates focus to the inner input which handles keyboard events */}
+      <div
+        className="flex flex-wrap items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800 px-2 py-1.5 focus-within:border-blue-500"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {values.map((v) => (
+          <span
+            key={v}
+            className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-200"
+          >
+            {v}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeValue(v);
+              }}
+              className="text-gray-400 hover:text-white"
+            >
+              x
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setHighlighted(0);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={values.length === 0 ? placeholder : ''}
+          className="min-w-[120px] flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-gray-700 bg-gray-800 py-1 shadow-lg">
+          {filtered.map((s, i) => (
+            <li key={s}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addValue(s);
+                }}
+                onMouseEnter={() => setHighlighted(i)}
+                className={`w-full px-3 py-1.5 text-left text-sm ${
+                  i === highlighted ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Policies() {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -76,6 +222,8 @@ export function Policies() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const [agentNames, setAgentNames] = useState<string[]>([]);
+  const [probeNames, setProbeNames] = useState<string[]>([]);
 
   const fetchKeys = useCallback(() => {
     setLoading(true);
@@ -83,8 +231,7 @@ export function Policies() {
     apiFetch<{ keys: ApiKey[] }>('/api-keys')
       .then((data) => setKeys(data.keys))
       .catch((err: unknown) => {
-        const msg =
-          err instanceof Error ? err.message : 'Failed to load policies';
+        const msg = err instanceof Error ? err.message : 'Failed to load policies';
         setError(msg);
         toast(msg, 'error');
       })
@@ -94,6 +241,23 @@ export function Policies() {
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  useEffect(() => {
+    apiFetch<{ agents: Array<{ name: string }> }>('/agents')
+      .then((data) => setAgentNames(data.agents.map((a) => a.name)))
+      .catch(() => {});
+    apiFetch<{ packs: PackDef[] }>('/packs')
+      .then((data) => {
+        const names: string[] = [];
+        for (const pack of data.packs) {
+          for (const probe of pack.probes) {
+            names.push(probe.name);
+          }
+        }
+        setProbeNames(names.sort());
+      })
+      .catch(() => {});
+  }, []);
 
   if (loading) {
     return <div className="p-8 text-gray-400">Loading...</div>;
@@ -116,16 +280,14 @@ export function Policies() {
   }
 
   const activeKeys = keys.filter((k) => !k.revokedAt);
-  const filtered = search
-    ? activeKeys.filter((k) => matchesSearch(k, search))
-    : activeKeys;
+  const filtered = search ? activeKeys.filter((k) => matchesSearch(k, search)) : activeKeys;
 
   return (
     <div className="p-8">
       <h1 className="text-2xl font-semibold text-white">Policies</h1>
       <p className="mt-1 text-sm text-gray-400">
-        Configure per-key access policies. Policies restrict which agents,
-        probes, and clients a key can access.
+        Configure per-key access policies. Policies restrict which agents, probes, and clients a key
+        can access.
       </p>
 
       {/* Educational section */}
@@ -138,9 +300,7 @@ export function Policies() {
           <h2 className="text-sm font-medium text-gray-300 uppercase tracking-wide">
             Policy dimensions
           </h2>
-          <span className="text-xs text-gray-500">
-            {showHelp ? 'Hide' : 'Show'}
-          </span>
+          <span className="text-xs text-gray-500">{showHelp ? 'Hide' : 'Show'}</span>
         </button>
         {showHelp && (
           <>
@@ -148,19 +308,15 @@ export function Policies() {
               <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
                 <dt className="text-sm font-medium text-white">Agents</dt>
                 <dd className="mt-1.5 text-sm text-gray-400">
-                  Restrict which agents a key can query. Exact name matching.
-                  Empty = all agents.
+                  Restrict which agents a key can query. Exact name matching. Empty = all agents.
                 </dd>
-                <dd className="mt-1 text-xs font-mono text-gray-500">
-                  prod-server-1, staging-web
-                </dd>
+                <dd className="mt-1 text-xs font-mono text-gray-500">prod-server-1, staging-web</dd>
               </div>
               <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
                 <dt className="text-sm font-medium text-white">Probes</dt>
                 <dd className="mt-1.5 text-sm text-gray-400">
                   Restrict which probes a key can run. Glob patterns with{' '}
-                  <code className="text-gray-300">*</code> wildcard. Empty = all
-                  probes.
+                  <code className="text-gray-300">*</code> wildcard. Empty = all probes.
                 </dd>
                 <dd className="mt-1 text-xs font-mono text-gray-500">
                   system.*, docker.container.*
@@ -169,17 +325,15 @@ export function Policies() {
               <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
                 <dt className="text-sm font-medium text-white">Clients</dt>
                 <dd className="mt-1.5 text-sm text-gray-400">
-                  Restrict which MCP clients can use a key. Exact client ID
-                  matching. Empty = all clients.
+                  Restrict which MCP clients can use a key. Exact client ID matching. Empty = all
+                  clients.
                 </dd>
-                <dd className="mt-1 text-xs font-mono text-gray-500">
-                  claude-desktop, cursor
-                </dd>
+                <dd className="mt-1 text-xs font-mono text-gray-500">claude-desktop, cursor</dd>
               </div>
             </dl>
             <p className="mt-3 text-xs text-gray-500">
-              Keys with no restrictions have full diagnostic access. Restrictions
-              are enforced at the hub on every probe request.
+              Keys with no restrictions have full diagnostic access. Restrictions are enforced at
+              the hub on every probe request.
             </p>
           </>
         )}
@@ -213,13 +367,8 @@ export function Policies() {
           <tbody className="divide-y divide-gray-800">
             {filtered.length === 0 ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-gray-500"
-                >
-                  {search
-                    ? 'No policies match your search.'
-                    : 'No active API keys to configure.'}
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  {search ? 'No policies match your search.' : 'No active API keys to configure.'}
                 </td>
               </tr>
             ) : (
@@ -230,9 +379,7 @@ export function Policies() {
                 return (
                   <Fragment key={k.id}>
                     <tr className="bg-gray-950">
-                      <td className="px-4 py-3 font-medium text-white">
-                        {k.name}
-                      </td>
+                      <td className="px-4 py-3 font-medium text-white">{k.name}</td>
                       <td className="px-4 py-3">
                         <span className="inline-block rounded-full bg-gray-800 px-2.5 py-1 text-xs font-medium leading-none text-gray-300">
                           {k.role}
@@ -261,9 +408,7 @@ export function Policies() {
                       <td className="px-4 py-3">
                         <button
                           type="button"
-                          onClick={() =>
-                            setEditingId(isEditing ? null : k.id)
-                          }
+                          onClick={() => setEditingId(isEditing ? null : k.id)}
                           className="text-xs text-blue-400 hover:text-blue-300"
                         >
                           {isEditing ? 'Cancel' : 'Edit Policy'}
@@ -276,6 +421,8 @@ export function Policies() {
                           <PolicyEditor
                             keyId={k.id}
                             policyJson={k.policyJson}
+                            agentSuggestions={agentNames}
+                            probeSuggestions={probeNames}
                             onSaved={() => {
                               setEditingId(null);
                               fetchKeys();
@@ -299,22 +446,20 @@ export function Policies() {
 function PolicyEditor({
   keyId,
   policyJson,
+  agentSuggestions,
+  probeSuggestions,
   onSaved,
 }: {
   keyId: string;
   policyJson: string;
+  agentSuggestions: string[];
+  probeSuggestions: string[];
   onSaved: () => void;
 }) {
   const policy = safeParse(policyJson);
-  const [agents, setAgents] = useState(
-    ((policy.allowedAgents as string[]) ?? []).join(', '),
-  );
-  const [probes, setProbes] = useState(
-    ((policy.allowedProbes as string[]) ?? []).join(', '),
-  );
-  const [allowedClients, setAllowedClients] = useState(
-    ((policy.allowedClients as string[]) ?? []).join(', '),
-  );
+  const [agents, setAgents] = useState<string[]>((policy.allowedAgents as string[]) ?? []);
+  const [probes, setProbes] = useState<string[]>((policy.allowedProbes as string[]) ?? []);
+  const [clients, setClients] = useState<string[]>((policy.allowedClients as string[]) ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -324,23 +469,9 @@ function PolicyEditor({
     setError(null);
 
     const newPolicy: Policy = {};
-    const agentList = agents
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const probeList = probes
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (agentList.length > 0) newPolicy.allowedAgents = agentList;
-    if (probeList.length > 0) newPolicy.allowedProbes = probeList;
-
-    const clientList = allowedClients
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (clientList.length > 0) newPolicy.allowedClients = clientList;
+    if (agents.length > 0) newPolicy.allowedAgents = agents;
+    if (probes.length > 0) newPolicy.allowedProbes = probes;
+    if (clients.length > 0) newPolicy.allowedClients = clients;
 
     apiFetch(`/api-keys/${keyId}/policy`, {
       method: 'PUT',
@@ -357,38 +488,35 @@ function PolicyEditor({
     <form onSubmit={handleSave} className="space-y-3 pt-2">
       <div>
         <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-          Allowed Agents (comma-separated, empty = all)
+          Allowed Agents (empty = all)
         </p>
-        <input
-          type="text"
-          value={agents}
-          onChange={(e) => setAgents(e.target.value)}
-          placeholder="e.g. prod-server-1, staging-web"
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+        <TagInput
+          values={agents}
+          onChange={setAgents}
+          suggestions={agentSuggestions}
+          placeholder="Type to search agents..."
         />
       </div>
       <div>
         <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-          Allowed Probes (glob patterns, empty = all)
+          Allowed Probes (empty = all)
         </p>
-        <input
-          type="text"
-          value={probes}
-          onChange={(e) => setProbes(e.target.value)}
-          placeholder="e.g. system.*, docker.container.*"
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+        <TagInput
+          values={probes}
+          onChange={setProbes}
+          suggestions={probeSuggestions}
+          placeholder="Type to search probes..."
         />
       </div>
       <div>
         <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-          Allowed Clients (comma-separated MCP client IDs)
+          Allowed Clients (empty = all)
         </p>
-        <input
-          type="text"
-          value={allowedClients}
-          onChange={(e) => setAllowedClients(e.target.value)}
-          placeholder="e.g. claude-desktop, cursor"
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+        <TagInput
+          values={clients}
+          onChange={setClients}
+          suggestions={KNOWN_CLIENTS}
+          placeholder="Type to search clients..."
         />
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
