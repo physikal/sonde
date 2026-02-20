@@ -181,6 +181,13 @@ export const UpdateMcpInstructionsBody = z.object({
   customPrefix: z.string().max(2000).default(''),
 });
 
+// --- AI Settings ---
+
+export const UpdateAiSettingsBody = z.object({
+  apiKey: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+});
+
 // --- Probes / Diagnostics ---
 // Reuse ProbeInput and DiagnoseInput from @sonde/shared (exported via mcp.ts)
 

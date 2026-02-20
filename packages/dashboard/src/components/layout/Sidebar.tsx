@@ -17,9 +17,7 @@ interface NavSection {
 const NAV_SECTIONS: NavSection[] = [
   {
     title: 'My Account',
-    items: [
-      { to: '/my-api-keys', label: 'My API Keys' },
-    ],
+    items: [{ to: '/my-api-keys', label: 'My API Keys' }],
   },
   {
     title: 'Fleet',
@@ -41,6 +39,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Diagnostics',
     items: [
+      { to: '/trending', label: 'Trending', minimumRole: 'admin' },
       { to: '/try-it', label: 'Try It', minimumRole: 'admin' },
       { to: '/critical-paths', label: 'Critical Paths', minimumRole: 'admin' },
       { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
@@ -51,6 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Settings',
     items: [
       { to: '/settings/tags', label: 'Tags', minimumRole: 'admin' },
+      { to: '/settings/ai', label: 'AI Analysis', minimumRole: 'owner' },
       { to: '/settings/mcp-instructions', label: 'MCP Prompt', minimumRole: 'owner' },
       { to: '/settings/sso', label: 'SSO', minimumRole: 'owner' },
     ],

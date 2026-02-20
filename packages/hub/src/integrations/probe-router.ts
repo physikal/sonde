@@ -69,6 +69,8 @@ export class ProbeRouter {
       });
     }
 
+    this.recordProbeResult(probe, agent, response, caller);
+
     return response;
   }
 
@@ -132,5 +134,40 @@ export class ProbeRouter {
       message: `Probe ${probe} ${result.status} (${durationMs}ms)`,
       detailJson: JSON.stringify(detail),
     });
+  }
+
+  private recordProbeResult(
+    probe: string,
+    agent: string | undefined,
+    response: ProbeResponse,
+    caller?: CallerContext,
+  ): void {
+    if (!this.db) return;
+
+    const isIntegration = this.integrationExecutor.isIntegrationProbe(probe);
+    const agentOrSource = agent ?? probe.split('.')[0] ?? 'unknown';
+    const sourceType = isIntegration ? 'integration' : 'agent';
+
+    let errorMessage: string | undefined;
+    if (response.status !== 'success') {
+      const data = response.data as Record<string, unknown> | undefined;
+      if (typeof data?.error === 'string') {
+        errorMessage = data.error.slice(0, 500);
+      }
+    }
+
+    try {
+      this.db.recordProbeResult({
+        probe,
+        agentOrSource,
+        sourceType,
+        status: response.status,
+        durationMs: response.durationMs,
+        errorMessage,
+        callerApiKeyId: caller?.apiKeyId,
+      });
+    } catch {
+      // Never block probe delivery
+    }
   }
 }

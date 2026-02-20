@@ -44,11 +44,12 @@ import { exceedsRole } from './auth/roles.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
 import { SessionManager } from './auth/sessions.js';
 import type { UserContext } from './auth/sessions.js';
+import { getAnalysisStatus, startOrJoinAnalysis } from './ai/analyze.js';
 import { loadConfig } from './config.js';
 import { generateCaCert } from './crypto/ca.js';
 import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
-import { encrypt } from './integrations/crypto.js';
+import { decrypt, encrypt } from './integrations/crypto.js';
 import { IntegrationExecutor } from './integrations/executor.js';
 import { IntegrationManager } from './integrations/manager.js';
 import { ProbeRouter } from './integrations/probe-router.js';
@@ -75,6 +76,7 @@ import {
   SetTagsBody,
   TagImportBody,
   UpdateAccessGroupBody,
+  UpdateAiSettingsBody,
   UpdateApiKeyPolicyBody,
   UpdateAuthorizedGroupBody,
   UpdateAuthorizedUserBody,
@@ -93,6 +95,14 @@ const config = loadConfig();
 const db = new SondeDb(config.dbPath);
 const sessionManager = new SessionManager(db);
 sessionManager.startCleanupLoop();
+
+// Clean expired probe results every 15 minutes (24h rolling window)
+const PROBE_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
+const probeCleanupTimer = setInterval(() => {
+  db.cleanExpiredProbeResults();
+}, PROBE_CLEANUP_INTERVAL_MS);
+// Run cleanup on startup to purge stale rows from previous runs
+db.cleanExpiredProbeResults();
 const dispatcher = new AgentDispatcher();
 const integrationExecutor = new IntegrationExecutor();
 const probeRouter = new ProbeRouter(dispatcher, integrationExecutor, db, (packName) => {
@@ -400,8 +410,11 @@ app.use('/api/v1/audit/*', requireRole('admin'));
 app.use('/api/v1/activity/*', requireRole('admin'));
 app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
+app.use('/api/v1/settings/ai', requireRole('owner'));
 app.use('/api/v1/settings/mcp-instructions', requireRole('owner'));
 app.use('/api/v1/critical-paths/*', requireRole('admin'));
+app.use('/api/v1/trending/*', requireRole('admin'));
+app.get('/api/v1/trending', requireRole('admin'));
 
 app.get('/health', (c) =>
   c.json({
@@ -619,6 +632,62 @@ app.put('/api/v1/settings/mcp-instructions', async (c) => {
   db.setHubSetting('mcp_instructions_prefix', parsed.data.customPrefix);
   const preview = buildMcpInstructions(db, integrationManager, probeRouter);
   return c.json({ ok: true, preview });
+});
+
+// --- AI settings endpoints ---
+
+const AI_DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+
+app.get('/api/v1/settings/ai', (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  return c.json({ configured: !!encKey, model });
+});
+
+// Admin-level check: can the button be shown?
+app.get('/api/v1/settings/ai/status', requireRole('admin'), (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  return c.json({ configured: !!encKey });
+});
+
+app.put('/api/v1/settings/ai', async (c) => {
+  const parsed = parseBody(UpdateAiSettingsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+
+  if (body.apiKey) {
+    db.setHubSetting('ai_api_key', encrypt(body.apiKey, config.secret));
+  }
+  if (body.model) {
+    db.setHubSetting('ai_model', body.model);
+  }
+
+  const encKey = db.getHubSetting('ai_api_key');
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  return c.json({ configured: !!encKey, model });
+});
+
+app.post('/api/v1/settings/ai/test', async (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  if (!encKey) {
+    return c.json({ success: false, error: 'No API key configured' });
+  }
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const apiKey = decrypt(encKey, config.secret);
+    const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+    const client = new Anthropic({ apiKey });
+    await client.messages.create({
+      model,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+    return c.json({ success: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false, error: msg });
+  }
 });
 
 // --- Authorized users endpoints ---
@@ -1403,6 +1472,81 @@ app.get('/api/v1/activity/agents', (c) => {
   return c.json({ entries });
 });
 
+// Trending probe results
+app.get('/api/v1/trending', (c) => {
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const summary = db.getTrendingSummary(hours);
+  return c.json({
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...summary,
+  });
+});
+
+app.get('/api/v1/trending/probe/:probe', (c) => {
+  const probe = c.req.param('probe');
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const data = db.getProbeResultsByProbe(probe, hours);
+  return c.json({
+    probe,
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...data,
+  });
+});
+
+app.get('/api/v1/trending/agent/:agent', (c) => {
+  const agent = c.req.param('agent');
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const data = db.getProbeResultsByAgent(agent, hours);
+  return c.json({
+    agent,
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...data,
+  });
+});
+
+// Trending analysis (AI)
+app.get('/api/v1/trending/analyze/status', (c) => {
+  return c.json(getAnalysisStatus());
+});
+
+app.post('/api/v1/trending/analyze', async (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  if (!encKey) {
+    return c.json({ error: 'AI API key not configured' }, 503);
+  }
+
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const apiKey = decrypt(encKey, config.secret);
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  const stream = startOrJoinAnalysis(hours, apiKey, model, db);
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
+    },
+  });
+});
+
 // Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
 app.get('/api/v1/packs', (c) => {
   const mapManifest = (manifest: {
@@ -1768,6 +1912,7 @@ server.listen(config.port, config.host, () => {
 process.on('SIGINT', () => {
   console.log('\nShutting down...');
   sessionManager.stopCleanupLoop();
+  clearInterval(probeCleanupTimer);
   server.close();
   db.close();
   process.exit(0);
@@ -1777,6 +1922,7 @@ if (process.platform === 'win32') {
   process.on('SIGBREAK', () => {
     console.log('\nShutting down (SIGBREAK)...');
     sessionManager.stopCleanupLoop();
+    clearInterval(probeCleanupTimer);
     server.close();
     db.close();
     process.exit(0);

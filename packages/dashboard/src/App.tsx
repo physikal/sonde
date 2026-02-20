@@ -7,8 +7,11 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { AccessGroups } from './pages/AccessGroups';
 import { AgentDetail } from './pages/AgentDetail';
+import { AiSettings } from './pages/AiSettings';
 import { ApiKeys } from './pages/ApiKeys';
 import { Audit } from './pages/Audit';
+import { CriticalPathDetail } from './pages/CriticalPathDetail';
+import { CriticalPaths } from './pages/CriticalPaths';
 import { Enrollment } from './pages/Enrollment';
 import { Fleet } from './pages/Fleet';
 import { IntegrationDetail } from './pages/IntegrationDetail';
@@ -19,10 +22,9 @@ import { MyApiKeys } from './pages/MyApiKeys';
 import { Policies } from './pages/Policies';
 import { Settings } from './pages/Settings';
 import { TagsManagement } from './pages/TagsManagement';
+import { Trending } from './pages/Trending';
 import { TryIt } from './pages/TryIt';
 import { Users } from './pages/Users';
-import { CriticalPaths } from './pages/CriticalPaths';
-import { CriticalPathDetail } from './pages/CriticalPathDetail';
 
 function AppRoutes() {
   const { status, loading: setupLoading, refetch } = useSetupStatus();
@@ -67,11 +69,13 @@ function AppRoutes() {
           <Route path="integrations" element={<Integrations />} />
           <Route path="integrations/:id" element={<IntegrationDetail />} />
           <Route path="audit" element={<Audit />} />
+          <Route path="trending" element={<Trending />} />
           <Route path="try-it" element={<TryIt />} />
           <Route path="critical-paths" element={<CriticalPaths />} />
           <Route path="critical-paths/:id" element={<CriticalPathDetail />} />
           <Route path="settings" element={<Navigate to="/settings/sso" replace />} />
           <Route path="settings/sso" element={<Settings />} />
+          <Route path="settings/ai" element={<AiSettings />} />
           <Route path="settings/mcp-instructions" element={<McpInstructions />} />
           <Route path="settings/tags" element={<TagsManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -18,6 +18,7 @@ import { up as up010, version as v010 } from './010-tags.js';
 import { up as up011, version as v011 } from './011-admin-credentials.js';
 import { up as up012, version as v012 } from './012-api-key-owner.js';
 import { up as up013, version as v013 } from './013-critical-paths.js';
+import { up as up014, version as v014 } from './014-probe-results.js';
 
 export const migrations: Migration[] = [
   { version: v001, up: up001 },
@@ -33,4 +34,5 @@ export const migrations: Migration[] = [
   { version: v011, up: up011 },
   { version: v012, up: up012 },
   { version: v013, up: up013 },
+  { version: v014, up: up014 },
 ].sort((a, b) => a.version - b.version);

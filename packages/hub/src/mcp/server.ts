@@ -13,13 +13,14 @@ import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
 import { buildMcpInstructions } from './instructions.js';
 import { handleAgentOverview } from './tools/agent-overview.js';
+import { handleCheckCriticalPath } from './tools/check-critical-path.js';
 import { handleDiagnose } from './tools/diagnose.js';
 import { handleHealthCheck } from './tools/health-check.js';
 import { handleListAgents } from './tools/list-agents.js';
 import { handleListCapabilities } from './tools/list-capabilities.js';
 import { handleProbe } from './tools/probe.js';
-import { handleCheckCriticalPath } from './tools/check-critical-path.js';
 import { handleQueryLogs } from './tools/query-logs.js';
+import { handleTrendingSummary } from './tools/trending.js';
 
 /**
  * Creates an MCP HTTP handler using StreamableHTTPServerTransport.
@@ -63,11 +64,7 @@ export function createMcpHandler(
     server: McpServer;
     transport: StreamableHTTPServerTransport;
   } {
-    const instructions = buildMcpInstructions(
-      db,
-      integrationManager,
-      probeRouter,
-    );
+    const instructions = buildMcpInstructions(db, integrationManager, probeRouter);
 
     const server = new McpServer(
       { name: 'sonde-hub', version: '0.1.0' },
@@ -264,6 +261,30 @@ export function createMcpHandler(
       },
       async (args) => {
         return handleCheckCriticalPath(args, probeRouter, db, auth);
+      },
+    );
+
+    server.registerTool(
+      'trending_summary',
+      {
+        description:
+          'Show aggregate probe trends from the last 24 hours. Surfaces failure rates, error patterns, and which agents or probes are struggling. Use during outages to see what others have been investigating and where failures concentrate.',
+        inputSchema: z.object({
+          hours: z
+            .number()
+            .min(1)
+            .max(24)
+            .default(24)
+            .describe('How many hours to look back (default: 24, max: 24)'),
+          probe: z
+            .string()
+            .optional()
+            .describe('Filter to a specific probe name (e.g. "system.disk-usage")'),
+          agent: z.string().optional().describe('Filter to a specific agent or integration source'),
+        }),
+      },
+      async (args) => {
+        return handleTrendingSummary(args, db);
       },
     );
 

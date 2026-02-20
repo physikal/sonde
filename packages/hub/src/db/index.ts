@@ -127,6 +127,51 @@ export interface CriticalPathStepRow {
   probesJson: string;
 }
 
+export interface ProbeResultEntry {
+  probe: string;
+  agentOrSource: string;
+  sourceType: 'agent' | 'integration';
+  status: string;
+  durationMs: number;
+  errorMessage?: string;
+  callerApiKeyId?: string;
+}
+
+export interface TrendingSummary {
+  totalProbes: number;
+  totalFailures: number;
+  failureRate: number;
+  byProbe: Array<{
+    probe: string;
+    total: number;
+    success: number;
+    error: number;
+    timeout: number;
+    failureRate: number;
+    avgDurationMs: number;
+  }>;
+  byAgent: Array<{
+    agentOrSource: string;
+    sourceType: string;
+    total: number;
+    failures: number;
+    failureRate: number;
+  }>;
+  byHour: Array<{
+    hour: string;
+    total: number;
+    failures: number;
+  }>;
+  recentErrors: Array<{
+    timestamp: string;
+    probe: string;
+    agentOrSource: string;
+    status: string;
+    errorMessage: string | null;
+    durationMs: number;
+  }>;
+}
+
 export interface AuditEntryWithAgentName {
   id: number;
   timestamp: string;
@@ -655,17 +700,15 @@ export class SondeDb {
 
   countApiKeysByOwner(ownerId: string): number {
     const row = this.db
-      .prepare(
-        'SELECT COUNT(*) as count FROM api_keys WHERE owner_id = ? AND revoked_at IS NULL',
-      )
+      .prepare('SELECT COUNT(*) as count FROM api_keys WHERE owner_id = ? AND revoked_at IS NULL')
       .get(ownerId) as { count: number };
     return row.count;
   }
 
   getApiKeyOwner(id: string): string | null {
-    const row = this.db
-      .prepare('SELECT owner_id FROM api_keys WHERE id = ?')
-      .get(id) as { owner_id: string | null } | undefined;
+    const row = this.db.prepare('SELECT owner_id FROM api_keys WHERE id = ?').get(id) as
+      | { owner_id: string | null }
+      | undefined;
     return row?.owner_id ?? null;
   }
 
@@ -1482,12 +1525,8 @@ export class SondeDb {
 
   setAgentTags(agentId: string, tags: string[]): void {
     const tx = this.db.transaction(() => {
-      this.db
-        .prepare('DELETE FROM agent_tags WHERE agent_id = ?')
-        .run(agentId);
-      const insert = this.db.prepare(
-        'INSERT INTO agent_tags (agent_id, tag) VALUES (?, ?)',
-      );
+      this.db.prepare('DELETE FROM agent_tags WHERE agent_id = ?').run(agentId);
+      const insert = this.db.prepare('INSERT INTO agent_tags (agent_id, tag) VALUES (?, ?)');
       for (const tag of tags) {
         insert.run(agentId, tag);
       }
@@ -1511,9 +1550,7 @@ export class SondeDb {
 
   removeAgentTags(agentIds: string[], tags: string[]): void {
     const tx = this.db.transaction(() => {
-      const del = this.db.prepare(
-        'DELETE FROM agent_tags WHERE agent_id = ? AND tag = ?',
-      );
+      const del = this.db.prepare('DELETE FROM agent_tags WHERE agent_id = ? AND tag = ?');
       for (const id of agentIds) {
         for (const tag of tags) {
           del.run(id, tag);
@@ -1550,9 +1587,7 @@ export class SondeDb {
 
   setIntegrationTags(integrationId: string, tags: string[]): void {
     const tx = this.db.transaction(() => {
-      this.db
-        .prepare('DELETE FROM integration_tags WHERE integration_id = ?')
-        .run(integrationId);
+      this.db.prepare('DELETE FROM integration_tags WHERE integration_id = ?').run(integrationId);
       const insert = this.db.prepare(
         'INSERT INTO integration_tags (integration_id, tag) VALUES (?, ?)',
       );
@@ -1632,12 +1667,8 @@ export class SondeDb {
     let agents = 0;
     let integrations = 0;
     const tx = this.db.transaction(() => {
-      agents = this.db
-        .prepare('DELETE FROM agent_tags WHERE tag = ?')
-        .run(tag).changes;
-      integrations = this.db
-        .prepare('DELETE FROM integration_tags WHERE tag = ?')
-        .run(tag).changes;
+      agents = this.db.prepare('DELETE FROM agent_tags WHERE tag = ?').run(tag).changes;
+      integrations = this.db.prepare('DELETE FROM integration_tags WHERE tag = ?').run(tag).changes;
     });
     tx();
     return { agents, integrations };
@@ -1647,10 +1678,7 @@ export class SondeDb {
    * Renames a tag globally across agents and integrations.
    * Handles merge: if an entity already has newTag, the old row is just removed.
    */
-  renameTagGlobally(
-    oldTag: string,
-    newTag: string,
-  ): { agents: number; integrations: number } {
+  renameTagGlobally(oldTag: string, newTag: string): { agents: number; integrations: number } {
     let agents = 0;
     let integrations = 0;
     const tx = this.db.transaction(() => {
@@ -1667,9 +1695,7 @@ export class SondeDb {
         .run(newTag, oldTag);
 
       // Delete old tag rows
-      agents = this.db
-        .prepare('DELETE FROM agent_tags WHERE tag = ?')
-        .run(oldTag).changes;
+      agents = this.db.prepare('DELETE FROM agent_tags WHERE tag = ?').run(oldTag).changes;
       integrations = this.db
         .prepare('DELETE FROM integration_tags WHERE tag = ?')
         .run(oldTag).changes;
@@ -1696,23 +1722,16 @@ export class SondeDb {
 
   // --- Local Admins ---
 
-  createLocalAdmin(
-    id: string,
-    username: string,
-    passwordHash: string,
-    salt: string,
-  ): void {
+  createLocalAdmin(id: string, username: string, passwordHash: string, salt: string): void {
     this.db
-      .prepare(
-        'INSERT INTO local_admins (id, username, password_hash, salt) VALUES (?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO local_admins (id, username, password_hash, salt) VALUES (?, ?, ?, ?)')
       .run(id, username, passwordHash, salt);
   }
 
   getLocalAdminByUsername(username: string): LocalAdminRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM local_admins WHERE username = ?')
-      .get(username) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM local_admins WHERE username = ?').get(username) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return undefined;
     return {
       id: row.id as string,
@@ -1724,9 +1743,9 @@ export class SondeDb {
   }
 
   hasLocalAdmin(): boolean {
-    const row = this.db
-      .prepare('SELECT COUNT(*) as count FROM local_admins')
-      .get() as { count: number };
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM local_admins').get() as {
+      count: number;
+    };
     return row.count > 0;
   }
 
@@ -1734,16 +1753,14 @@ export class SondeDb {
 
   createCriticalPath(id: string, name: string, description: string): void {
     this.db
-      .prepare(
-        'INSERT INTO critical_paths (id, name, description) VALUES (?, ?, ?)',
-      )
+      .prepare('INSERT INTO critical_paths (id, name, description) VALUES (?, ?, ?)')
       .run(id, name, description);
   }
 
   getCriticalPath(id: string): CriticalPathRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM critical_paths WHERE id = ?')
-      .get(id) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM critical_paths WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return undefined;
     return {
       id: row.id as string,
@@ -1755,9 +1772,9 @@ export class SondeDb {
   }
 
   getCriticalPathByName(name: string): CriticalPathRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM critical_paths WHERE name = ?')
-      .get(name) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT * FROM critical_paths WHERE name = ?').get(name) as
+      | Record<string, unknown>
+      | undefined;
     if (!row) return undefined;
     return {
       id: row.id as string,
@@ -1769,9 +1786,9 @@ export class SondeDb {
   }
 
   listCriticalPaths(): CriticalPathRow[] {
-    const rows = this.db
-      .prepare('SELECT * FROM critical_paths ORDER BY name ASC')
-      .all() as Array<Record<string, unknown>>;
+    const rows = this.db.prepare('SELECT * FROM critical_paths ORDER BY name ASC').all() as Array<
+      Record<string, unknown>
+    >;
     return rows.map((row) => ({
       id: row.id as string,
       name: row.name as string,
@@ -1781,10 +1798,7 @@ export class SondeDb {
     }));
   }
 
-  updateCriticalPath(
-    id: string,
-    fields: { name?: string; description?: string },
-  ): boolean {
+  updateCriticalPath(id: string, fields: { name?: string; description?: string }): boolean {
     const sets: string[] = [];
     const params: unknown[] = [];
 
@@ -1808,17 +1822,13 @@ export class SondeDb {
   }
 
   deleteCriticalPath(id: string): boolean {
-    const result = this.db
-      .prepare('DELETE FROM critical_paths WHERE id = ?')
-      .run(id);
+    const result = this.db.prepare('DELETE FROM critical_paths WHERE id = ?').run(id);
     return result.changes > 0;
   }
 
   getCriticalPathSteps(pathId: string): CriticalPathStepRow[] {
     const rows = this.db
-      .prepare(
-        'SELECT * FROM critical_path_steps WHERE path_id = ? ORDER BY step_order ASC',
-      )
+      .prepare('SELECT * FROM critical_path_steps WHERE path_id = ? ORDER BY step_order ASC')
       .all(pathId) as Array<Record<string, unknown>>;
     return rows.map((row) => ({
       id: row.id as string,
@@ -1843,9 +1853,7 @@ export class SondeDb {
     }>,
   ): void {
     const tx = this.db.transaction(() => {
-      this.db
-        .prepare('DELETE FROM critical_path_steps WHERE path_id = ?')
-        .run(pathId);
+      this.db.prepare('DELETE FROM critical_path_steps WHERE path_id = ?').run(pathId);
       const insert = this.db.prepare(
         'INSERT INTO critical_path_steps (id, path_id, step_order, label, target_type, target_id, probes_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
       );
@@ -1862,6 +1870,349 @@ export class SondeDb {
       }
     });
     tx();
+  }
+
+  // --- Probe Results (Trending) ---
+
+  recordProbeResult(entry: ProbeResultEntry): void {
+    this.db
+      .prepare(
+        `INSERT INTO probe_results
+         (timestamp, probe, agent_or_source, source_type, status, duration_ms, error_message, caller_api_key_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        new Date().toISOString(),
+        entry.probe,
+        entry.agentOrSource,
+        entry.sourceType,
+        entry.status,
+        entry.durationMs,
+        entry.errorMessage ?? null,
+        entry.callerApiKeyId ?? null,
+      );
+  }
+
+  cleanExpiredProbeResults(): number {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const result = this.db.prepare('DELETE FROM probe_results WHERE timestamp < ?').run(cutoff);
+    return result.changes;
+  }
+
+  getTrendingSummary(sinceHours: number): TrendingSummary {
+    const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+
+    const byProbeRows = this.db
+      .prepare(
+        `SELECT
+           probe,
+           COUNT(*) as total,
+           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error,
+           SUM(CASE WHEN status = 'timeout' THEN 1 ELSE 0 END) as timeout,
+           AVG(duration_ms) as avg_duration_ms
+         FROM probe_results
+         WHERE timestamp >= ?
+         GROUP BY probe
+         ORDER BY (COUNT(*) - SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)) DESC, COUNT(*) DESC`,
+      )
+      .all(since) as Array<{
+      probe: string;
+      total: number;
+      success: number;
+      error: number;
+      timeout: number;
+      avg_duration_ms: number;
+    }>;
+
+    const byAgentRows = this.db
+      .prepare(
+        `SELECT
+           agent_or_source,
+           source_type,
+           COUNT(*) as total,
+           SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failures
+         FROM probe_results
+         WHERE timestamp >= ?
+         GROUP BY agent_or_source, source_type
+         ORDER BY failures DESC, total DESC`,
+      )
+      .all(since) as Array<{
+      agent_or_source: string;
+      source_type: string;
+      total: number;
+      failures: number;
+    }>;
+
+    const byHourRows = this.db
+      .prepare(
+        `SELECT
+           strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
+           COUNT(*) as total,
+           SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failures
+         FROM probe_results
+         WHERE timestamp >= ?
+         GROUP BY hour
+         ORDER BY hour ASC`,
+      )
+      .all(since) as Array<{
+      hour: string;
+      total: number;
+      failures: number;
+    }>;
+
+    const recentErrorRows = this.db
+      .prepare(
+        `SELECT timestamp, probe, agent_or_source, status, error_message, duration_ms
+         FROM probe_results
+         WHERE timestamp >= ? AND status != 'success'
+         ORDER BY id DESC
+         LIMIT 20`,
+      )
+      .all(since) as Array<{
+      timestamp: string;
+      probe: string;
+      agent_or_source: string;
+      status: string;
+      error_message: string | null;
+      duration_ms: number;
+    }>;
+
+    let totalProbes = 0;
+    let totalFailures = 0;
+    for (const row of byProbeRows) {
+      totalProbes += row.total;
+      totalFailures += row.total - row.success;
+    }
+
+    return {
+      totalProbes,
+      totalFailures,
+      failureRate: totalProbes > 0 ? Math.round((totalFailures / totalProbes) * 1000) / 10 : 0,
+      byProbe: byProbeRows.map((r) => ({
+        probe: r.probe,
+        total: r.total,
+        success: r.success,
+        error: r.error,
+        timeout: r.timeout,
+        failureRate: r.total > 0 ? Math.round(((r.total - r.success) / r.total) * 1000) / 10 : 0,
+        avgDurationMs: Math.round(r.avg_duration_ms),
+      })),
+      byAgent: byAgentRows.map((r) => ({
+        agentOrSource: r.agent_or_source,
+        sourceType: r.source_type,
+        total: r.total,
+        failures: r.failures,
+        failureRate: r.total > 0 ? Math.round((r.failures / r.total) * 1000) / 10 : 0,
+      })),
+      byHour: byHourRows.map((r) => ({
+        hour: r.hour,
+        total: r.total,
+        failures: r.failures,
+      })),
+      recentErrors: recentErrorRows.map((r) => ({
+        timestamp: r.timestamp,
+        probe: r.probe,
+        agentOrSource: r.agent_or_source,
+        status: r.status,
+        errorMessage: r.error_message,
+        durationMs: r.duration_ms,
+      })),
+    };
+  }
+
+  getProbeResultsByProbe(
+    probe: string,
+    sinceHours: number,
+  ): {
+    total: number;
+    success: number;
+    error: number;
+    timeout: number;
+    failureRate: number;
+    avgDurationMs: number;
+    byAgent: Array<{
+      agentOrSource: string;
+      total: number;
+      failures: number;
+      failureRate: number;
+      avgDurationMs: number;
+    }>;
+    recentResults: Array<{
+      timestamp: string;
+      agentOrSource: string;
+      status: string;
+      durationMs: number;
+      errorMessage: string | null;
+    }>;
+  } {
+    const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+
+    const summary = this.db
+      .prepare(
+        `SELECT
+           COUNT(*) as total,
+           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+           SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error,
+           SUM(CASE WHEN status = 'timeout' THEN 1 ELSE 0 END) as timeout,
+           AVG(duration_ms) as avg_duration_ms
+         FROM probe_results
+         WHERE timestamp >= ? AND probe = ?`,
+      )
+      .get(since, probe) as {
+      total: number;
+      success: number;
+      error: number;
+      timeout: number;
+      avg_duration_ms: number;
+    };
+
+    const byAgentRows = this.db
+      .prepare(
+        `SELECT
+           agent_or_source,
+           COUNT(*) as total,
+           SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failures,
+           AVG(duration_ms) as avg_duration_ms
+         FROM probe_results
+         WHERE timestamp >= ? AND probe = ?
+         GROUP BY agent_or_source
+         ORDER BY failures DESC, total DESC`,
+      )
+      .all(since, probe) as Array<{
+      agent_or_source: string;
+      total: number;
+      failures: number;
+      avg_duration_ms: number;
+    }>;
+
+    const recentRows = this.db
+      .prepare(
+        `SELECT timestamp, agent_or_source, status, duration_ms, error_message
+         FROM probe_results
+         WHERE timestamp >= ? AND probe = ?
+         ORDER BY id DESC
+         LIMIT 20`,
+      )
+      .all(since, probe) as Array<{
+      timestamp: string;
+      agent_or_source: string;
+      status: string;
+      duration_ms: number;
+      error_message: string | null;
+    }>;
+
+    const total = summary.total ?? 0;
+    const success = summary.success ?? 0;
+    return {
+      total,
+      success,
+      error: summary.error ?? 0,
+      timeout: summary.timeout ?? 0,
+      failureRate: total > 0 ? Math.round(((total - success) / total) * 1000) / 10 : 0,
+      avgDurationMs: Math.round(summary.avg_duration_ms ?? 0),
+      byAgent: byAgentRows.map((r) => ({
+        agentOrSource: r.agent_or_source,
+        total: r.total,
+        failures: r.failures,
+        failureRate: r.total > 0 ? Math.round((r.failures / r.total) * 1000) / 10 : 0,
+        avgDurationMs: Math.round(r.avg_duration_ms),
+      })),
+      recentResults: recentRows.map((r) => ({
+        timestamp: r.timestamp,
+        agentOrSource: r.agent_or_source,
+        status: r.status,
+        durationMs: r.duration_ms,
+        errorMessage: r.error_message,
+      })),
+    };
+  }
+
+  getProbeResultsByAgent(
+    agent: string,
+    sinceHours: number,
+  ): {
+    total: number;
+    failures: number;
+    failureRate: number;
+    byProbe: Array<{
+      probe: string;
+      total: number;
+      failures: number;
+      failureRate: number;
+      avgDurationMs: number;
+    }>;
+    recentResults: Array<{
+      timestamp: string;
+      probe: string;
+      status: string;
+      durationMs: number;
+      errorMessage: string | null;
+    }>;
+  } {
+    const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+
+    const byProbeRows = this.db
+      .prepare(
+        `SELECT
+           probe,
+           COUNT(*) as total,
+           SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failures,
+           AVG(duration_ms) as avg_duration_ms
+         FROM probe_results
+         WHERE timestamp >= ? AND agent_or_source = ?
+         GROUP BY probe
+         ORDER BY failures DESC, total DESC`,
+      )
+      .all(since, agent) as Array<{
+      probe: string;
+      total: number;
+      failures: number;
+      avg_duration_ms: number;
+    }>;
+
+    const recentRows = this.db
+      .prepare(
+        `SELECT timestamp, probe, status, duration_ms, error_message
+         FROM probe_results
+         WHERE timestamp >= ? AND agent_or_source = ?
+         ORDER BY id DESC
+         LIMIT 20`,
+      )
+      .all(since, agent) as Array<{
+      timestamp: string;
+      probe: string;
+      status: string;
+      duration_ms: number;
+      error_message: string | null;
+    }>;
+
+    let total = 0;
+    let failures = 0;
+    for (const row of byProbeRows) {
+      total += row.total;
+      failures += row.failures;
+    }
+
+    return {
+      total,
+      failures,
+      failureRate: total > 0 ? Math.round((failures / total) * 1000) / 10 : 0,
+      byProbe: byProbeRows.map((r) => ({
+        probe: r.probe,
+        total: r.total,
+        failures: r.failures,
+        failureRate: r.total > 0 ? Math.round((r.failures / r.total) * 1000) / 10 : 0,
+        avgDurationMs: Math.round(r.avg_duration_ms),
+      })),
+      recentResults: recentRows.map((r) => ({
+        timestamp: r.timestamp,
+        probe: r.probe,
+        status: r.status,
+        durationMs: r.duration_ms,
+        errorMessage: r.error_message,
+      })),
+    };
   }
 
   close(): void {
