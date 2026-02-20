@@ -27,16 +27,6 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Manage',
-    items: [
-      { to: '/enrollment', label: 'Enrollment', minimumRole: 'admin' },
-      { to: '/api-keys', label: 'API Keys', minimumRole: 'admin' },
-      { to: '/users', label: 'Users', minimumRole: 'admin' },
-      { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
-      { to: '/integrations', label: 'Integrations', minimumRole: 'admin' },
-    ],
-  },
-  {
     title: 'Diagnostics',
     items: [
       { to: '/trending', label: 'Trending', minimumRole: 'admin' },
@@ -44,6 +34,16 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/critical-paths', label: 'Critical Paths', minimumRole: 'admin' },
       { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
       { to: '/policies', label: 'Policies', minimumRole: 'admin' },
+    ],
+  },
+  {
+    title: 'Manage',
+    items: [
+      { to: '/enrollment', label: 'Enrollment', minimumRole: 'admin' },
+      { to: '/api-keys', label: 'API Keys', minimumRole: 'admin' },
+      { to: '/users', label: 'Users', minimumRole: 'admin' },
+      { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
+      { to: '/integrations', label: 'Integrations', minimumRole: 'admin' },
     ],
   },
   {
