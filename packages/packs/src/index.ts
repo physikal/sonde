@@ -48,6 +48,8 @@ export { thousandeyesPack } from './integrations/thousandeyes.js';
 export { merakiPack } from './integrations/meraki.js';
 export { checkpointPack } from './integrations/checkpoint.js';
 export { a10Pack } from './integrations/a10.js';
+export { unifiPack } from './integrations/unifi.js';
+export { unifiAccessPack } from './integrations/unifi-access.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
 export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 

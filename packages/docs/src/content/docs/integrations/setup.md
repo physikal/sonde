@@ -306,6 +306,74 @@ Use a read-only API key. Full-access keys are not needed since Sonde only perfor
 - "Who is on call right now?"
 - "Show details for service P1234ABC"
 
+## UniFi Network
+
+### Prerequisites
+
+- UniFi Network controller accessible over HTTPS from the hub (UDM, UDM-Pro, UDM-SE, or self-hosted controller)
+- Local admin credentials (username and password)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Controller URL | `https://192.168.1.1` (UDM) or `https://unifi.local:8443` (self-hosted) |
+| Auth Method | `api_key` |
+| Username | (controller admin user) |
+| Password | (encrypted at rest) |
+| Site | `default` (or your site name for multi-site deployments) |
+| Controller Type | `udm` (UDM/UDM-Pro/UDM-SE) or `selfhosted` (Cloud Key / manual install) |
+| Verify SSL | `false` (UniFi controllers use self-signed certs by default) |
+
+The controller type determines the API paths used. UDM devices use `/proxy/network/api/s/{site}/` while self-hosted controllers use `/api/s/{site}/`. Authentication is session-based — Sonde logs in, caches the session cookie for 25 minutes, and automatically re-authenticates on expiry.
+
+### Available Probes
+
+- **site.health** — Overall site health summary (ISP, switches, APs, gateways)
+- **devices** — List all network devices with status, model, firmware, uptime
+- **device.detail** — Single device detail by MAC address
+- **clients** — Active wireless and wired clients with hostname, IP, signal, experience score
+- **events** — Recent network events (configurable limit)
+- **alarms** — Active alarms and alerts
+- **port.forwards** — Port forwarding rules
+
+### Example Queries
+
+- "What's the health of my UniFi network?"
+- "List all access points and their firmware versions"
+- "How many clients are connected right now?"
+- "Show me any network alarms"
+- "What port forwarding rules are configured?"
+
+## UniFi Access
+
+### Prerequisites
+
+- UniFi Access system with API access enabled
+- API token (generated in UniFi Access settings under Developer API)
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Access URL | `https://192.168.1.1/proxy/access/api/v1/developer` (through UDM) or `https://access-host:12445/api/v1/developer` (direct) |
+| Auth Method | `api_key` |
+| API Token | (bearer token from Access settings) |
+| Verify SSL | `false` (self-signed certs typical) |
+
+### Available Probes
+
+- **doors** — List all doors with name, status, and lock state
+- **door.logs** — Access event log for a specific door (requires door_id, configurable limit)
+- **devices** — List access control devices (readers, hubs) with status and firmware
+
+### Example Queries
+
+- "List all doors in the access system"
+- "Who were the last 10 people to access the server room?"
+- "Are all door readers online?"
+- "Show me the access log for the main entrance"
+
 ## Testing Integrations
 
 After configuring any integration:

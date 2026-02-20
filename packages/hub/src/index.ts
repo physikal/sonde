@@ -24,6 +24,8 @@ import {
   servicenowPack,
   splunkPack,
   thousandeyesPack,
+  unifiAccessPack,
+  unifiPack,
   vcenterPack,
 } from '@sonde/packs';
 import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
@@ -114,6 +116,8 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [merakiPack.manifest.name, merakiPack],
   [checkpointPack.manifest.name, checkpointPack],
   [a10Pack.manifest.name, a10Pack],
+  [unifiPack.manifest.name, unifiPack],
+  [unifiAccessPack.manifest.name, unifiAccessPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,
