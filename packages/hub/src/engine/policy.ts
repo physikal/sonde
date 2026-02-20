@@ -1,8 +1,7 @@
-export interface ApiKeyPolicy {
-  allowedAgents?: string[];
-  allowedProbes?: string[];
-  allowedClients?: string[];
-}
+import type { z } from 'zod';
+import type { ApiKeyPolicySchema } from '../schemas.js';
+
+export type ApiKeyPolicy = z.infer<typeof ApiKeyPolicySchema>;
 
 export interface AuthContext {
   type: 'api_key' | 'oauth';
