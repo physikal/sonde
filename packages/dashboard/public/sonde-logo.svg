@@ -15,15 +15,7 @@
       </feMerge>
     </filter>
 
-    <!-- Background gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
-    </linearGradient>
   </defs>
-  
-  <!-- Background -->
-  <rect width="600" height="200" rx="16" fill="url(#bgGrad)"/>
   
   <!-- Sonar/Probe Icon -->
   <g transform="translate(100, 100)">

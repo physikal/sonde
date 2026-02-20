@@ -116,8 +116,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           lg:relative lg:flex
         `}
       >
-        <div className="px-4 py-4">
-          <img src="/sonde-logo.svg" alt="Sonde" className="h-10" />
+        <div className="px-2 py-4">
+          <img src="/sonde-logo.svg" alt="Sonde" className="w-full" />
         </div>
         <nav className="mt-2 flex flex-1 flex-col gap-4 px-2 pb-4">
           {NAV_SECTIONS.map((section) => {
