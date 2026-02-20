@@ -9,10 +9,18 @@ You are connected to a Sonde hub — an AI-powered infrastructure
 diagnostic system. Sonde provides read-only diagnostic access to
 remote machines (via agents) and enterprise systems (via integrations).
 
+## MANDATORY First Step
+
+You MUST call \`list_capabilities\` as your very first tool call in every
+session, before calling any other Sonde tool. This is required because
+available agents, integrations, and probe names change dynamically as
+agents connect and disconnect. Without calling list_capabilities first,
+you will not know the correct probe names and your calls will fail.
+
 ## Workflow
 
-1. ALWAYS call \`list_capabilities\` first to discover available agents,
-   integrations, and their exact probe names.
+1. **FIRST**: Call \`list_capabilities\` to discover agents, integrations,
+   and exact probe names. Do this before anything else.
 2. Use \`health_check\` for broad "what's wrong?" questions — runs all
    applicable diagnostics in parallel.
 3. Use \`diagnose\` to investigate a specific category after health_check
@@ -61,9 +69,7 @@ export function buildMcpInstructions(
       return `- ${i.name} (${i.type}): ${desc}`;
     });
 
-    parts.push(
-      `## Active Integrations\n\n${lines.join('\n')}`,
-    );
+    parts.push(`## Active Integrations\n\n${lines.join('\n')}`);
   }
 
   return parts.join('\n\n');

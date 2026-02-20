@@ -75,7 +75,7 @@ export function createMcpHandler(
       'probe',
       {
         description:
-          'Run a single targeted probe for a specific measurement. Use for follow-up after diagnose reveals something worth investigating. For agent probes, specify the agent name/ID. For integration probes (external APIs), the agent parameter can be omitted.',
+          'Run a single targeted probe for a specific measurement. IMPORTANT: You must call list_capabilities first to discover valid probe names — they change as agents connect/disconnect. Use for follow-up after diagnose reveals something worth investigating. For agent probes, specify the agent name/ID. For integration probes (external APIs), the agent parameter can be omitted.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -94,7 +94,7 @@ export function createMcpHandler(
       'diagnose',
       {
         description:
-          'Deep investigation of a specific category on an agent or integration. Use after health_check flags an issue or when the user asks about a specific category (e.g. "check docker on server-1"). For agent categories (e.g. system, docker), specify the agent. For integration categories (e.g. proxmox-vm, proxmox-cluster), do NOT specify an agent — these run server-side via external APIs.',
+          'Deep investigation of a specific category on an agent or integration. IMPORTANT: You must call list_capabilities first to discover valid categories and agent names — they change dynamically. Use after health_check flags an issue or when the user asks about a specific category (e.g. "check docker on server-1"). For agent categories (e.g. system, docker), specify the agent. For integration categories (e.g. proxmox-vm, proxmox-cluster), do NOT specify an agent — these run server-side via external APIs.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -189,7 +189,7 @@ export function createMcpHandler(
       'health_check',
       {
         description:
-          'Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel and returns unified findings sorted by severity (critical → warning → info). Use tags to scope to a group of agents/integrations (e.g. #prod, #storefront). For deeper investigation of a specific finding, follow up with diagnose for a full category runbook, probe for a single data point, or query_logs for root cause analysis. Skips categories that require user-provided parameters.',
+          'Start here for broad "is something wrong?" questions. IMPORTANT: You must call list_capabilities first to discover available agents and integrations before using this tool. Runs all applicable diagnostics in parallel and returns unified findings sorted by severity (critical → warning → info). Use tags to scope to a group of agents/integrations (e.g. #prod, #storefront). For deeper investigation of a specific finding, follow up with diagnose for a full category runbook, probe for a single data point, or query_logs for root cause analysis. Skips categories that require user-provided parameters.',
         inputSchema: z.object({
           agent: z.string().optional().describe('Agent name or ID for agent-specific checks'),
           categories: z
@@ -224,7 +224,7 @@ export function createMcpHandler(
       'query_logs',
       {
         description:
-          "Investigate root cause by checking logs after diagnostics reveal an issue. For agent logs (systemd, docker, nginx), specify the agent. For audit logs, no agent is needed — this queries the hub's activity log.",
+          "Investigate root cause by checking logs after diagnostics reveal an issue. IMPORTANT: You must call list_capabilities first to discover available agents. For agent logs (systemd, docker, nginx), specify the agent. For audit logs, no agent is needed — this queries the hub's activity log.",
         inputSchema: z.object({
           source: z
             .enum(['systemd', 'docker', 'nginx', 'audit'])
@@ -254,7 +254,7 @@ export function createMcpHandler(
       'check_critical_path',
       {
         description:
-          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). All steps execute in parallel, returning pass/fail per hop with timing. Use list_capabilities to discover available paths.',
+          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). IMPORTANT: You must call list_capabilities first to discover available path names. All steps execute in parallel, returning pass/fail per hop with timing.',
         inputSchema: z.object({
           path: z.string().describe('Critical path name (e.g. "storefront")'),
         }),
