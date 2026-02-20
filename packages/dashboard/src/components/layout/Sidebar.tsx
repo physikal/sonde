@@ -16,10 +16,6 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    title: 'My Account',
-    items: [{ to: '/my-api-keys', label: 'My API Keys' }],
-  },
-  {
     title: 'Fleet',
     items: [
       { to: '/', label: 'Overview', minimumRole: 'admin' },
@@ -54,6 +50,10 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/settings/mcp-instructions', label: 'MCP Prompt', minimumRole: 'owner' },
       { to: '/settings/sso', label: 'SSO', minimumRole: 'owner' },
     ],
+  },
+  {
+    title: 'My Account',
+    items: [{ to: '/my-api-keys', label: 'My API Keys' }],
   },
 ];
 
