@@ -33,7 +33,7 @@ export function createMcpHandler(
   packRegistry: ReadonlyMap<string, Pack>,
   oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
-  const SESSION_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+  const SESSION_MAX_IDLE_MS = 8 * 60 * 60 * 1000; // 8 hours (matches dashboard sessions)
   const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   // Per-session transports (sessionId → transport)
@@ -353,7 +353,16 @@ export function createMcpHandler(
       return;
     }
 
-    // For new sessions (no session ID or unknown session), handle initialization
+    // Stale session: client sent a session ID we don't recognize (evicted
+    // or server restarted). Return 404 per MCP spec so the client
+    // re-initializes instead of hanging on a dead session.
+    if (sessionId) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Session expired' }));
+      return;
+    }
+
+    // For new sessions (no session ID), handle initialization
     if (req.method === 'POST' || req.method === 'GET') {
       const { server, transport } = createSessionServer(auth);
       await server.connect(transport);
