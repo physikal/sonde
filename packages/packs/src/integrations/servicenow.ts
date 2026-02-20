@@ -6,8 +6,76 @@ import type {
   IntegrationProbeHandler,
 } from '@sonde/shared';
 
-/** Build Authorization header (Basic auth with username:password) */
-function buildAuthHeaders(credentials: IntegrationCredentials): Record<string, string> {
+// --- OAuth2 client_credentials token cache ---
+
+interface CachedToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+let tokenCache: CachedToken | null = null;
+
+/** Clear the cached token (used for testing) */
+export function clearTokenCache(): void {
+  tokenCache = null;
+}
+
+/**
+ * Acquire or reuse a ServiceNow OAuth2 token via client_credentials grant.
+ * Requires Washington DC release or newer with the OAuth 2.0 plugin enabled
+ * and `glide.oauth.inbound.client.credential.grant_type.enabled = true`.
+ * Token endpoint: POST https://<instance>/oauth_token.do
+ */
+async function ensureAccessToken(
+  config: IntegrationConfig,
+  credentials: IntegrationCredentials,
+  fetchFn: FetchFn,
+): Promise<string> {
+  if (tokenCache && Date.now() < tokenCache.expiresAt - 30_000) {
+    return tokenCache.accessToken;
+  }
+
+  const clientId = credentials.credentials.clientId ?? '';
+  const clientSecret = credentials.credentials.clientSecret ?? '';
+  const endpoint = config.endpoint.replace(/\/$/, '');
+
+  const res = await fetchFn(`${endpoint}/oauth_token.do`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    }).toString(),
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `ServiceNow OAuth token request failed: ${res.status} ${res.statusText}`,
+    );
+  }
+
+  const data = (await res.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
+  tokenCache = {
+    accessToken: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  };
+  return tokenCache.accessToken;
+}
+
+/** Build Authorization header based on auth method */
+async function buildAuthHeaders(
+  config: IntegrationConfig,
+  credentials: IntegrationCredentials,
+  fetchFn: FetchFn,
+): Promise<Record<string, string>> {
+  if (credentials.authMethod === 'oauth2') {
+    const token = await ensureAccessToken(config, credentials, fetchFn);
+    return { Authorization: `Bearer ${token}` };
+  }
   const { username, password } = credentials.credentials;
   if (username && password) {
     const encoded = Buffer.from(`${username}:${password}`).toString('base64');
@@ -41,9 +109,10 @@ async function snowFetch(
   credentials: IntegrationCredentials,
   fetchFn: FetchFn,
 ): Promise<{ result: unknown[] }> {
+  const authHeaders = await buildAuthHeaders(config, credentials, fetchFn);
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    ...buildAuthHeaders(credentials),
+    ...authHeaders,
     ...config.headers,
   };
   const res = await fetchFn(url, { headers });
@@ -265,9 +334,10 @@ export const servicenowPack: IntegrationPack = {
     const url = buildUrl(config.endpoint, 'sys_properties', undefined, ['name']);
     const parsed = new URL(url);
     parsed.searchParams.set('sysparm_limit', '1');
+    const authHeaders = await buildAuthHeaders(config, credentials, fetchFn);
     const headers: Record<string, string> = {
       Accept: 'application/json',
-      ...buildAuthHeaders(credentials),
+      ...authHeaders,
       ...config.headers,
     };
     const res = await fetchFn(parsed.toString(), { headers });

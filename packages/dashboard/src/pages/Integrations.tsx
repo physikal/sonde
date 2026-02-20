@@ -27,7 +27,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     label: 'ServiceNow',
     description:
       'CMDB lookup, incidents, changes, and ownership. Requires snc_read_only + itil roles.',
-    authMethods: ['api_key'],
+    authMethods: ['api_key', 'oauth2'],
     credentialFields: {
       api_key: [
         {
@@ -42,6 +42,21 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           placeholder: 'ServiceNow account password',
           sensitive: true,
           tooltip: 'Password for the ServiceNow user account',
+        },
+      ],
+      oauth2: [
+        {
+          key: 'clientId',
+          label: 'Client ID',
+          placeholder: 'OAuth application client ID',
+          tooltip:
+            'From System OAuth > Application Registry in ServiceNow',
+        },
+        {
+          key: 'clientSecret',
+          label: 'Client Secret',
+          sensitive: true,
+          tooltip: 'Client secret from the OAuth application',
         },
       ],
     },

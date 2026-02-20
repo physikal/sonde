@@ -69,10 +69,10 @@ Identifies VMs with local storage that are HA-managed, recommending migration co
 ### Prerequisites
 
 - ServiceNow instance with REST API access
-- User account with `snc_read_only` and `itil` roles
-- Read access to CMDB tables (`cmdb_ci`, `cmdb_rel_ci`, `change_request`, `incident`)
+- **Basic auth:** User account with `snc_read_only` and `itil` roles
+- **OAuth 2.0:** OAuth application registered in ServiceNow (System OAuth > Application Registry) with `client_credentials` grant enabled. Requires Washington DC release or newer with the OAuth 2.0 plugin and `glide.oauth.inbound.client.credential.grant_type.enabled` set to `true`.
 
-### Configuration
+### Configuration (Basic Auth)
 
 | Field | Value |
 |---|---|
@@ -81,7 +81,16 @@ Identifies VMs with local storage that are HA-managed, recommending migration co
 | Username | ServiceNow user with `snc_read_only` + `itil` roles |
 | Password | (encrypted at rest) |
 
-Use a dedicated service account for least privilege. The account only needs read access to CMDB and ITSM tables.
+### Configuration (OAuth 2.0)
+
+| Field | Value |
+|---|---|
+| Instance URL | `https://company.service-now.com` |
+| Auth Method | `oauth2` |
+| Client ID | OAuth application client ID (from Application Registry) |
+| Client Secret | (encrypted at rest) |
+
+OAuth 2.0 uses the `client_credentials` grant type. Sonde exchanges the client ID and secret for a bearer token via `POST /oauth_token.do` and caches it until expiry. No username or password needed — the OAuth application user's roles determine API access. Assign `snc_platform_rest_api_access` and `snc_read_only` roles to the application user.
 
 ### Available Probes
 
