@@ -265,10 +265,36 @@ if ! command -v sonde >/dev/null 2>&1; then
 fi
 ok "@sonde/agent installed ($(sonde --version 2>/dev/null || echo 'unknown version'))"
 
+# --- Ensure a non-root user for the agent ---
+# The agent refuses to run as root. On root-only systems (e.g. Unraid),
+# create a dedicated "sonde" system user to run the agent as.
+SONDE_USER=""
+if [ "$(id -u)" = "0" ] && [ -z "\${SUDO_USER:-}" ]; then
+  if id -u sonde >/dev/null 2>&1; then
+    ok "sonde user already exists"
+  else
+    info "Root-only system detected — creating dedicated sonde user..."
+    useradd --system --home-dir /var/lib/sonde --create-home \\
+      --shell /usr/sbin/nologin sonde
+    ok "Created sonde user (home: /var/lib/sonde)"
+  fi
+
+  # Grant docker access if docker is installed
+  if command -v docker >/dev/null 2>&1; then
+    usermod -aG docker sonde 2>/dev/null || true
+  fi
+
+  SONDE_USER="sonde"
+fi
+
 # --- Launch interactive installer TUI ---
 info "Launching Sonde installer..."
 printf "\\n"
-exec sonde install --hub ${hubUrl}
+if [ -n "$SONDE_USER" ]; then
+  exec su -s /bin/sh "$SONDE_USER" -c "sonde install --hub ${hubUrl}"
+else
+  exec sonde install --hub ${hubUrl}
+fi
 `;
 }
 
