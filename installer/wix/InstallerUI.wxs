@@ -42,22 +42,20 @@
         <Control Id="Back" Type="PushButton"
                  X="180" Y="243" Width="56" Height="17"
                  Text="!(loc.WixUIBack)">
-          <Publish Event="NewDialog" Value="WelcomeDlg">1</Publish>
+          <Publish Event="NewDialog" Value="WelcomeDlg" />
         </Control>
         <Control Id="Next" Type="PushButton"
                  X="236" Y="243" Width="56" Height="17"
                  Default="yes" Text="!(loc.WixUINext)">
-          <Publish Event="NewDialog" Value="AzureConfigDlg">
-            <![CDATA[SONDE_SECRET_MODE = "keyvault"]]>
-          </Publish>
-          <Publish Event="NewDialog" Value="VerifyReadyDlg">
-            <![CDATA[SONDE_SECRET_MODE <> "keyvault"]]>
-          </Publish>
+          <Publish Event="NewDialog" Value="AzureConfigDlg"
+                   Condition="SONDE_SECRET_MODE = &quot;keyvault&quot;" />
+          <Publish Event="NewDialog" Value="VerifyReadyDlg"
+                   Condition="SONDE_SECRET_MODE &lt;&gt; &quot;keyvault&quot;" />
         </Control>
         <Control Id="Cancel" Type="PushButton"
                  X="304" Y="243" Width="56" Height="17"
                  Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
 
@@ -140,17 +138,17 @@
         <Control Id="Back" Type="PushButton"
                  X="180" Y="243" Width="56" Height="17"
                  Text="!(loc.WixUIBack)">
-          <Publish Event="NewDialog" Value="SecretModeDlg">1</Publish>
+          <Publish Event="NewDialog" Value="SecretModeDlg" />
         </Control>
         <Control Id="Next" Type="PushButton"
                  X="236" Y="243" Width="56" Height="17"
                  Default="yes" Text="!(loc.WixUINext)">
-          <Publish Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
         </Control>
         <Control Id="Cancel" Type="PushButton"
                  X="304" Y="243" Width="56" Height="17"
                  Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
 
@@ -159,21 +157,19 @@
       <!-- WelcomeDlg Next → SecretModeDlg (overrides default → VerifyReadyDlg) -->
       <Publish Dialog="WelcomeDlg" Control="Next"
                Event="NewDialog" Value="SecretModeDlg"
-               Order="2">1</Publish>
+               Order="2" />
 
       <!-- VerifyReadyDlg Back → AzureConfigDlg (if keyvault) -->
       <Publish Dialog="VerifyReadyDlg" Control="Back"
                Event="NewDialog" Value="AzureConfigDlg"
-               Order="2">
-        <![CDATA[SONDE_SECRET_MODE = "keyvault"]]>
-      </Publish>
+               Order="2"
+               Condition="SONDE_SECRET_MODE = &quot;keyvault&quot;" />
 
       <!-- VerifyReadyDlg Back → SecretModeDlg (if standalone) -->
       <Publish Dialog="VerifyReadyDlg" Control="Back"
                Event="NewDialog" Value="SecretModeDlg"
-               Order="2">
-        <![CDATA[SONDE_SECRET_MODE <> "keyvault"]]>
-      </Publish>
+               Order="2"
+               Condition="SONDE_SECRET_MODE &lt;&gt; &quot;keyvault&quot;" />
     </UI>
   </Fragment>
 
