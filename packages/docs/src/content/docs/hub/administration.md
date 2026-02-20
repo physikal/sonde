@@ -62,7 +62,7 @@ Admins manage all keys across the deployment from **Manage** > **API Keys**:
 1. Click **Create Key**
 2. Enter a descriptive name (e.g., "n8n monitoring workflow", "shared-team-key")
 3. Select role: **Member** (MCP only) or **Admin** (MCP + REST)
-4. Optional: scope to specific agents (glob pattern) or probe types
+4. Optional: scope to specific agents (exact names), probe types (glob patterns), or MCP clients (exact client IDs)
 5. The key value is shown once — copy it immediately
 
 ### Rotating Keys
@@ -74,7 +74,8 @@ Click **Rotate** on an existing key to generate a new value. The old value is im
 - Direct members to **My API Keys** for self-service — avoid creating keys on their behalf
 - Create separate keys for each client or integration
 - Use the minimum role needed (member for MCP users, admin for automation)
-- Scope keys to specific agents when possible (e.g., `prod-*` for production-only access)
+- Scope keys to specific agents when possible (e.g., `prod-server-1, staging-web`)
+- Restrict clients to known MCP consumers (e.g., `claude-desktop, cursor`)
 - Rotate keys periodically and after any suspected compromise
 - Name keys descriptively so you know what breaks if you revoke one
 

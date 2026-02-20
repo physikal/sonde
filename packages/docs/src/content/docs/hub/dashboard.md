@@ -167,7 +167,20 @@ Useful for testing probe functionality without needing an AI client connected.
 
 ### Policies
 
-Configure per-API-key access policies: restrict to specific agents (glob patterns) and tools.
+Configure per-API-key access policies across three dimensions:
+
+- **Agents** — Restrict which agents a key can query. Exact name matching. Empty = all agents.
+- **Probes** — Restrict which probes a key can run. Glob patterns with `*` wildcard. Empty = all probes.
+- **Clients** — Restrict which MCP clients can use a key. Exact client ID matching. Empty = all clients.
+
+The policies table shows all active API keys with columns for name, role, restriction status, agent/probe counts, and last used time. Use the search bar to filter by key name, role, restriction values, or status (`restricted` / `unrestricted`).
+
+- **Unrestricted** (green badge) — No restrictions on any dimension. Full diagnostic access.
+- **Restricted** (amber badge) — At least one dimension has entries limiting access.
+
+Click **Edit Policy** on any row to expand an inline editor where you can set comma-separated agent names, probe glob patterns, and client IDs. A collapsible "Policy dimensions" section at the top of the page explains each dimension with examples.
+
+Keys with no restrictions have full diagnostic access. Restrictions are enforced at the hub on every probe request.
 
 ## Settings (Owner Only)
 

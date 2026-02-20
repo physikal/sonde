@@ -22,7 +22,7 @@ All endpoints (except where noted) require authentication via one of:
 | Type | Scope |
 |------|-------|
 | Master API key | Full access to all endpoints and agents |
-| Scoped API key | Restricted by policy rules (specific agents and tools) |
+| Scoped API key | Restricted by policy rules (specific agents, probes, and clients) |
 
 ## MCP Endpoint
 
@@ -177,7 +177,7 @@ Admin-only endpoints for managing all keys across the deployment. Requires `admi
 
 #### `POST /api/v1/api-keys`
 
-Create a new API key. Optionally scope it with policy rules.
+Create a new API key. Optionally scope it with policy rules across three dimensions: agents (exact names), probes (glob patterns), and clients (exact MCP client IDs). Omit a field or pass an empty array for no restriction on that dimension.
 
 **Request:**
 ```json
@@ -186,7 +186,8 @@ Create a new API key. Optionally scope it with policy rules.
   "role": "member",
   "policy": {
     "allowedAgents": ["my-server"],
-    "allowedProbes": ["system.*"]
+    "allowedProbes": ["system.*"],
+    "allowedClients": ["claude-desktop"]
   }
 }
 ```

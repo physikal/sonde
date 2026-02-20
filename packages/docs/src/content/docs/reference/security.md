@@ -295,22 +295,30 @@ Raw API keys are never stored. On creation, the key is hashed with SHA-256 and o
 
 ### Policy Engine
 
-Each API key can be scoped with policies that restrict which agents and probes it can access:
+Each API key can be scoped with policies that restrict which agents, probes, and MCP clients it can access:
 
 ```json
 {
   "allowedAgents": ["web-server-01", "db-server-01"],
-  "allowedProbes": ["system.*", "docker.containers.*"]
+  "allowedProbes": ["system.*", "docker.containers.*"],
+  "allowedClients": ["claude-desktop", "cursor"]
 }
 ```
 
-The policy engine evaluates these rules before dispatching any probe request. Glob patterns allow flexible matching (e.g., `system.*` matches all system probes).
+The policy engine evaluates these rules before dispatching any probe request:
+
+- **Agents** — Exact name matching. Only the listed agents can be queried with this key.
+- **Probes** — Glob patterns with `*` wildcard (e.g., `system.*` matches all system probes).
+- **Clients** — Exact MCP client ID matching. Only the listed clients can use this key.
+
+An empty array (or omitted field) means no restriction on that dimension.
 
 ### What This Mitigates
 
 - **Credential theft** — a stolen API key hash is useless for authentication. The attacker needs the raw key.
 - **Lateral movement** — a scoped key for one agent cannot query a different agent. Compromise of a single key doesn't grant fleet-wide access.
 - **Blast radius** — keys scoped to specific probes limit what data an attacker can access even with a valid key.
+- **Client restriction** — keys scoped to specific MCP clients cannot be used from unauthorized tools, limiting misuse of leaked credentials.
 - **Revocation** — keys can be revoked immediately via the dashboard. Revoked keys are rejected on the next request.
 
 ---
