@@ -143,13 +143,15 @@ function TagInput({
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (open && filtered.length > 0 && highlighted < filtered.length) {
-        addValue(filtered[highlighted]);
+      const match = filtered[highlighted];
+      if (open && filtered.length > 0 && match !== undefined) {
+        addValue(match);
       } else if (input.trim()) {
         addValue(input);
       }
     } else if (e.key === 'Backspace' && !input && values.length > 0) {
-      removeValue(values[values.length - 1]);
+      const last = values[values.length - 1];
+      if (last !== undefined) removeValue(last);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setHighlighted((h) => (h < filtered.length - 1 ? h + 1 : h));
