@@ -276,6 +276,43 @@ The application key determines the scope of data access. Use a key scoped to a s
 - "List infrastructure hosts in Datadog"
 - "What events happened in the last 4 hours?"
 
+## ThousandEyes
+
+### Prerequisites
+
+- ThousandEyes account with API access
+- API bearer token (generate from Account Settings > Users and Roles > Profile > User API Tokens)
+
+Token generation requires MFA to be enabled on your account.
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| ThousandEyes API URL | `https://api.thousandeyes.com` |
+| Auth Method | `bearer_token` |
+| Token | (API bearer token) |
+
+The API URL is the same for all accounts. Tokens inherit the permissions of the associated user — use a user with a read-only role for least privilege.
+
+### Available Probes
+
+- **alerts.active** — Active alerts with severity, state, and violation count
+- **tests.list** — Configured tests with type, interval, and assigned agents
+- **network.metrics** — Per-agent latency, loss, and jitter for a specific test
+- **network.path-vis** — Hop-by-hop path visualization for a specific test
+- **agents.list** — ThousandEyes agents with type, location, and status
+- **outages.network** — Detected internet outages affecting your tests
+
+### Example Queries
+
+- "Show me active ThousandEyes alerts"
+- "List all ThousandEyes tests"
+- "What's the network latency for test 12345?"
+- "Show me the path visualization for test 12345"
+- "Are there any internet outages affecting my tests?"
+- "List ThousandEyes agents and their locations"
+
 ## Loki
 
 ### Prerequisites
