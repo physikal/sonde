@@ -113,6 +113,7 @@ export interface AuditEntryWithAgentName {
   id: number;
   timestamp: string;
   apiKeyId: string;
+  apiKeyName: string | null;
   agentId: string;
   probe: string;
   status: string;
@@ -244,6 +245,7 @@ export class SondeDb {
     id: number;
     timestamp: string;
     apiKeyId: string;
+    apiKeyName: string | null;
     agentId: string;
     probe: string;
     status: string;
@@ -256,30 +258,31 @@ export class SondeDb {
     const params: unknown[] = [];
 
     if (opts?.agentId) {
-      conditions.push('agent_id = ?');
+      conditions.push('al.agent_id = ?');
       params.push(opts.agentId);
     }
     if (opts?.apiKeyId) {
-      conditions.push('api_key_id = ?');
+      conditions.push('al.api_key_id = ?');
       params.push(opts.apiKeyId);
     }
     if (opts?.startDate) {
-      conditions.push('timestamp >= ?');
+      conditions.push('al.timestamp >= ?');
       params.push(opts.startDate);
     }
     if (opts?.endDate) {
-      conditions.push('timestamp <= ?');
+      conditions.push('al.timestamp <= ?');
       params.push(opts.endDate);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const sql = `SELECT id, timestamp, api_key_id, agent_id, probe, status, duration_ms, request_json, response_json FROM audit_log ${where} ORDER BY id DESC LIMIT ?`;
+    const sql = `SELECT al.id, al.timestamp, al.api_key_id, ak.name AS api_key_name, al.agent_id, al.probe, al.status, al.duration_ms, al.request_json, al.response_json FROM audit_log al LEFT JOIN api_keys ak ON al.api_key_id = ak.id ${where} ORDER BY al.id DESC LIMIT ?`;
     params.push(limit);
 
     const rows = this.db.prepare(sql).all(...params) as Array<{
       id: number;
       timestamp: string;
       api_key_id: string;
+      api_key_name: string | null;
       agent_id: string;
       probe: string;
       status: string;
@@ -292,6 +295,7 @@ export class SondeDb {
       id: r.id,
       timestamp: r.timestamp,
       apiKeyId: r.api_key_id,
+      apiKeyName: r.api_key_name,
       agentId: r.agent_id,
       probe: r.probe,
       status: r.status,
@@ -1422,11 +1426,13 @@ export class SondeDb {
   getAuditEntriesWithNames(limit: number): AuditEntryWithAgentName[] {
     const rows = this.db
       .prepare(
-        `SELECT al.id, al.timestamp, al.api_key_id, al.agent_id, al.probe, al.status,
+        `SELECT al.id, al.timestamp, al.api_key_id, ak.name AS api_key_name,
+                al.agent_id, al.probe, al.status,
                 al.duration_ms, al.request_json, al.response_json,
                 a.name AS agent_name
          FROM audit_log al
          INNER JOIN agents a ON al.agent_id = a.id
+         LEFT JOIN api_keys ak ON al.api_key_id = ak.id
          ORDER BY al.id DESC
          LIMIT ?`,
       )
@@ -1436,6 +1442,7 @@ export class SondeDb {
       id: r.id as number,
       timestamp: r.timestamp as string,
       apiKeyId: r.api_key_id as string,
+      apiKeyName: (r.api_key_name as string) ?? null,
       agentId: r.agent_id as string,
       probe: r.probe as string,
       status: r.status as string,

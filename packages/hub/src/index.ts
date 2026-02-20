@@ -498,9 +498,7 @@ app.post('/api/v1/my/api-keys', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const body = await c.req.json() as { name?: string };
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!name) return c.json({ error: 'name is required' }, 400);
+  const name = user.email ?? user.displayName;
 
   if (db.countApiKeysByOwner(user.id) >= 5) {
     return c.json({ error: 'Maximum of 5 keys per user' }, 400);

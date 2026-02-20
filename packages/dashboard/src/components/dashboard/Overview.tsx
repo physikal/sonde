@@ -24,6 +24,7 @@ interface AuditEntryWithAgentName {
   id: number;
   timestamp: string;
   apiKeyId: string;
+  apiKeyName: string | null;
   agentId: string;
   probe: string;
   status: string;
@@ -237,6 +238,11 @@ export function Overview() {
                     <span className="shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">
                       {entry.agentName ?? entry.agentId.slice(0, 8)}
                     </span>
+                    {entry.apiKeyName && (
+                      <span className="shrink-0 rounded bg-blue-900/40 px-1.5 py-0.5 text-xs text-blue-400">
+                        {entry.apiKeyName}
+                      </span>
+                    )}
                     <span className="shrink-0 text-sm font-medium text-gray-200">
                       {entry.probe}
                     </span>

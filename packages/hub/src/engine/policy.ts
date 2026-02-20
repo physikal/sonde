@@ -7,6 +7,7 @@ export interface ApiKeyPolicy {
 export interface AuthContext {
   type: 'api_key' | 'oauth';
   keyId: string;
+  keyName?: string;
   policy: ApiKeyPolicy;
   scopes?: string[];
 }

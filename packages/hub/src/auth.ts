@@ -42,5 +42,5 @@ export function validateAuth(req: http.IncomingMessage, db: SondeDb): AuthContex
   if (record.expiresAt && new Date(record.expiresAt) < new Date()) return undefined;
 
   const policy = JSON.parse(record.policyJson);
-  return { type: 'api_key', keyId: record.id, policy };
+  return { type: 'api_key', keyId: record.id, keyName: record.name, policy };
 }

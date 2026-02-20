@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../components/common/Toast';
 import { apiFetch } from '../lib/api';
 
@@ -15,8 +15,6 @@ export function MyApiKeys() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState<{
     id: string;
@@ -42,19 +40,15 @@ export function MyApiKeys() {
     fetchKeys();
   }, [fetchKeys]);
 
-  const handleCreate = (e: FormEvent) => {
-    e.preventDefault();
-    if (!newKeyName.trim()) return;
+  const handleCreate = () => {
     setCreating(true);
 
     apiFetch<{ id: string; key: string; name: string }>('/my/api-keys', {
       method: 'POST',
-      body: JSON.stringify({ name: newKeyName.trim() }),
+      body: JSON.stringify({}),
     })
       .then((data) => {
         setCreatedKey(data);
-        setNewKeyName('');
-        setShowCreate(false);
         fetchKeys();
         toast(`API key "${data.name}" created`, 'success');
       })
@@ -129,45 +123,18 @@ export function MyApiKeys() {
         </div>
         <button
           type="button"
-          onClick={() => setShowCreate(!showCreate)}
-          disabled={keys.length >= 5}
+          onClick={handleCreate}
+          disabled={creating || keys.length >= 5}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
-          Create Key
+          {creating ? 'Creating...' : 'Create Key'}
         </button>
       </div>
 
       <p className="mt-3 text-sm text-gray-400">
         Use these keys to connect AI tools (Claude Desktop, Claude Code) to
-        Sonde via MCP.
+        Sonde via MCP. Keys are automatically named with your identity.
       </p>
-
-      {showCreate && (
-        <form
-          onSubmit={handleCreate}
-          className="mt-4 space-y-3 rounded-xl border border-gray-800 bg-gray-900 p-4"
-        >
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-              Key Name
-            </p>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g. claude-desktop"
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating || !newKeyName.trim()}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : 'Create'}
-          </button>
-        </form>
-      )}
 
       {createdKey && (
         <div className="mt-4 rounded-xl border border-amber-800 bg-amber-950/30 p-5">
