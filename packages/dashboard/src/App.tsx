@@ -15,37 +15,12 @@ import { IntegrationDetail } from './pages/IntegrationDetail';
 import { Integrations } from './pages/Integrations';
 import { Login } from './pages/Login';
 import { McpInstructions } from './pages/McpInstructions';
+import { MyApiKeys } from './pages/MyApiKeys';
 import { Policies } from './pages/Policies';
 import { Settings } from './pages/Settings';
 import { TagsManagement } from './pages/TagsManagement';
 import { TryIt } from './pages/TryIt';
 import { Users } from './pages/Users';
-
-function MemberNotice() {
-  const { logout } = useAuth();
-
-  return (
-    <div className="flex h-screen items-center justify-center bg-gray-950">
-      <div className="max-w-md rounded-lg border border-gray-800 bg-gray-900 p-8 text-center">
-        <h1 className="text-xl font-semibold text-white">MCP Access Only</h1>
-        <p className="mt-3 text-sm text-gray-400">
-          Your account is authorized for MCP access only. Use Claude Desktop or Claude Code to
-          connect to Sonde and run diagnostic queries.
-        </p>
-        <p className="mt-4 text-xs text-gray-500">
-          Contact your Sonde administrator if you need dashboard access.
-        </p>
-        <button
-          type="button"
-          onClick={logout}
-          className="mt-6 rounded-md bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
-        >
-          Sign out
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function AppRoutes() {
   const { status, loading: setupLoading, refetch } = useSetupStatus();
@@ -71,13 +46,18 @@ function AppRoutes() {
       ) : !user ? (
         <Route path="*" element={<Navigate to="/login" replace />} />
       ) : user.role === 'member' ? (
-        <Route path="*" element={<MemberNotice />} />
+        <Route element={<AppShell />}>
+          <Route index element={<Navigate to="/my-api-keys" replace />} />
+          <Route path="my-api-keys" element={<MyApiKeys />} />
+          <Route path="*" element={<Navigate to="/my-api-keys" replace />} />
+        </Route>
       ) : (
         <Route element={<AppShell />}>
           <Route index element={<Overview />} />
           <Route path="agents" element={<Fleet />} />
           <Route path="agents/:id" element={<AgentDetail />} />
           <Route path="enrollment" element={<Enrollment />} />
+          <Route path="my-api-keys" element={<MyApiKeys />} />
           <Route path="api-keys" element={<ApiKeys />} />
           <Route path="users" element={<Users />} />
           <Route path="access-groups" element={<AccessGroups />} />

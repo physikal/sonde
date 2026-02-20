@@ -577,6 +577,76 @@ export class SondeDb {
     }));
   }
 
+  // --- Owner-scoped API key methods ---
+
+  createApiKeyWithOwner(
+    id: string,
+    name: string,
+    keyHash: string,
+    policyJson: string,
+    roleId: string,
+    keyType: 'mcp' | 'agent',
+    ownerId: string,
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO api_keys (id, name, key_hash, policy_json, role_id, key_type, owner_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(id, name, keyHash, policyJson, roleId, keyType, ownerId, new Date().toISOString());
+  }
+
+  listApiKeysByOwner(ownerId: string): Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    policyJson: string;
+    lastUsedAt: string | null;
+    keyType: 'mcp' | 'agent';
+  }> {
+    const rows = this.db
+      .prepare(
+        'SELECT id, name, policy_json, created_at, expires_at, revoked_at, last_used_at, key_type FROM api_keys WHERE owner_id = ? AND revoked_at IS NULL',
+      )
+      .all(ownerId) as Array<{
+      id: string;
+      name: string;
+      policy_json: string;
+      created_at: string;
+      expires_at: string | null;
+      revoked_at: string | null;
+      last_used_at: string | null;
+      key_type: string;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      revokedAt: r.revoked_at,
+      policyJson: r.policy_json,
+      lastUsedAt: r.last_used_at,
+      keyType: (r.key_type === 'agent' ? 'agent' : 'mcp') as 'mcp' | 'agent',
+    }));
+  }
+
+  countApiKeysByOwner(ownerId: string): number {
+    const row = this.db
+      .prepare(
+        'SELECT COUNT(*) as count FROM api_keys WHERE owner_id = ? AND revoked_at IS NULL',
+      )
+      .get(ownerId) as { count: number };
+    return row.count;
+  }
+
+  getApiKeyOwner(id: string): string | null {
+    const row = this.db
+      .prepare('SELECT owner_id FROM api_keys WHERE id = ?')
+      .get(id) as { owner_id: string | null } | undefined;
+    return row?.owner_id ?? null;
+  }
+
   // --- OAuth stores ---
 
   getOAuthClient(clientId: string):

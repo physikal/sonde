@@ -171,9 +171,11 @@ Query the audit log. Entries are returned in reverse chronological order.
 ]
 ```
 
-### API Keys
+### API Keys (Admin)
 
-#### `POST /api/v1/keys`
+Admin-only endpoints for managing all keys across the deployment. Requires `admin` role or higher.
+
+#### `POST /api/v1/api-keys`
 
 Create a new API key. Optionally scope it with policy rules.
 
@@ -181,9 +183,10 @@ Create a new API key. Optionally scope it with policy rules.
 ```json
 {
   "name": "ci-readonly",
+  "role": "member",
   "policy": {
-    "agents": ["my-server"],
-    "tools": ["probe", "list_agents"]
+    "allowedAgents": ["my-server"],
+    "allowedProbes": ["system.*"]
   }
 }
 ```
@@ -193,20 +196,86 @@ Create a new API key. Optionally scope it with policy rules.
 {
   "id": "uuid",
   "name": "ci-readonly",
-  "key": "sonde_...",
-  "createdAt": "2026-02-16T12:00:00.000Z"
+  "key": "a1b2c3...",
+  "policy": { "role": "member" }
 }
 ```
 
 The `key` value is only returned once at creation time.
 
-#### `GET /api/v1/keys`
+#### `GET /api/v1/api-keys`
 
 List all API keys (without the key values).
 
-#### `DELETE /api/v1/keys/:id`
+#### `POST /api/v1/api-keys/:id/rotate`
+
+Generate a new key value. The old value is immediately invalidated.
+
+#### `DELETE /api/v1/api-keys/:id`
 
 Revoke an API key. Immediately invalidates all sessions using this key.
+
+### My API Keys (Self-Service)
+
+Self-service endpoints for managing your own keys. Available to any authenticated user (member, admin, owner). Keys created here are always scoped to `member` role. Maximum 5 keys per user. Operations on keys not owned by the caller return `404`.
+
+#### `GET /api/v1/my/api-keys`
+
+List the caller's own API keys (active only, excludes revoked).
+
+**Response:**
+```json
+{
+  "keys": [
+    {
+      "id": "uuid",
+      "name": "claude-desktop",
+      "createdAt": "2026-02-16T12:00:00.000Z",
+      "lastUsedAt": "2026-02-17T08:30:00.000Z",
+      "role": "member",
+      "keyType": "mcp"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/my/api-keys`
+
+Create a new personal API key. Role is hardcoded to `member`.
+
+**Request:**
+```json
+{
+  "name": "claude-desktop"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "key": "a1b2c3...",
+  "name": "claude-desktop"
+}
+```
+
+Returns `400` if the user already has 5 active keys.
+
+#### `POST /api/v1/my/api-keys/:id/rotate`
+
+Generate a new key value for an owned key. Returns `404` if the key doesn't belong to the caller.
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "key": "d4e5f6..."
+}
+```
+
+#### `DELETE /api/v1/my/api-keys/:id`
+
+Revoke an owned key. Returns `404` if the key doesn't belong to the caller.
 
 ### Enrollment Tokens
 

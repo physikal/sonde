@@ -481,6 +481,69 @@ app.put('/api/v1/api-keys/:id/policy', async (c) => {
   return c.json({ ok: true });
 });
 
+// --- Self-service API key endpoints (any authenticated user) ---
+
+app.get('/api/v1/my/api-keys', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const keys = db.listApiKeysByOwner(user.id).map((k) => ({
+    ...k,
+    role: 'member',
+    keyType: k.keyType,
+  }));
+  return c.json({ keys });
+});
+
+app.post('/api/v1/my/api-keys', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = await c.req.json() as { name?: string };
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name) return c.json({ error: 'name is required' }, 400);
+
+  if (db.countApiKeysByOwner(user.id) >= 5) {
+    return c.json({ error: 'Maximum of 5 keys per user' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const rawKey = crypto.randomBytes(32).toString('hex');
+  const keyHash = hashApiKey(rawKey);
+  const policyJson = JSON.stringify({ role: 'member' });
+
+  db.createApiKeyWithOwner(id, name, keyHash, policyJson, 'member', 'mcp', user.id);
+
+  return c.json({ id, key: rawKey, name }, 201);
+});
+
+app.post('/api/v1/my/api-keys/:id/rotate', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const owner = db.getApiKeyOwner(id);
+  if (owner !== user.id) return c.json({ error: 'Not found' }, 404);
+
+  const rawKey = crypto.randomBytes(32).toString('hex');
+  const newKeyHash = hashApiKey(rawKey);
+  const rotated = db.rotateApiKey(id, newKeyHash);
+  if (!rotated) return c.json({ error: 'Not found' }, 404);
+
+  return c.json({ id, key: rawKey });
+});
+
+app.delete('/api/v1/my/api-keys/:id', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const owner = db.getApiKeyOwner(id);
+  if (owner !== user.id) return c.json({ error: 'Not found' }, 404);
+
+  db.revokeApiKey(id);
+  return c.json({ ok: true });
+});
+
 // --- SSO configuration endpoints ---
 
 // Public: check if SSO is enabled (needed by login page)

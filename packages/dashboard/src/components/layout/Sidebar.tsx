@@ -16,26 +16,32 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
+    title: 'My Account',
+    items: [
+      { to: '/my-api-keys', label: 'My API Keys' },
+    ],
+  },
+  {
     title: 'Fleet',
     items: [
-      { to: '/', label: 'Overview' },
-      { to: '/agents', label: 'Agents' },
+      { to: '/', label: 'Overview', minimumRole: 'admin' },
+      { to: '/agents', label: 'Agents', minimumRole: 'admin' },
     ],
   },
   {
     title: 'Manage',
     items: [
-      { to: '/enrollment', label: 'Enrollment' },
-      { to: '/api-keys', label: 'API Keys' },
+      { to: '/enrollment', label: 'Enrollment', minimumRole: 'admin' },
+      { to: '/api-keys', label: 'API Keys', minimumRole: 'admin' },
       { to: '/users', label: 'Users', minimumRole: 'admin' },
       { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
-      { to: '/integrations', label: 'Integrations' },
+      { to: '/integrations', label: 'Integrations', minimumRole: 'admin' },
     ],
   },
   {
     title: 'Diagnostics',
     items: [
-      { to: '/try-it', label: 'Try It' },
+      { to: '/try-it', label: 'Try It', minimumRole: 'admin' },
       { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
       { to: '/policies', label: 'Policies', minimumRole: 'admin' },
     ],

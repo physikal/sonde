@@ -89,9 +89,22 @@ Generate enrollment tokens for new agents.
 - Live feed: agents appear in real-time as they enroll
 - Previously used/expired tokens are shown with their status
 
-### API Keys
+### My API Keys
 
-Create and manage API keys for MCP clients, automation scripts, and integrations.
+Self-service API key management, available to all roles (member, admin, owner). Access from the **My Account** section in the sidebar.
+
+- **Create Key**: Enter a name — role is always `member` (hardcoded for security)
+- Keys are shown once on creation — copy immediately
+- **Rotate**: Generate a new key value, invalidating the old one
+- **Revoke**: Permanently disable a key
+- Maximum 5 keys per user
+- Each key shows: name, created date, last used
+
+Members see only this page when they log into the dashboard. Admins and owners see it alongside the full admin interface.
+
+### API Keys (Admin)
+
+Create and manage all API keys across the deployment. Admin and owner only.
 
 - **Create Key**: Name, Role (member/admin), optional agent scope, optional probe scope
 - Keys are shown once on creation — copy immediately
@@ -184,15 +197,15 @@ See [Security & Authentication](/reference/security) for the full Entra SSO setu
 | Feature | Member | Admin | Owner |
 |---|---|---|---|
 | MCP tools (probe, diagnose, etc.) | Yes | Yes | Yes |
-| Dashboard access | No | Yes | Yes |
-| Fleet view, agent details | No | Yes | Yes |
-| Enrollment, API keys | No | Yes | Yes |
+| Dashboard — My API Keys | Yes | Yes | Yes |
+| Dashboard — Fleet, agents, diagnostics | No | Yes | Yes |
+| Enrollment, admin API key management | No | Yes | Yes |
 | Integration management | No | Yes | Yes |
 | User management | No | Yes | Yes |
 | SSO configuration | No | No | Yes |
 | MCP Prompt customization | No | No | Yes |
 
-**Members** are MCP-only users. They connect through Claude or API keys and have full diagnostic capability, but cannot access the dashboard. If they try to log in, they see a message directing them to connect via Claude Desktop or Claude Code.
+**Members** have full MCP diagnostic capability and limited dashboard access. When they log in, they see only the **My API Keys** page where they can create, rotate, and revoke their own API keys (up to 5, always scoped to `member` role). All other dashboard pages are hidden. This lets members manage their own MCP credentials without needing to contact an admin.
 
 ## Real-Time Updates
 

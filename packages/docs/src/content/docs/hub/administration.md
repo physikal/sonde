@@ -41,10 +41,26 @@ Delete a user record to revoke access completely. They'll be denied on next logi
 
 ## API Key Management
 
-### Creating Keys
+### Self-Service Keys (All Users)
 
-1. **Manage** > **API Keys** > **Create Key**
-2. Enter a descriptive name (e.g., "Claude Code - Josh", "n8n monitoring workflow")
+All users (members, admins, owners) can manage their own API keys from **My Account** > **My API Keys** in the dashboard sidebar:
+
+1. Click **Create Key**
+2. Enter a descriptive name (e.g., "Claude Desktop", "Claude Code")
+3. The key is always scoped to `member` role — no privilege escalation possible
+4. Maximum 5 keys per user
+5. The key value is shown once — copy it immediately
+
+Users can **Rotate** (generate new value, invalidate old) or **Revoke** (permanently disable) their own keys. They cannot see or manage keys belonging to other users.
+
+This is the primary way members get their MCP credentials — they log in to the dashboard, create a key, and use it to connect Claude Desktop or Claude Code.
+
+### Admin Key Management
+
+Admins manage all keys across the deployment from **Manage** > **API Keys**:
+
+1. Click **Create Key**
+2. Enter a descriptive name (e.g., "n8n monitoring workflow", "shared-team-key")
 3. Select role: **Member** (MCP only) or **Admin** (MCP + REST)
 4. Optional: scope to specific agents (glob pattern) or probe types
 5. The key value is shown once — copy it immediately
@@ -55,6 +71,7 @@ Click **Rotate** on an existing key to generate a new value. The old value is im
 
 ### Best Practices
 
+- Direct members to **My API Keys** for self-service — avoid creating keys on their behalf
 - Create separate keys for each client or integration
 - Use the minimum role needed (member for MCP users, admin for automation)
 - Scope keys to specific agents when possible (e.g., `prod-*` for production-only access)
