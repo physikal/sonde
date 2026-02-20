@@ -1449,6 +1449,16 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+if (process.platform === 'win32') {
+  process.on('SIGBREAK', () => {
+    console.log('\nShutting down (SIGBREAK)...');
+    sessionManager.stopCleanupLoop();
+    server.close();
+    db.close();
+    process.exit(0);
+  });
+}
+
 export {
   app,
   config,

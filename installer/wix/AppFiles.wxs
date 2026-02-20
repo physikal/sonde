@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+    <!-- Auto-harvest all files from staged app directory -->
+    <ComponentGroup Id="HubAppFiles" Directory="AppDir">
+      <Files Include="$(var.StageDir)\app\**" />
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

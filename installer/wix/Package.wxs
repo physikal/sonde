@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package
+    Name="Sonde Hub"
+    Manufacturer="Sonde"
+    Version="$(var.Version)"
+    UpgradeCode="e8f3a1b2-7c4d-4e5f-9a6b-8d2c1e0f3a4b"
+    Scope="perMachine"
+    Language="1033"
+    Codepage="1252">
+
+    <SummaryInformation
+      Description="Sonde Hub — AI Infrastructure Agent Server"
+      Keywords="Sonde,Hub,MCP,AI" />
+
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="A newer version of Sonde Hub is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="HubFeature" Title="Sonde Hub" Level="1">
+      <ComponentGroupRef Id="NodeRuntime" />
+      <ComponentGroupRef Id="HubAppFiles" />
+      <ComponentGroupRef Id="HubServiceComponents" />
+      <ComponentGroupRef Id="DataDirectoryComponents" />
+    </Feature>
+
+    <!--
+      Custom action: run setup-env.cjs after install to generate
+      SONDE_SECRET if the env file doesn't exist yet.
+      Uses WiX Util extension's WixQuietExec64 for deferred execution
+      as SYSTEM (required for ProgramData write access).
+    -->
+    <SetProperty
+      Id="RunSetupEnv"
+      Value="&quot;[INSTALLFOLDER]node\node.exe&quot; &quot;[INSTALLFOLDER]app\installer-scripts\setup-env.cjs&quot;"
+      Before="RunSetupEnv"
+      Sequence="execute" />
+
+    <CustomAction
+      Id="RunSetupEnv"
+      BinaryRef="Wix4UtilCA_X64"
+      DllEntry="WixQuietExec64"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RunSetupEnv" After="InstallFiles">
+        NOT Installed OR REINSTALL
+      </Custom>
+    </InstallExecuteSequence>
+
+    <Property Id="SONDE_SECRET" Secure="yes" />
+
+  </Package>
+
+</Wix>

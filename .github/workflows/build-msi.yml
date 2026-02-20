@@ -1,0 +1,45 @@
+name: Build MSI
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'installer/**'
+      - 'packages/hub/**'
+      - 'packages/shared/**'
+      - 'packages/packs/**'
+      - 'packages/dashboard/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install WiX v5
+        run: dotnet tool install --global wix
+
+      - name: Build MSI
+        run: .\installer\build-msi.ps1
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sonde-hub-msi
+          path: installer\out\*.msi
+          retention-days: 30

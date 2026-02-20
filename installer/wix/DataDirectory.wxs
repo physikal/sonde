@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+    <ComponentGroup Id="DataDirectoryComponents" Directory="DATADIR">
+
+      <!-- Create ProgramData\Sonde with ACLs.
+           No RemoveFolder — data directory survives uninstall
+           (contains sonde.db, sonde-hub.env, logs). -->
+      <Component Id="DataDirPerms" Guid="*">
+        <CreateFolder>
+          <Permission
+            User="SYSTEM"
+            GenericAll="yes" />
+          <Permission
+            User="Administrators"
+            GenericAll="yes" />
+          <Permission
+            User="LOCAL SERVICE"
+            GenericRead="yes"
+            GenericWrite="yes"
+            GenericExecute="yes" />
+        </CreateFolder>
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\Sonde"
+          Name="DataDir"
+          Type="string"
+          Value="[DATADIR]"
+          KeyPath="yes" />
+      </Component>
+
+      <!-- Create logs subdirectory -->
+      <Component Id="LogsDirComponent" Guid="*" Directory="LogsDir">
+        <CreateFolder />
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\Sonde"
+          Name="LogsDir"
+          Type="string"
+          Value="[LogsDir]"
+          KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
