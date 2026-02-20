@@ -159,6 +159,15 @@ Grant admin consent for all.
 
 The Graph pack detects the existing Entra SSO configuration automatically. No additional endpoint configuration needed — it reuses the client ID and secret, but with client_credentials flow instead of authorization code flow.
 
+## Microsoft Graph + Intune — Example Queries
+
+- "Look up user john.doe@company.com in Entra"
+- "What groups is this user a member of?"
+- "Show me recent sign-in failures"
+- "Which Intune-managed devices are non-compliant?"
+- "What device compliance policies are configured?"
+- "Show me managed apps on mobile devices"
+
 ## Nutanix
 
 ### Prerequisites
@@ -180,6 +189,13 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **nutanix-cluster-health** — Fleet overview across all registered clusters
 - **nutanix-vm-health** — Single VM deep dive with storage, network, protection status
 - **nutanix-capacity-planning** — Headroom analysis for CPU, memory, and storage
+
+### Example Queries
+
+- "How's my Nutanix cluster doing?"
+- "Check the health of VM web-prod-01"
+- "Do I have enough capacity for 10 more VMs?"
+- "Which VMs are not protected by snapshots?"
 
 ## Splunk
 
@@ -203,6 +219,13 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **indexes** — List all indexes with size and event count
 - **saved_searches** — List saved searches with schedule info
 - **health** — Splunkd health status with per-feature breakdown
+
+### Example Queries
+
+- "Is Splunk healthy?"
+- "What indexes are available and how large are they?"
+- "Search Splunk for errors in the last hour: index=main level=ERROR"
+- "Show me saved searches in Splunk"
 
 ## vCenter
 

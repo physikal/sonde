@@ -83,15 +83,66 @@ The `#` prefix is required — without it, words are treated as natural language
 
 Tag filtering works with `list_agents`, `list_capabilities`, and `health_check`. When `health_check` is called with tags, it runs diagnostics across all matching agents in parallel and returns unified findings.
 
-## Example prompts
+## Prompt cookbook
 
-- "List all connected sonde agents"
-- "Show me #prod agents"
-- "What's wrong with the #storefront servers?"
-- "Check disk usage on my-server"
-- "Run a docker diagnostic on my-server"
-- "What's the memory usage on my-server?"
+### Getting started
+
+- "What agents are connected to Sonde?"
 - "What diagnostics can you run on my-server?"
+- "What integrations are available?"
+
+### Outage triage
+
+Start broad, then narrow down:
+
+- "What's wrong with the #storefront servers?"
+- "Run a health check across all #prod agents"
+- "Something is slow — check all agents and integrations for issues"
+- "Check the storefront critical path"
+
+### Targeted investigation
+
+When you know what's broken, go deeper:
+
+- "Run a Docker diagnostic on web-01"
+- "Check disk usage on my-server"
+- "What's the memory usage on db-01?"
+- "Show me the last 100 lines of nginx error logs on web-01"
+- "Are there any slow queries on db-01?"
+- "What's the status of the postgresql service on db-01?"
+
+### Cross-system correlation
+
+Combine agent probes with integration data:
+
+- "Check the web servers and then look up any open ServiceNow incidents for them"
+- "Show me Proxmox VM health and compare with the agent status for that host"
+- "Are there any PagerDuty incidents for services related to #database agents?"
+- "Check Datadog monitors and correlate with agent health on #prod"
+
+### Capacity planning
+
+- "Is the disk getting full on any agent?"
+- "Compare memory usage across all #prod agents"
+- "Do I have enough Nutanix capacity for 10 more VMs?"
+- "What's the Redis memory usage trend on cache-01?"
+
+### Tags
+
+Use `#tagname` to scope queries to specific groups:
+
+- "Show me #prod agents"
+- "Run diagnostics on #database #linux"
+- "Health check all #staging servers"
+- "Check Docker on #web #prod"
+
+### Logs and investigation
+
+- "Show me Docker logs from the api container on web-01"
+- "Query systemd journal for errors on db-01"
+- "Search Splunk for errors in the last hour"
+- "Query Loki for {job=\"varlogs\"} |= \"error\""
+- "Show me the audit trail for probes run in the last 24 hours"
 
 ## Troubleshooting
 

@@ -43,6 +43,48 @@ Sonde ships with 8 official agent packs:
 | [mysql](/packs/mysql/) | Databases, process list, server status | `mysql` command |
 | proxmox-node | Proxmox VE node-local: VM/LXC config, HA, LVM, Ceph | `/usr/sbin/qm` or `/usr/sbin/pct` |
 
+## What you can ask
+
+You don't need to memorize probe names — just describe what you want in natural language. Here are examples for each built-in pack:
+
+**System:**
+- "What's the disk usage on web-01?"
+- "Is the server running low on memory?"
+- "Is the CPU overloaded on db-01?"
+- "Can web-01 reach 10.0.0.1?"
+
+**Docker:**
+- "What containers are running on web-01?"
+- "Show me the last 50 lines of logs from the api container"
+- "Is Docker healthy on the production server?"
+
+**systemd:**
+- "What services are running on db-01?"
+- "What's the status of the postgresql service?"
+- "Show me the last 100 journal entries for nginx on web-01"
+
+**Nginx:**
+- "Is the Nginx config valid on web-01?"
+- "Show me recent Nginx errors on the load balancer"
+- "What traffic is hitting web-01?"
+
+**PostgreSQL / MySQL:**
+- "What databases are on db-01 and how big are they?"
+- "Are there any slow queries running?"
+- "Show me active connections to PostgreSQL"
+
+**Redis:**
+- "What's the Redis server status on cache-01?"
+- "How many keys are stored in Redis?"
+- "Is Redis running low on memory?"
+
+**Tags work with all packs:**
+- "Check disk usage on #prod agents"
+- "Are there any failed systemd services on #database #linux?"
+- "Show me Docker containers across all #staging servers"
+
+For the full probe reference per pack, see the individual pack pages linked below.
+
 ## Managing packs
 
 Use the `sonde packs` CLI on the agent machine to manage which packs are active.
