@@ -39,14 +39,18 @@ interface ProbeResult {
 }
 
 interface DiagnoseResult {
-  category: string;
-  findings: Record<string, ProbeResult>;
-  summary: {
+  meta: {
+    target: string;
+    source: string;
+    timestamp: string;
+    category: string;
+    runbookId: string;
     probesRun: number;
     probesSucceeded: number;
     probesFailed: number;
     durationMs: number;
   };
+  probes: Record<string, ProbeResult>;
 }
 
 const CAP_COLORS: Record<string, string> = {
@@ -151,8 +155,8 @@ export function TryIt() {
         .then((data) => {
           setDiagnoseResult(data);
           toast(
-            `Diagnostic complete: ${data.summary.probesSucceeded}/${data.summary.probesRun} passed`,
-            data.summary.probesFailed > 0 ? 'error' : 'success',
+            `Diagnostic complete: ${data.meta.probesSucceeded}/${data.meta.probesRun} passed`,
+            data.meta.probesFailed > 0 ? 'error' : 'success',
           );
         })
         .catch((err: unknown) => {
@@ -464,17 +468,17 @@ function DiagnoseResults({ result }: { result: DiagnoseResult }) {
       {/* Summary bar */}
       <div className="flex flex-wrap gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4 text-sm">
         <span className="text-gray-400">
-          {result.summary.probesRun} probe{result.summary.probesRun !== 1 ? 's' : ''}
+          {result.meta.probesRun} probe{result.meta.probesRun !== 1 ? 's' : ''}
         </span>
-        <span className="text-emerald-400">{result.summary.probesSucceeded} succeeded</span>
-        {result.summary.probesFailed > 0 && (
-          <span className="text-red-400">{result.summary.probesFailed} failed</span>
+        <span className="text-emerald-400">{result.meta.probesSucceeded} succeeded</span>
+        {result.meta.probesFailed > 0 && (
+          <span className="text-red-400">{result.meta.probesFailed} failed</span>
         )}
-        <span className="text-gray-500">{result.summary.durationMs}ms total</span>
+        <span className="text-gray-500">{result.meta.durationMs}ms total</span>
       </div>
 
       {/* Per-probe results */}
-      {Object.entries(result.findings).map(([probe, finding]) => (
+      {Object.entries(result.probes).map(([probe, finding]) => (
         <ProbeResultCard key={probe} name={probe} result={finding} />
       ))}
     </div>

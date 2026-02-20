@@ -1,6 +1,6 @@
 import type { IntegrationConfig, IntegrationCredentials } from '@sonde/shared';
-import { describe, expect, it, vi } from 'vitest';
-import { servicenowPack } from './servicenow.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clearTokenCache, servicenowPack } from './servicenow.js';
 
 const config: IntegrationConfig = {
   endpoint: 'https://instance.service-now.com',
@@ -15,9 +15,10 @@ const basicCreds: IntegrationCredentials = {
 const oauthCreds: IntegrationCredentials = {
   packName: 'servicenow',
   authMethod: 'oauth2',
-  credentials: {},
-  oauth2: { accessToken: 'my-token' },
+  credentials: { clientId: 'my-client-id', clientSecret: 'my-secret' },
 };
+
+afterEach(() => clearTokenCache());
 
 const handler = (name: string) => {
   const h = servicenowPack.handlers[name];
@@ -73,12 +74,34 @@ describe('servicenow pack', () => {
       expect(init.headers.Authorization).toBe(expected);
     });
 
-    it('uses bearer token for oauth2 method', async () => {
-      const fetchFn = mockFetch([{ name: 'web01' }]);
+    it('exchanges client_credentials for bearer token on oauth2 method', async () => {
+      let callCount = 0;
+      const fetchFn = vi.fn().mockImplementation((url: string) => {
+        callCount++;
+        if (callCount === 1) {
+          // Token exchange call to /oauth_token.do
+          expect(url).toBe('https://instance.service-now.com/oauth_token.do');
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ access_token: 'tok-123', expires_in: 1800 }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            ),
+          );
+        }
+        // Table API call
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ result: [{ name: 'web01' }] }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      });
+
       await handler('ci.lookup')({ query: 'web01' }, config, oauthCreds, fetchFn);
 
-      const init = callArgs(fetchFn, 0)[1] as { headers: Record<string, string> };
-      expect(init.headers.Authorization).toBe('Bearer my-token');
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+      const apiInit = callArgs(fetchFn, 1)[1] as { headers: Record<string, string> };
+      expect(apiInit.headers.Authorization).toBe('Bearer tok-123');
     });
   });
 

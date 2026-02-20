@@ -24,6 +24,8 @@ import {
   servicenowPack,
   splunkPack,
   thousandeyesPack,
+  unifiAccessPack,
+  unifiPack,
   vcenterPack,
 } from '@sonde/packs';
 import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
@@ -42,11 +44,12 @@ import { exceedsRole } from './auth/roles.js';
 import { getUser, sessionMiddleware } from './auth/session-middleware.js';
 import { SessionManager } from './auth/sessions.js';
 import type { UserContext } from './auth/sessions.js';
+import { getAnalysisStatus, startOrJoinAnalysis } from './ai/analyze.js';
 import { loadConfig } from './config.js';
 import { generateCaCert } from './crypto/ca.js';
 import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
-import { encrypt } from './integrations/crypto.js';
+import { decrypt, encrypt } from './integrations/crypto.js';
 import { IntegrationExecutor } from './integrations/executor.js';
 import { IntegrationManager } from './integrations/manager.js';
 import { ProbeRouter } from './integrations/probe-router.js';
@@ -67,14 +70,17 @@ import {
   CreateApiKeyBody,
   CreateAuthorizedGroupBody,
   CreateAuthorizedUserBody,
+  CreateCriticalPathBody,
   CreateIntegrationBody,
   CreateSsoBody,
   SetTagsBody,
   TagImportBody,
   UpdateAccessGroupBody,
+  UpdateAiSettingsBody,
   UpdateApiKeyPolicyBody,
   UpdateAuthorizedGroupBody,
   UpdateAuthorizedUserBody,
+  UpdateCriticalPathBody,
   UpdateIntegrationBody,
   UpdateMcpInstructionsBody,
   UpdateSsoBody,
@@ -89,6 +95,14 @@ const config = loadConfig();
 const db = new SondeDb(config.dbPath);
 const sessionManager = new SessionManager(db);
 sessionManager.startCleanupLoop();
+
+// Clean expired probe results every 15 minutes (24h rolling window)
+const PROBE_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
+const probeCleanupTimer = setInterval(() => {
+  db.cleanExpiredProbeResults();
+}, PROBE_CLEANUP_INTERVAL_MS);
+// Run cleanup on startup to purge stale rows from previous runs
+db.cleanExpiredProbeResults();
 const dispatcher = new AgentDispatcher();
 const integrationExecutor = new IntegrationExecutor();
 const probeRouter = new ProbeRouter(dispatcher, integrationExecutor, db, (packName) => {
@@ -114,6 +128,8 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [merakiPack.manifest.name, merakiPack],
   [checkpointPack.manifest.name, checkpointPack],
   [a10Pack.manifest.name, a10Pack],
+  [unifiPack.manifest.name, unifiPack],
+  [unifiAccessPack.manifest.name, unifiAccessPack],
 ]);
 const integrationManager = new IntegrationManager(
   db,
@@ -265,10 +281,36 @@ if ! command -v sonde >/dev/null 2>&1; then
 fi
 ok "@sonde/agent installed ($(sonde --version 2>/dev/null || echo 'unknown version'))"
 
+# --- Ensure a non-root user for the agent ---
+# The agent refuses to run as root. On root-only systems (e.g. Unraid),
+# create a dedicated "sonde" system user to run the agent as.
+SONDE_USER=""
+if [ "$(id -u)" = "0" ] && [ -z "\${SUDO_USER:-}" ]; then
+  if id -u sonde >/dev/null 2>&1; then
+    ok "sonde user already exists"
+  else
+    info "Root-only system detected — creating dedicated sonde user..."
+    useradd --system --home-dir /var/lib/sonde --create-home \\
+      --shell /usr/sbin/nologin sonde
+    ok "Created sonde user (home: /var/lib/sonde)"
+  fi
+
+  # Grant docker access if docker is installed
+  if command -v docker >/dev/null 2>&1; then
+    usermod -aG docker sonde 2>/dev/null || true
+  fi
+
+  SONDE_USER="sonde"
+fi
+
 # --- Launch interactive installer TUI ---
 info "Launching Sonde installer..."
 printf "\\n"
-exec sonde install --hub ${hubUrl}
+if [ -n "$SONDE_USER" ]; then
+  exec su -s /bin/sh "$SONDE_USER" -c "sonde install --hub ${hubUrl}"
+else
+  exec sonde install --hub ${hubUrl}
+fi
 `;
 }
 
@@ -368,7 +410,11 @@ app.use('/api/v1/audit/*', requireRole('admin'));
 app.use('/api/v1/activity/*', requireRole('admin'));
 app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
+app.use('/api/v1/settings/ai', requireRole('owner'));
 app.use('/api/v1/settings/mcp-instructions', requireRole('owner'));
+app.use('/api/v1/critical-paths/*', requireRole('admin'));
+app.use('/api/v1/trending/*', requireRole('admin'));
+app.get('/api/v1/trending', requireRole('admin'));
 
 app.get('/health', (c) =>
   c.json({
@@ -451,6 +497,67 @@ app.put('/api/v1/api-keys/:id/policy', async (c) => {
   return c.json({ ok: true });
 });
 
+// --- Self-service API key endpoints (any authenticated user) ---
+
+app.get('/api/v1/my/api-keys', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const keys = db.listApiKeysByOwner(user.id).map((k) => ({
+    ...k,
+    role: 'member',
+    keyType: k.keyType,
+  }));
+  return c.json({ keys });
+});
+
+app.post('/api/v1/my/api-keys', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const name = user.email ?? user.displayName;
+
+  if (db.countApiKeysByOwner(user.id) >= 5) {
+    return c.json({ error: 'Maximum of 5 keys per user' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const rawKey = crypto.randomBytes(32).toString('hex');
+  const keyHash = hashApiKey(rawKey);
+  const policyJson = JSON.stringify({ role: 'member' });
+
+  db.createApiKeyWithOwner(id, name, keyHash, policyJson, 'member', 'mcp', user.id);
+
+  return c.json({ id, key: rawKey, name }, 201);
+});
+
+app.post('/api/v1/my/api-keys/:id/rotate', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const owner = db.getApiKeyOwner(id);
+  if (owner !== user.id) return c.json({ error: 'Not found' }, 404);
+
+  const rawKey = crypto.randomBytes(32).toString('hex');
+  const newKeyHash = hashApiKey(rawKey);
+  const rotated = db.rotateApiKey(id, newKeyHash);
+  if (!rotated) return c.json({ error: 'Not found' }, 404);
+
+  return c.json({ id, key: rawKey });
+});
+
+app.delete('/api/v1/my/api-keys/:id', (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const owner = db.getApiKeyOwner(id);
+  if (owner !== user.id) return c.json({ error: 'Not found' }, 404);
+
+  db.revokeApiKey(id);
+  return c.json({ ok: true });
+});
+
 // --- SSO configuration endpoints ---
 
 // Public: check if SSO is enabled (needed by login page)
@@ -525,6 +632,62 @@ app.put('/api/v1/settings/mcp-instructions', async (c) => {
   db.setHubSetting('mcp_instructions_prefix', parsed.data.customPrefix);
   const preview = buildMcpInstructions(db, integrationManager, probeRouter);
   return c.json({ ok: true, preview });
+});
+
+// --- AI settings endpoints ---
+
+const AI_DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+
+app.get('/api/v1/settings/ai', (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  return c.json({ configured: !!encKey, model });
+});
+
+// Admin-level check: can the button be shown?
+app.get('/api/v1/settings/ai/status', requireRole('admin'), (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  return c.json({ configured: !!encKey });
+});
+
+app.put('/api/v1/settings/ai', async (c) => {
+  const parsed = parseBody(UpdateAiSettingsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+
+  if (body.apiKey) {
+    db.setHubSetting('ai_api_key', encrypt(body.apiKey, config.secret));
+  }
+  if (body.model) {
+    db.setHubSetting('ai_model', body.model);
+  }
+
+  const encKey = db.getHubSetting('ai_api_key');
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  return c.json({ configured: !!encKey, model });
+});
+
+app.post('/api/v1/settings/ai/test', async (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  if (!encKey) {
+    return c.json({ success: false, error: 'No API key configured' });
+  }
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const apiKey = decrypt(encKey, config.secret);
+    const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+    const client = new Anthropic({ apiKey });
+    await client.messages.create({
+      model,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+    return c.json({ success: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false, error: msg });
+  }
 });
 
 // --- Authorized users endpoints ---
@@ -1012,6 +1175,199 @@ app.patch('/api/v1/integrations/tags', requireRole('admin'), async (c) => {
   return c.json({ ok: true });
 });
 
+// --- Critical Paths endpoints ---
+
+app.post('/api/v1/critical-paths', async (c) => {
+  const parsed = parseBody(CreateCriticalPathBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+
+  const id = crypto.randomUUID();
+  try {
+    db.createCriticalPath(id, body.name, body.description);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'A critical path with this name already exists' }, 409);
+    }
+    throw error;
+  }
+
+  if (body.steps.length > 0) {
+    db.setCriticalPathSteps(
+      id,
+      body.steps.map((step, i) => ({
+        id: crypto.randomUUID(),
+        stepOrder: i,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        probesJson: JSON.stringify(step.probes),
+      })),
+    );
+  }
+
+  const steps = db.getCriticalPathSteps(id);
+  return c.json({ id, name: body.name, description: body.description, steps }, 201);
+});
+
+app.get('/api/v1/critical-paths', (c) => {
+  const paths = db.listCriticalPaths().map((p) => ({
+    ...p,
+    stepCount: db.getCriticalPathSteps(p.id).length,
+  }));
+  return c.json({ paths });
+});
+
+app.get('/api/v1/critical-paths/:id', (c) => {
+  const path = db.getCriticalPath(c.req.param('id'));
+  if (!path) return c.json({ error: 'Critical path not found' }, 404);
+  const steps = db.getCriticalPathSteps(path.id);
+  return c.json({ ...path, steps });
+});
+
+app.put('/api/v1/critical-paths/:id', async (c) => {
+  const parsed = parseBody(UpdateCriticalPathBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+  const id = c.req.param('id');
+
+  const existing = db.getCriticalPath(id);
+  if (!existing) return c.json({ error: 'Critical path not found' }, 404);
+
+  if (body.name !== undefined || body.description !== undefined) {
+    try {
+      db.updateCriticalPath(id, {
+        name: body.name,
+        description: body.description,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+        return c.json({ error: 'A critical path with this name already exists' }, 409);
+      }
+      throw error;
+    }
+  }
+
+  if (body.steps) {
+    db.setCriticalPathSteps(
+      id,
+      body.steps.map((step, i) => ({
+        id: crypto.randomUUID(),
+        stepOrder: i,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        probesJson: JSON.stringify(step.probes),
+      })),
+    );
+  }
+
+  const updated = db.getCriticalPath(id);
+  const steps = db.getCriticalPathSteps(id);
+  return c.json({ ...updated, steps });
+});
+
+app.delete('/api/v1/critical-paths/:id', (c) => {
+  const deleted = db.deleteCriticalPath(c.req.param('id'));
+  if (!deleted) return c.json({ error: 'Critical path not found' }, 404);
+  return c.json({ ok: true });
+});
+
+app.post('/api/v1/critical-paths/:id/execute', async (c) => {
+  const id = c.req.param('id');
+  const path = db.getCriticalPath(id);
+  if (!path) return c.json({ error: 'Critical path not found' }, 404);
+
+  const steps = db.getCriticalPathSteps(path.id);
+  if (steps.length === 0) {
+    return c.json({ error: 'Critical path has no steps' }, 400);
+  }
+
+  const overallStart = Date.now();
+
+  const stepResults = await Promise.allSettled(
+    steps.map(async (step) => {
+      const probes: string[] = JSON.parse(step.probesJson);
+      const stepStart = Date.now();
+
+      const probeResults = await Promise.allSettled(
+        probes.map(async (probeName) => {
+          const probeStart = Date.now();
+          try {
+            const agent = step.targetType === 'agent' ? step.targetId : undefined;
+            const response = await probeRouter.execute(probeName, undefined, agent);
+            return {
+              name: probeName,
+              status: response.status === 'success' ? 'success' as const : 'error' as const,
+              durationMs: Date.now() - probeStart,
+              data: response.data,
+            };
+          } catch (error) {
+            return {
+              name: probeName,
+              status: 'error' as const,
+              durationMs: Date.now() - probeStart,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        }),
+      );
+
+      const resolvedProbes = probeResults.map((r) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { name: 'unknown', status: 'error' as const, durationMs: 0, error: 'Promise rejected' },
+      );
+
+      const allPass = resolvedProbes.every((p) => p.status === 'success');
+      const allFail = resolvedProbes.every((p) => p.status !== 'success');
+      const stepStatus = resolvedProbes.length === 0
+        ? 'pass' as const
+        : allPass
+          ? 'pass' as const
+          : allFail
+            ? 'fail' as const
+            : 'partial' as const;
+
+      return {
+        stepOrder: step.stepOrder,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        status: stepStatus,
+        durationMs: Date.now() - stepStart,
+        probes: resolvedProbes,
+      };
+    }),
+  );
+
+  const resolvedSteps = stepResults.map((r, i) =>
+    r.status === 'fulfilled'
+      ? r.value
+      : {
+          stepOrder: steps[i]!.stepOrder,
+          label: steps[i]!.label,
+          targetType: steps[i]!.targetType,
+          targetId: steps[i]!.targetId,
+          status: 'fail' as const,
+          durationMs: 0,
+          probes: [],
+        },
+  );
+
+  const allPass = resolvedSteps.every((s) => s.status === 'pass');
+  const allFail = resolvedSteps.every((s) => s.status === 'fail');
+  const overallStatus = allPass ? 'pass' : allFail ? 'fail' : 'partial';
+
+  return c.json({
+    path: path.name,
+    description: path.description,
+    overallStatus,
+    totalDurationMs: Date.now() - overallStart,
+    steps: resolvedSteps,
+  });
+});
+
 // Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)
 app.get('/api/v1/agents', (c) => {
   const allTags = db.getAllAgentTags();
@@ -1114,6 +1470,81 @@ app.get('/api/v1/activity/agents', (c) => {
   const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
   const entries = db.getAuditEntriesWithNames(limit);
   return c.json({ entries });
+});
+
+// Trending probe results
+app.get('/api/v1/trending', (c) => {
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const summary = db.getTrendingSummary(hours);
+  return c.json({
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...summary,
+  });
+});
+
+app.get('/api/v1/trending/probe/:probe', (c) => {
+  const probe = c.req.param('probe');
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const data = db.getProbeResultsByProbe(probe, hours);
+  return c.json({
+    probe,
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...data,
+  });
+});
+
+app.get('/api/v1/trending/agent/:agent', (c) => {
+  const agent = c.req.param('agent');
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const now = new Date();
+  const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+  const data = db.getProbeResultsByAgent(agent, hours);
+  return c.json({
+    agent,
+    window: {
+      sinceHours: hours,
+      since: since.toISOString(),
+      until: now.toISOString(),
+    },
+    ...data,
+  });
+});
+
+// Trending analysis (AI)
+app.get('/api/v1/trending/analyze/status', (c) => {
+  return c.json(getAnalysisStatus());
+});
+
+app.post('/api/v1/trending/analyze', async (c) => {
+  const encKey = db.getHubSetting('ai_api_key');
+  if (!encKey) {
+    return c.json({ error: 'AI API key not configured' }, 503);
+  }
+
+  const hours = Math.min(Math.max(Number(c.req.query('hours')) || 24, 1), 24);
+  const apiKey = decrypt(encKey, config.secret);
+  const model = db.getHubSetting('ai_model') ?? AI_DEFAULT_MODEL;
+  const stream = startOrJoinAnalysis(hours, apiKey, model, db);
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
+    },
+  });
 });
 
 // Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
@@ -1481,6 +1912,7 @@ server.listen(config.port, config.host, () => {
 process.on('SIGINT', () => {
   console.log('\nShutting down...');
   sessionManager.stopCleanupLoop();
+  clearInterval(probeCleanupTimer);
   server.close();
   db.close();
   process.exit(0);
@@ -1490,6 +1922,7 @@ if (process.platform === 'win32') {
   process.on('SIGBREAK', () => {
     console.log('\nShutting down (SIGBREAK)...');
     sessionManager.stopCleanupLoop();
+    clearInterval(probeCleanupTimer);
     server.close();
     db.close();
     process.exit(0);

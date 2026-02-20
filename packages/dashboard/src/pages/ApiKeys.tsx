@@ -310,7 +310,7 @@ export function ApiKeys() {
                   <tr key={k.id} className="bg-gray-950">
                     <td className="px-4 py-3 font-medium text-white">{k.name}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-block rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-300">
+                      <span className="inline-block rounded-full bg-gray-800 px-2.5 py-1 text-xs font-medium leading-none text-gray-300">
                         {k.role}
                       </span>
                     </td>

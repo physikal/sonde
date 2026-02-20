@@ -89,9 +89,22 @@ Generate enrollment tokens for new agents.
 - Live feed: agents appear in real-time as they enroll
 - Previously used/expired tokens are shown with their status
 
-### API Keys
+### My API Keys
 
-Create and manage API keys for MCP clients, automation scripts, and integrations.
+Self-service API key management, available to all roles (member, admin, owner). Access from the **My Account** section in the sidebar.
+
+- **Create Key**: Enter a name — role is always `member` (hardcoded for security)
+- Keys are shown once on creation — copy immediately
+- **Rotate**: Generate a new key value, invalidating the old one
+- **Revoke**: Permanently disable a key
+- Maximum 5 keys per user
+- Each key shows: name, created date, last used
+
+Members see only this page when they log into the dashboard. Admins and owners see it alongside the full admin interface.
+
+### API Keys (Admin)
+
+Create and manage all API keys across the deployment. Admin and owner only.
 
 - **Create Key**: Name, Role (member/admin), optional agent scope, optional probe scope
 - Keys are shown once on creation — copy immediately
@@ -140,6 +153,28 @@ Optional scoping to restrict users to specific agents or integrations.
 
 ## Diagnostics
 
+### Trending
+
+The Trending page shows aggregate probe activity and failure patterns over a configurable time window (1, 6, 12, or 24 hours). Data refreshes automatically every 30 seconds.
+
+**Stat cards** at the top show total probes, total failures, and failure rate with color-coded severity (green < 5%, amber 5-20%, red > 20%).
+
+**Volume Over Time** — A sparkline chart showing hourly probe volume with red segments for failures. Hover for exact counts.
+
+**Breakdowns** — Two side-by-side panels:
+- **Probes by Failure Rate** — Which probes are failing most, with average duration
+- **Targets by Failure Rate** — Which agents/integrations have the highest failure rates
+
+**Recent Errors** — Table of the latest failures with timestamp, probe, target, status, duration, and error message.
+
+#### Activate AI
+
+When an AI API key is configured (see [AI Analysis settings](#ai-analysis) below), the Trending page shows an **Activate AI** button. Clicking it sends the aggregate trending data to Claude for automated diagnosis.
+
+The analysis streams back in real-time, appearing in a panel below the stat cards. Claude identifies failure patterns, likely root causes, and recommends specific Sonde commands to run next.
+
+**Shared analysis:** If multiple admins have the Trending page open, only one Claude API call is made. Other admins see the same analysis stream (or the completed result if they arrive later). Results are cached for 5 minutes.
+
 ### Try It Panel
 
 A built-in diagnostic testing interface:
@@ -152,9 +187,54 @@ A built-in diagnostic testing interface:
 
 Useful for testing probe functionality without needing an AI client connected.
 
+### Critical Paths
+
+Define ordered chains of infrastructure checkpoints that Claude can traverse with a single MCP tool call. For example, a "storefront" path might check: Load Balancer -> Web Server -> App Server -> Database.
+
+**Creating a path:**
+
+1. Navigate to **Diagnostics** > **Critical Paths**
+2. Click **Create Critical Path**
+3. Enter a name (used by the MCP tool, e.g. `storefront`) and optional description
+4. Add steps using the **+** button in the chain diagram
+
+**Each step defines a checkpoint:**
+
+- **Label** — Display name (e.g. "Load Balancer")
+- **Target Type** — Agent (probes on a remote machine) or Integration (probes via external API)
+- **Target** — Which agent or integration to check
+- **Probes** — Which probes to run (filtered to available probes for the selected target)
+
+**Chain diagram:**
+
+The visual chain shows steps connected with arrows. Each step card shows the step number, label, target badge, and probe count. After execution, steps show color-coded borders (green = pass, red = fail, amber = partial) with duration badges.
+
+Use the arrow buttons on hover to reorder steps. Click any step to edit it.
+
+**Running a path:**
+
+Click **Run Path** to execute all steps in parallel. Results overlay on the chain diagram. An overall status banner shows pass/fail/partial with total duration.
+
+**MCP integration:**
+
+AI clients can execute paths directly via `check_critical_path({ path: "storefront" })`. The `list_capabilities` tool includes available critical paths in its output.
+
 ### Policies
 
-Configure per-API-key access policies: restrict to specific agents (glob patterns) and tools.
+Configure per-API-key access policies across three dimensions:
+
+- **Agents** — Restrict which agents a key can query. Exact name matching. Empty = all agents.
+- **Probes** — Restrict which probes a key can run. Glob patterns with `*` wildcard. Empty = all probes.
+- **Clients** — Restrict which MCP clients can use a key. Exact client ID matching. Empty = all clients.
+
+The policies table shows all active API keys with columns for name, role, restriction status, agent/probe counts, and last used time. Use the search bar to filter by key name, role, restriction values, or status (`restricted` / `unrestricted`).
+
+- **Unrestricted** (green badge) — No restrictions on any dimension. Full diagnostic access.
+- **Restricted** (amber badge) — At least one dimension has entries limiting access.
+
+Click **Edit Policy** on any row to expand an inline editor where you can set comma-separated agent names, probe glob patterns, and client IDs. A collapsible "Policy dimensions" section at the top of the page explains each dimension with examples.
+
+Keys with no restrictions have full diagnostic access. Restrictions are enforced at the hub on every probe request.
 
 ## Settings (Owner Only)
 
@@ -166,6 +246,17 @@ Customize the instructions sent to AI clients during the MCP handshake.
 - **Full Instructions Preview** — Read-only view of the complete instructions string that AI clients receive. Includes your custom prefix, core Sonde workflow guidance, and a dynamic list of active integrations.
 
 Instructions are assembled per-session, so new MCP connections always reflect the current state (integrations added/removed, prefix changes). No client-side changes are needed — AI clients receive the updated instructions automatically on their next connection.
+
+### AI Analysis
+
+Configure the Claude API connection for automated trending analysis. The API key is encrypted at rest using `SONDE_SECRET`.
+
+- **API Key** — Enter your Anthropic API key (from [console.anthropic.com](https://console.anthropic.com))
+- **Model** — Select Claude Sonnet 4 (default) or Claude Opus 4
+- **Test Connection** — Validates the API key against the Claude API
+- Leave the API key field blank when saving to keep the existing key
+
+Once configured, the **Activate AI** button appears on the [Trending](#trending) page for all admins.
 
 ### SSO Configuration
 
@@ -184,15 +275,18 @@ See [Security & Authentication](/reference/security) for the full Entra SSO setu
 | Feature | Member | Admin | Owner |
 |---|---|---|---|
 | MCP tools (probe, diagnose, etc.) | Yes | Yes | Yes |
-| Dashboard access | No | Yes | Yes |
-| Fleet view, agent details | No | Yes | Yes |
-| Enrollment, API keys | No | Yes | Yes |
+| Dashboard — My API Keys | Yes | Yes | Yes |
+| Dashboard — Fleet, agents, diagnostics | No | Yes | Yes |
+| Critical path management | No | Yes | Yes |
+| Enrollment, admin API key management | No | Yes | Yes |
 | Integration management | No | Yes | Yes |
 | User management | No | Yes | Yes |
+| Trending (view + Activate AI) | No | Yes | Yes |
+| AI Analysis configuration | No | No | Yes |
 | SSO configuration | No | No | Yes |
 | MCP Prompt customization | No | No | Yes |
 
-**Members** are MCP-only users. They connect through Claude or API keys and have full diagnostic capability, but cannot access the dashboard. If they try to log in, they see a message directing them to connect via Claude Desktop or Claude Code.
+**Members** have full MCP diagnostic capability and limited dashboard access. When they log in, they see only the **My API Keys** page where they can create, rotate, and revoke their own API keys (up to 5, always scoped to `member` role). All other dashboard pages are hidden. This lets members manage their own MCP credentials without needing to contact an admin.
 
 ## Real-Time Updates
 

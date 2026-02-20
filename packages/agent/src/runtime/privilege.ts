@@ -1,11 +1,22 @@
 import { execFileSync } from 'node:child_process';
 
-/** Exit with error if running as root (uid 0) */
+/** Exit with error if running as root (uid 0). */
 export function checkNotRoot(): void {
   if (process.getuid?.() === 0) {
     console.error('Error: sonde agent must not run as root.');
-    console.error('Run as the dedicated "sonde" user or a non-root account.');
-    console.error('See: packages/agent/scripts/install.sh');
+    console.error('');
+    if (sondeUserExists()) {
+      console.error('A "sonde" user exists. Install the systemd service:');
+      console.error('  sonde service install');
+      console.error('');
+      console.error('Or start interactively as the sonde user:');
+      console.error('  su -s /bin/sh sonde -c "sonde start"');
+    } else {
+      console.error('Create a dedicated user and re-run the installer:');
+      console.error('  useradd --system --home-dir /var/lib/sonde --create-home \\');
+      console.error('    --shell /usr/sbin/nologin sonde');
+      console.error('  sonde service install');
+    }
     process.exit(1);
   }
 }

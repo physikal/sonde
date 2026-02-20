@@ -5,6 +5,17 @@ import type { IntegrationExecutor } from './executor.js';
 import type { FetchFn, IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 import { buildTlsFetch } from './tls-fetch.js';
 
+/** Prepend https:// if no protocol is present */
+function normalizeEndpoint(
+  config: IntegrationConfig,
+): IntegrationConfig {
+  const ep = config.endpoint;
+  if (ep && !/^https?:\/\//i.test(ep)) {
+    return { ...config, endpoint: `https://${ep}` };
+  }
+  return config;
+}
+
 /** Non-sensitive config snapshot for event logging */
 function configSummary(
   config: IntegrationConfig,
@@ -62,7 +73,8 @@ export class IntegrationManager {
   create(input: CreateInput): IntegrationSummary {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const blob = JSON.stringify({ config: input.config, credentials: input.credentials });
+    const config = normalizeEndpoint(input.config);
+    const blob = JSON.stringify({ config, credentials: input.credentials });
     const configEncrypted = encrypt(blob, this.secret);
 
     this.db.createIntegration({
@@ -80,7 +92,7 @@ export class IntegrationManager {
     // Register with executor if a pack definition is available
     const pack = this.findPack(input.type);
     if (pack) {
-      this.executor.registerPack(pack, input.config, input.credentials);
+      this.executor.registerPack(pack, config, input.credentials);
     }
 
     this.db.logIntegrationEvent({
@@ -89,7 +101,7 @@ export class IntegrationManager {
       status: 'success',
       message: `Integration "${input.name}" created (type: ${input.type})`,
       detailJson: JSON.stringify({
-        config: configSummary(input.config),
+        config: configSummary(config),
         credentials: credentialSummary(input.credentials),
       }),
     });
@@ -138,8 +150,11 @@ export class IntegrationManager {
     const existing = this.getDecryptedConfig(id);
     if (!existing) return false;
 
+    const mergedConfig = input.config
+      ? normalizeEndpoint(input.config)
+      : existing.config;
     const merged = {
-      config: input.config ?? existing.config,
+      config: mergedConfig,
       credentials: input.credentials ?? existing.credentials,
     };
 

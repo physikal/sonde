@@ -36,7 +36,25 @@ function resolveInvokingUser(): { username: string; homedir: string } {
       return { username: sudoUser, homedir };
     }
   }
+
+  // If running as root without SUDO_USER (root-only systems like Unraid),
+  // prefer the dedicated sonde user to avoid running the service as root.
   const info = os.userInfo();
+  if (info.uid === 0) {
+    try {
+      const passwd = execFileSync('getent', ['passwd', 'sonde'], {
+        encoding: 'utf-8',
+        timeout: 5_000,
+      }).trim();
+      const fields = passwd.split(':');
+      if (fields[0] && fields[5]) {
+        return { username: fields[0], homedir: fields[5] };
+      }
+    } catch {
+      // sonde user doesn't exist — fall through to root
+    }
+  }
+
   return { username: info.username, homedir: info.homedir };
 }
 

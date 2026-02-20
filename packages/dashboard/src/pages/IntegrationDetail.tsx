@@ -44,31 +44,14 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         {
           key: 'clientId',
           label: 'Client ID',
-          tooltip: 'From System OAuth → Application Registry in ServiceNow',
+          tooltip:
+            'From System OAuth > Application Registry in ServiceNow',
         },
         {
           key: 'clientSecret',
           label: 'Client Secret',
-          placeholder: 'OAuth application secret',
           sensitive: true,
           tooltip: 'Client secret from the OAuth application',
-        },
-        {
-          key: 'username',
-          label: 'Username',
-          placeholder: 'rest_api_user',
-          tooltip: 'ServiceNow user with snc_read_only and itil roles',
-        },
-        {
-          key: 'password',
-          label: 'Password',
-          sensitive: true,
-          tooltip: 'Password for the ServiceNow user account',
-        },
-        {
-          key: 'tokenUrl',
-          label: 'Token URL',
-          tooltip: 'Usually https://<instance>.service-now.com/oauth_token.do',
         },
       ],
     },
@@ -424,6 +407,38 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'Password',
           sensitive: true,
           tooltip: 'Password for the admin account',
+        },
+      ],
+    },
+  },
+  {
+    value: 'unifi',
+    label: 'UniFi Network',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'apiKey',
+          label: 'API Key',
+          sensitive: true,
+          tooltip:
+            'Generate in Network > Settings > Control Plane > Integrations',
+        },
+      ],
+    },
+  },
+  {
+    value: 'unifi-access',
+    label: 'UniFi Access',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'apiToken',
+          label: 'API Token',
+          sensitive: true,
+          tooltip:
+            'Bearer token from UniFi Access settings (Developer API)',
         },
       ],
     },

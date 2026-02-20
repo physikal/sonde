@@ -63,3 +63,53 @@ Use `#tagname` in your prompts to filter agents and integrations by tag:
 The `#` prefix is required — without it, words are treated as natural language and no tag filtering occurs. Multiple tags use AND logic (all must match). Tags are assigned by admins in the dashboard.
 
 Tag filtering works with `list_agents`, `list_capabilities`, and `health_check`. When `health_check` is called with tags, it runs diagnostics across all matching agents in parallel and returns unified findings.
+
+## Prompt cookbook
+
+### Getting started
+
+```
+> What agents are connected to Sonde?
+> What diagnostics can you run on my-server?
+> What integrations are available?
+```
+
+### Outage triage
+
+Start broad, then narrow down:
+
+```
+> What's wrong with the #storefront servers?
+> Run a health check across all #prod agents
+> Something is slow — check all agents and integrations for issues
+> Check the storefront critical path
+```
+
+### Targeted investigation
+
+```
+> Run a Docker diagnostic on web-01
+> Check disk usage on my-server
+> Show me the last 100 nginx error log lines on web-01
+> Are there any slow queries on db-01?
+> What's the status of the postgresql service on db-01?
+```
+
+### Cross-system correlation
+
+```
+> Check the web servers and look up open ServiceNow incidents for them
+> Show me Proxmox VM health and compare with agent status
+> Are there PagerDuty incidents for #database agents?
+> Check Datadog monitors and correlate with #prod agent health
+```
+
+### Capacity and logs
+
+```
+> Is the disk getting full on any agent?
+> Compare memory usage across all #prod agents
+> Show me Docker logs from the api container on web-01
+> Search Splunk for errors in the last hour
+> Query Loki for {job="varlogs"} |= "error"
+```

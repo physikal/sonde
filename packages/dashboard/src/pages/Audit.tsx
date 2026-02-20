@@ -5,6 +5,7 @@ interface AuditEntry {
   id: number;
   timestamp: string;
   apiKeyId: string;
+  apiKeyName: string | null;
   agentId: string;
   probe: string;
   status: string;
@@ -16,11 +17,6 @@ interface AuditEntry {
 interface ChainStatus {
   valid: boolean;
   brokenAt?: number;
-}
-
-interface ApiKeyOption {
-  id: string;
-  name: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -38,24 +34,15 @@ export function Audit() {
   const [filterAgent, setFilterAgent] = useState('');
   const [filterProbe, setFilterProbe] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterApiKeyId, setFilterApiKeyId] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [limit, setLimit] = useState(100);
-  const [apiKeys, setApiKeys] = useState<ApiKeyOption[]>([]);
-
-  // Fetch API key list for dropdown
-  useEffect(() => {
-    apiFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys').then((data) =>
-      setApiKeys(data.keys.map((k) => ({ id: k.id, name: k.name }))),
-    );
-  }, []);
+  const [filterCaller, setFilterCaller] = useState('');
 
   const fetchEntries = useCallback(() => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ limit: String(limit) });
-    if (filterApiKeyId) params.set('apiKeyId', filterApiKeyId);
     if (filterStartDate) params.set('startDate', new Date(filterStartDate).toISOString());
     if (filterEndDate) params.set('endDate', new Date(filterEndDate).toISOString());
 
@@ -65,7 +52,7 @@ export function Audit() {
         setError(err instanceof Error ? err.message : 'Failed to load audit entries'),
       )
       .finally(() => setLoading(false));
-  }, [limit, filterApiKeyId, filterStartDate, filterEndDate]);
+  }, [limit, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     fetchEntries();
@@ -78,16 +65,17 @@ export function Audit() {
       .finally(() => setVerifying(false));
   };
 
-  // Client-side filtering (agent, probe, status are still client-side)
+  // Client-side filtering (agent, probe, status, caller are client-side)
   const filtered = entries.filter((e) => {
     if (filterAgent && !e.agentId.toLowerCase().includes(filterAgent.toLowerCase())) return false;
     if (filterProbe && !e.probe.toLowerCase().includes(filterProbe.toLowerCase())) return false;
     if (filterStatus && e.status !== filterStatus) return false;
+    if (filterCaller && e.apiKeyName !== filterCaller) return false;
     return true;
   });
 
-  // Build a lookup for API key names
-  const apiKeyNames = new Map(apiKeys.map((k) => [k.id, k.name]));
+  // Unique caller names from entries for filter dropdown
+  const callerNames = [...new Set(entries.map((e) => e.apiKeyName).filter(Boolean))] as string[];
 
   if (loading) {
     return <div className="p-8 text-gray-400">Loading...</div>;
@@ -145,14 +133,14 @@ export function Audit() {
       {/* Filters */}
       <div className="mt-4 flex flex-wrap gap-3">
         <select
-          value={filterApiKeyId}
-          onChange={(e) => setFilterApiKeyId(e.target.value)}
+          value={filterCaller}
+          onChange={(e) => setFilterCaller(e.target.value)}
           className="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
         >
-          <option value="">All API keys</option>
-          {apiKeys.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.name}
+          <option value="">All callers</option>
+          {callerNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
             </option>
           ))}
         </select>
@@ -214,7 +202,7 @@ export function Audit() {
             <tr>
               <th className="px-4 py-3">#</th>
               <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">API Key</th>
+              <th className="px-4 py-3">Caller</th>
               <th className="px-4 py-3">Agent</th>
               <th className="px-4 py-3">Probe</th>
               <th className="px-4 py-3">Status</th>
@@ -237,9 +225,7 @@ export function Audit() {
                     {new Date(entry.timestamp).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
-                    {entry.apiKeyId
-                      ? (apiKeyNames.get(entry.apiKeyId) ?? entry.apiKeyId.slice(0, 8))
-                      : '\u2014'}
+                    {entry.apiKeyName ?? '\u2014'}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-400">
                     {entry.agentId.slice(0, 8)}...

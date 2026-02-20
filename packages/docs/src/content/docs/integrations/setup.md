@@ -68,19 +68,39 @@ Identifies VMs with local storage that are HA-managed, recommending migration co
 
 ### Prerequisites
 
-- ServiceNow instance with API access
-- OAuth app registration or Basic auth credentials
-- User with read access to CMDB tables (cmdb_ci, cmdb_rel_ci, change_request, incident)
+- ServiceNow instance with REST API access
+- **Basic auth:** User account with `snc_read_only` and `itil` roles
+- **OAuth 2.0:** OAuth application registered in ServiceNow (System OAuth > Application Registry) with `client_credentials` grant enabled. Requires Washington DC release or newer with the OAuth 2.0 plugin and `glide.oauth.inbound.client.credential.grant_type.enabled` set to `true`.
 
-### Configuration
+### Configuration (Basic Auth)
 
 | Field | Value |
 |---|---|
 | Instance URL | `https://company.service-now.com` |
-| Auth Method | `oauth` or `basic` |
-| Client ID | (for OAuth) |
-| Client Secret | (for OAuth) |
-| Username/Password | (for Basic auth) |
+| Auth Method | `api_key` (Basic auth) |
+| Username | ServiceNow user with `snc_read_only` + `itil` roles |
+| Password | (encrypted at rest) |
+
+### Configuration (OAuth 2.0)
+
+| Field | Value |
+|---|---|
+| Instance URL | `https://company.service-now.com` |
+| Auth Method | `oauth2` |
+| Client ID | OAuth application client ID (from Application Registry) |
+| Client Secret | (encrypted at rest) |
+
+OAuth 2.0 uses the `client_credentials` grant type. Sonde exchanges the client ID and secret for a bearer token via `POST /oauth_token.do` and caches it until expiry. No username or password needed — the OAuth application user's roles determine API access. Assign `snc_platform_rest_api_access` and `snc_read_only` roles to the application user.
+
+### Available Probes
+
+- **ci.lookup** — Look up a configuration item by name or IP address
+- **ci.owner** — Get ownership and support group information for a CI
+- **ci.relationships** — Get upstream and downstream CI relationships
+- **ci.lifecycle** — Get lifecycle and asset information (install date, warranty, EOL)
+- **changes.recent** — Recent change requests associated with a CI (configurable lookback)
+- **incidents.open** — Open incidents associated with a CI
+- **service.health** — Business service overview with child CIs
 
 ### Example Queries
 
@@ -139,6 +159,15 @@ Grant admin consent for all.
 
 The Graph pack detects the existing Entra SSO configuration automatically. No additional endpoint configuration needed — it reuses the client ID and secret, but with client_credentials flow instead of authorization code flow.
 
+## Microsoft Graph + Intune — Example Queries
+
+- "Look up user john.doe@company.com in Entra"
+- "What groups is this user a member of?"
+- "Show me recent sign-in failures"
+- "Which Intune-managed devices are non-compliant?"
+- "What device compliance policies are configured?"
+- "Show me managed apps on mobile devices"
+
 ## Nutanix
 
 ### Prerequisites
@@ -160,6 +189,13 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **nutanix-cluster-health** — Fleet overview across all registered clusters
 - **nutanix-vm-health** — Single VM deep dive with storage, network, protection status
 - **nutanix-capacity-planning** — Headroom analysis for CPU, memory, and storage
+
+### Example Queries
+
+- "How's my Nutanix cluster doing?"
+- "Check the health of VM web-prod-01"
+- "Do I have enough capacity for 10 more VMs?"
+- "Which VMs are not protected by snapshots?"
 
 ## Splunk
 
@@ -183,6 +219,13 @@ The Graph pack detects the existing Entra SSO configuration automatically. No ad
 - **indexes** — List all indexes with size and event count
 - **saved_searches** — List saved searches with schedule info
 - **health** — Splunkd health status with per-feature breakdown
+
+### Example Queries
+
+- "Is Splunk healthy?"
+- "What indexes are available and how large are they?"
+- "Search Splunk for errors in the last hour: index=main level=ERROR"
+- "Show me saved searches in Splunk"
 
 ## vCenter
 
@@ -232,6 +275,43 @@ The application key determines the scope of data access. Use a key scoped to a s
 - "Show me triggered Datadog monitors"
 - "List infrastructure hosts in Datadog"
 - "What events happened in the last 4 hours?"
+
+## ThousandEyes
+
+### Prerequisites
+
+- ThousandEyes account with API access
+- API bearer token (generate from Account Settings > Users and Roles > Profile > User API Tokens)
+
+Token generation requires MFA to be enabled on your account.
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| ThousandEyes API URL | `https://api.thousandeyes.com` |
+| Auth Method | `bearer_token` |
+| Token | (API bearer token) |
+
+The API URL is the same for all accounts. Tokens inherit the permissions of the associated user — use a user with a read-only role for least privilege.
+
+### Available Probes
+
+- **alerts.active** — Active alerts with severity, state, and violation count
+- **tests.list** — Configured tests with type, interval, and assigned agents
+- **network.metrics** — Per-agent latency, loss, and jitter for a specific test
+- **network.path-vis** — Hop-by-hop path visualization for a specific test
+- **agents.list** — ThousandEyes agents with type, location, and status
+- **outages.network** — Detected internet outages affecting your tests
+
+### Example Queries
+
+- "Show me active ThousandEyes alerts"
+- "List all ThousandEyes tests"
+- "What's the network latency for test 12345?"
+- "Show me the path visualization for test 12345"
+- "Are there any internet outages affecting my tests?"
+- "List ThousandEyes agents and their locations"
 
 ## Loki
 
@@ -305,6 +385,88 @@ Use a read-only API key. Full-access keys are not needed since Sonde only perfor
 - "List PagerDuty services"
 - "Who is on call right now?"
 - "Show details for service P1234ABC"
+
+## UniFi Network
+
+Uses the official UniFi Network API (requires Network Application 9.0.108 or newer).
+
+### Prerequisites
+
+- UniFi OS device (UDM, UDM-Pro, UDM-SE, UCG-Ultra) accessible over HTTPS from the hub
+- API key generated in the Network application
+
+### Generate API Key
+
+1. Log into your UniFi controller's local portal
+2. Go to **Network > Settings > Control Plane > Integrations**
+3. Click **Create API Key**, give it a name, set expiration (or "Never Expires")
+4. Copy the key — it's only shown once
+
+The API key is read-only. No username or password needed.
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Controller URL | `https://192.168.1.1` (your UDM IP) |
+| Auth Method | `api_key` |
+| API Key | (the key from step above) |
+| Verify SSL | `false` (UniFi controllers use self-signed certs by default) |
+
+### Available Probes
+
+- **info** — Application version and basic metadata
+- **sites** — List all sites on this controller
+- **devices** — Adopted devices with state, model, firmware, features
+- **device.detail** — Full device details including interfaces and uplink (by UUID)
+- **device.stats** — Latest device statistics: CPU, memory, uptime, load averages (by UUID)
+- **clients** — Connected clients with type, IP, connection time
+- **networks** — Configured networks (VLANs, etc.)
+- **wans** — WAN interface definitions
+
+### Example Queries
+
+- "What version is my UniFi controller running?"
+- "List all network devices and their firmware"
+- "How many clients are connected?"
+- "Show me the CPU and memory usage of device X"
+- "What networks are configured?"
+
+## UniFi Access
+
+### Prerequisites
+
+- UniFi Access system with the Developer API enabled
+- API token (bearer token)
+
+### Generate API Token
+
+1. Open the UniFi Access application on your console
+2. Go to **Settings > Developer API**
+3. Enable the API and generate a token
+4. Copy the token — it's only shown once
+
+### Configuration
+
+| Field | Value |
+|---|---|
+| Access URL | `https://192.168.1.1/proxy/access/api/v1/developer/` (through UDM) or `https://access-host:12445/api/v1/developer/` (direct) |
+| Auth Method | `api_key` |
+| API Token | (the bearer token from step above) |
+| Verify SSL | `false` (self-signed certs typical) |
+
+### Available Probes
+
+- **doors** — List all doors with name, status, and lock state
+- **logs** — Access event log (door unlocks, denied attempts). Filterable by topic.
+- **devices** — Access control devices (readers, hubs) with status and firmware
+
+### Example Queries
+
+- "List all doors in the access system"
+- "Show me recent access logs"
+- "Who accessed the server room recently?"
+- "Are all door readers online?"
 
 ## Testing Integrations
 

@@ -13,12 +13,14 @@ import type { SondeOAuthProvider } from '../oauth/provider.js';
 import type { AgentDispatcher } from '../ws/dispatcher.js';
 import { buildMcpInstructions } from './instructions.js';
 import { handleAgentOverview } from './tools/agent-overview.js';
+import { handleCheckCriticalPath } from './tools/check-critical-path.js';
 import { handleDiagnose } from './tools/diagnose.js';
 import { handleHealthCheck } from './tools/health-check.js';
 import { handleListAgents } from './tools/list-agents.js';
 import { handleListCapabilities } from './tools/list-capabilities.js';
 import { handleProbe } from './tools/probe.js';
 import { handleQueryLogs } from './tools/query-logs.js';
+import { handleTrendingSummary } from './tools/trending.js';
 
 /**
  * Creates an MCP HTTP handler using StreamableHTTPServerTransport.
@@ -33,7 +35,7 @@ export function createMcpHandler(
   packRegistry: ReadonlyMap<string, Pack>,
   oauthProvider?: SondeOAuthProvider,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
-  const SESSION_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+  const SESSION_MAX_IDLE_MS = 8 * 60 * 60 * 1000; // 8 hours (matches dashboard sessions)
   const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   // Per-session transports (sessionId → transport)
@@ -62,11 +64,7 @@ export function createMcpHandler(
     server: McpServer;
     transport: StreamableHTTPServerTransport;
   } {
-    const instructions = buildMcpInstructions(
-      db,
-      integrationManager,
-      probeRouter,
-    );
+    const instructions = buildMcpInstructions(db, integrationManager, probeRouter);
 
     const server = new McpServer(
       { name: 'sonde-hub', version: '0.1.0' },
@@ -252,6 +250,44 @@ export function createMcpHandler(
       },
     );
 
+    server.registerTool(
+      'check_critical_path',
+      {
+        description:
+          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). All steps execute in parallel, returning pass/fail per hop with timing. Use list_capabilities to discover available paths.',
+        inputSchema: z.object({
+          path: z.string().describe('Critical path name (e.g. "storefront")'),
+        }),
+      },
+      async (args) => {
+        return handleCheckCriticalPath(args, probeRouter, db, auth);
+      },
+    );
+
+    server.registerTool(
+      'trending_summary',
+      {
+        description:
+          'Show aggregate probe trends from the last 24 hours. Surfaces failure rates, error patterns, and which agents or probes are struggling. Use during outages to see what others have been investigating and where failures concentrate.',
+        inputSchema: z.object({
+          hours: z
+            .number()
+            .min(1)
+            .max(24)
+            .default(24)
+            .describe('How many hours to look back (default: 24, max: 24)'),
+          probe: z
+            .string()
+            .optional()
+            .describe('Filter to a specific probe name (e.g. "system.disk-usage")'),
+          agent: z.string().optional().describe('Filter to a specific agent or integration source'),
+        }),
+      },
+      async (args) => {
+        return handleTrendingSummary(args, db);
+      },
+    );
+
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => crypto.randomUUID(),
       // Prefer direct JSON responses over SSE streams for tool calls.
@@ -353,7 +389,16 @@ export function createMcpHandler(
       return;
     }
 
-    // For new sessions (no session ID or unknown session), handle initialization
+    // Stale session: client sent a session ID we don't recognize (evicted
+    // or server restarted). Return 404 per MCP spec so the client
+    // re-initializes instead of hanging on a dead session.
+    if (sessionId) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Session expired' }));
+      return;
+    }
+
+    // For new sessions (no session ID), handle initialization
     if (req.method === 'POST' || req.method === 'GET') {
       const { server, transport } = createSessionServer(auth);
       await server.connect(transport);

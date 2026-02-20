@@ -7,45 +7,24 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { AccessGroups } from './pages/AccessGroups';
 import { AgentDetail } from './pages/AgentDetail';
+import { AiSettings } from './pages/AiSettings';
 import { ApiKeys } from './pages/ApiKeys';
 import { Audit } from './pages/Audit';
+import { CriticalPathDetail } from './pages/CriticalPathDetail';
+import { CriticalPaths } from './pages/CriticalPaths';
 import { Enrollment } from './pages/Enrollment';
 import { Fleet } from './pages/Fleet';
 import { IntegrationDetail } from './pages/IntegrationDetail';
 import { Integrations } from './pages/Integrations';
 import { Login } from './pages/Login';
 import { McpInstructions } from './pages/McpInstructions';
+import { MyApiKeys } from './pages/MyApiKeys';
 import { Policies } from './pages/Policies';
 import { Settings } from './pages/Settings';
 import { TagsManagement } from './pages/TagsManagement';
+import { Trending } from './pages/Trending';
 import { TryIt } from './pages/TryIt';
 import { Users } from './pages/Users';
-
-function MemberNotice() {
-  const { logout } = useAuth();
-
-  return (
-    <div className="flex h-screen items-center justify-center bg-gray-950">
-      <div className="max-w-md rounded-lg border border-gray-800 bg-gray-900 p-8 text-center">
-        <h1 className="text-xl font-semibold text-white">MCP Access Only</h1>
-        <p className="mt-3 text-sm text-gray-400">
-          Your account is authorized for MCP access only. Use Claude Desktop or Claude Code to
-          connect to Sonde and run diagnostic queries.
-        </p>
-        <p className="mt-4 text-xs text-gray-500">
-          Contact your Sonde administrator if you need dashboard access.
-        </p>
-        <button
-          type="button"
-          onClick={logout}
-          className="mt-6 rounded-md bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
-        >
-          Sign out
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function AppRoutes() {
   const { status, loading: setupLoading, refetch } = useSetupStatus();
@@ -71,13 +50,18 @@ function AppRoutes() {
       ) : !user ? (
         <Route path="*" element={<Navigate to="/login" replace />} />
       ) : user.role === 'member' ? (
-        <Route path="*" element={<MemberNotice />} />
+        <Route element={<AppShell />}>
+          <Route index element={<Navigate to="/my-api-keys" replace />} />
+          <Route path="my-api-keys" element={<MyApiKeys />} />
+          <Route path="*" element={<Navigate to="/my-api-keys" replace />} />
+        </Route>
       ) : (
         <Route element={<AppShell />}>
           <Route index element={<Overview />} />
           <Route path="agents" element={<Fleet />} />
           <Route path="agents/:id" element={<AgentDetail />} />
           <Route path="enrollment" element={<Enrollment />} />
+          <Route path="my-api-keys" element={<MyApiKeys />} />
           <Route path="api-keys" element={<ApiKeys />} />
           <Route path="users" element={<Users />} />
           <Route path="access-groups" element={<AccessGroups />} />
@@ -85,9 +69,13 @@ function AppRoutes() {
           <Route path="integrations" element={<Integrations />} />
           <Route path="integrations/:id" element={<IntegrationDetail />} />
           <Route path="audit" element={<Audit />} />
+          <Route path="trending" element={<Trending />} />
           <Route path="try-it" element={<TryIt />} />
+          <Route path="critical-paths" element={<CriticalPaths />} />
+          <Route path="critical-paths/:id" element={<CriticalPathDetail />} />
           <Route path="settings" element={<Navigate to="/settings/sso" replace />} />
           <Route path="settings/sso" element={<Settings />} />
+          <Route path="settings/ai" element={<AiSettings />} />
           <Route path="settings/mcp-instructions" element={<McpInstructions />} />
           <Route path="settings/tags" element={<TagsManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />

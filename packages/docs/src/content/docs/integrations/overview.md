@@ -38,7 +38,7 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Type | Auth Methods | Use Case |
 |---|---|---|
 | Proxmox VE | API Token | Hypervisor fleet monitoring |
-| ServiceNow | Basic / OAuth | CMDB lookups, incident correlation |
+| ServiceNow | Basic / OAuth 2.0 (client credentials) | CMDB lookups, incident correlation |
 | Citrix | Basic / OAuth | VDA health, session diagnostics |
 | Microsoft Graph | Auto (from SSO) | Entra/Intune device and user data |
 | Splunk | Token / Basic | Log search, saved search results |
@@ -48,5 +48,7 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Loki | Basic / Bearer | LogQL queries, label discovery |
 | Jira | Basic (email + API token) | Issue search, project listing, change history |
 | PagerDuty | Token | Incidents, services, on-call schedules |
+| UniFi Network | API Key (`X-API-KEY`) | Devices, clients, networks, WAN, device stats |
+| UniFi Access | Bearer Token | Door status, access logs, reader/hub devices |
 
 For per-type setup instructions (required permissions, credential format, example queries), see the [Integration Packs Setup](/integrations/setup) page.

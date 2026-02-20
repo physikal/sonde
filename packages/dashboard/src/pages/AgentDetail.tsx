@@ -19,6 +19,7 @@ interface AuditEntry {
   id: number;
   timestamp: string;
   agentId: string;
+  apiKeyName: string | null;
   probe: string;
   status: string;
   durationMs: number;
@@ -267,6 +268,7 @@ export function AgentDetail() {
             <thead className="bg-gray-900 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3">Time</th>
+                <th className="px-4 py-3">Caller</th>
                 <th className="px-4 py-3">Probe</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Duration</th>
@@ -276,7 +278,7 @@ export function AgentDetail() {
             <tbody className="divide-y divide-gray-800">
               {audit.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                     No probe history yet.
                   </td>
                 </tr>
@@ -285,6 +287,9 @@ export function AgentDetail() {
                   <tr key={entry.id} className="bg-gray-950">
                     <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
                       {new Date(entry.timestamp).toLocaleTimeString()}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">
+                      {entry.apiKeyName ?? '\u2014'}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-200">{entry.probe}</td>
                     <td className="px-4 py-3">

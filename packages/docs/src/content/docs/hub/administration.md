@@ -41,12 +41,28 @@ Delete a user record to revoke access completely. They'll be denied on next logi
 
 ## API Key Management
 
-### Creating Keys
+### Self-Service Keys (All Users)
 
-1. **Manage** > **API Keys** > **Create Key**
-2. Enter a descriptive name (e.g., "Claude Code - Josh", "n8n monitoring workflow")
+All users (members, admins, owners) can manage their own API keys from **My Account** > **My API Keys** in the dashboard sidebar:
+
+1. Click **Create Key**
+2. Enter a descriptive name (e.g., "Claude Desktop", "Claude Code")
+3. The key is always scoped to `member` role — no privilege escalation possible
+4. Maximum 5 keys per user
+5. The key value is shown once — copy it immediately
+
+Users can **Rotate** (generate new value, invalidate old) or **Revoke** (permanently disable) their own keys. They cannot see or manage keys belonging to other users.
+
+This is the primary way members get their MCP credentials — they log in to the dashboard, create a key, and use it to connect Claude Desktop or Claude Code.
+
+### Admin Key Management
+
+Admins manage all keys across the deployment from **Manage** > **API Keys**:
+
+1. Click **Create Key**
+2. Enter a descriptive name (e.g., "n8n monitoring workflow", "shared-team-key")
 3. Select role: **Member** (MCP only) or **Admin** (MCP + REST)
-4. Optional: scope to specific agents (glob pattern) or probe types
+4. Optional: scope to specific agents (exact names), probe types (glob patterns), or MCP clients (exact client IDs)
 5. The key value is shown once — copy it immediately
 
 ### Rotating Keys
@@ -55,9 +71,11 @@ Click **Rotate** on an existing key to generate a new value. The old value is im
 
 ### Best Practices
 
+- Direct members to **My API Keys** for self-service — avoid creating keys on their behalf
 - Create separate keys for each client or integration
 - Use the minimum role needed (member for MCP users, admin for automation)
-- Scope keys to specific agents when possible (e.g., `prod-*` for production-only access)
+- Scope keys to specific agents when possible (e.g., `prod-server-1, staging-web`)
+- Restrict clients to known MCP consumers (e.g., `claude-desktop, cursor`)
 - Rotate keys periodically and after any suspected compromise
 - Name keys descriptively so you know what breaks if you revoke one
 
@@ -205,6 +223,57 @@ curl -X PUT https://your-hub/api/v1/settings/mcp-instructions \
 ```
 
 Both endpoints require the `owner` role.
+
+## AI Analysis
+
+The hub can connect to the Claude API for automated analysis of probe trending data. During an outage, admins click **Activate AI** on the Trending page to get an AI-generated diagnosis of failure patterns.
+
+### Configuring the API Key
+
+1. Go to **Settings** > **AI Analysis** (owner only)
+2. Enter your Anthropic API key (from [console.anthropic.com](https://console.anthropic.com))
+3. Select a model (Claude Sonnet 4 is the default)
+4. Click **Save**
+5. Click **Test Connection** to verify the key works
+
+The API key is encrypted at rest using `SONDE_SECRET` (AES-256-GCM). The GET endpoint never returns the raw key — only whether one is configured.
+
+### Using AI Analysis
+
+Once configured, all admins see the **Activate AI** button on the **Diagnostics** > **Trending** page:
+
+1. Select a time window (1h, 6h, 12h, or 24h)
+2. Click **Activate AI**
+3. The analysis streams back in real-time with:
+   - Overall assessment
+   - Key failure patterns with likely causes
+   - Recommended Sonde commands to run next
+
+### Shared Analysis
+
+The hub maintains a singleton analysis — if one admin triggers it, others arriving at the Trending page see the same stream (or the completed result). This prevents duplicate API calls. Results are cached for 5 minutes.
+
+### REST API
+
+```bash
+# Check AI config (owner)
+curl https://your-hub/api/v1/settings/ai \
+  -H "Authorization: Bearer owner-api-key"
+
+# Update AI config (owner)
+curl -X PUT https://your-hub/api/v1/settings/ai \
+  -H "Authorization: Bearer owner-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey": "sk-ant-...", "model": "claude-sonnet-4-20250514"}'
+
+# Test connection (owner)
+curl -X POST https://your-hub/api/v1/settings/ai/test \
+  -H "Authorization: Bearer owner-api-key"
+
+# Trigger analysis (admin)
+curl -X POST "https://your-hub/api/v1/trending/analyze?hours=24" \
+  -H "Authorization: Bearer admin-api-key"
+```
 
 ## Audit Log
 

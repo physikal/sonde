@@ -22,7 +22,7 @@ All endpoints (except where noted) require authentication via one of:
 | Type | Scope |
 |------|-------|
 | Master API key | Full access to all endpoints and agents |
-| Scoped API key | Restricted by policy rules (specific agents and tools) |
+| Scoped API key | Restricted by policy rules (specific agents, probes, and clients) |
 
 ## MCP Endpoint
 
@@ -67,6 +67,7 @@ The following tools are available to AI clients via `tools/list` and `tools/call
 | `list_agents` | List all agents with connection status, packs, and tags. | Optional `tags` |
 | `agent_overview` | Detailed info for a specific agent. | `agent` (name or ID) |
 | `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail. | `source`, optional `agent`, filters |
+| `check_critical_path` | Execute a predefined critical path — an ordered chain of infrastructure checkpoints. All steps run in parallel, returning pass/fail per hop with timing. | `path` (name) |
 
 The `tags` parameter accepts an array of tag names (without `#` prefix). When provided, results are filtered to agents and integrations matching **all** specified tags (AND logic).
 
@@ -171,19 +172,23 @@ Query the audit log. Entries are returned in reverse chronological order.
 ]
 ```
 
-### API Keys
+### API Keys (Admin)
 
-#### `POST /api/v1/keys`
+Admin-only endpoints for managing all keys across the deployment. Requires `admin` role or higher.
 
-Create a new API key. Optionally scope it with policy rules.
+#### `POST /api/v1/api-keys`
+
+Create a new API key. Optionally scope it with policy rules across three dimensions: agents (exact names), probes (glob patterns), and clients (exact MCP client IDs). Omit a field or pass an empty array for no restriction on that dimension.
 
 **Request:**
 ```json
 {
   "name": "ci-readonly",
+  "role": "member",
   "policy": {
-    "agents": ["my-server"],
-    "tools": ["probe", "list_agents"]
+    "allowedAgents": ["my-server"],
+    "allowedProbes": ["system.*"],
+    "allowedClients": ["claude-desktop"]
   }
 }
 ```
@@ -193,20 +198,86 @@ Create a new API key. Optionally scope it with policy rules.
 {
   "id": "uuid",
   "name": "ci-readonly",
-  "key": "sonde_...",
-  "createdAt": "2026-02-16T12:00:00.000Z"
+  "key": "a1b2c3...",
+  "policy": { "role": "member" }
 }
 ```
 
 The `key` value is only returned once at creation time.
 
-#### `GET /api/v1/keys`
+#### `GET /api/v1/api-keys`
 
 List all API keys (without the key values).
 
-#### `DELETE /api/v1/keys/:id`
+#### `POST /api/v1/api-keys/:id/rotate`
+
+Generate a new key value. The old value is immediately invalidated.
+
+#### `DELETE /api/v1/api-keys/:id`
 
 Revoke an API key. Immediately invalidates all sessions using this key.
+
+### My API Keys (Self-Service)
+
+Self-service endpoints for managing your own keys. Available to any authenticated user (member, admin, owner). Keys created here are always scoped to `member` role. Maximum 5 keys per user. Operations on keys not owned by the caller return `404`.
+
+#### `GET /api/v1/my/api-keys`
+
+List the caller's own API keys (active only, excludes revoked).
+
+**Response:**
+```json
+{
+  "keys": [
+    {
+      "id": "uuid",
+      "name": "claude-desktop",
+      "createdAt": "2026-02-16T12:00:00.000Z",
+      "lastUsedAt": "2026-02-17T08:30:00.000Z",
+      "role": "member",
+      "keyType": "mcp"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/my/api-keys`
+
+Create a new personal API key. Role is hardcoded to `member`.
+
+**Request:**
+```json
+{
+  "name": "claude-desktop"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "key": "a1b2c3...",
+  "name": "claude-desktop"
+}
+```
+
+Returns `400` if the user already has 5 active keys.
+
+#### `POST /api/v1/my/api-keys/:id/rotate`
+
+Generate a new key value for an owned key. Returns `404` if the key doesn't belong to the caller.
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "key": "d4e5f6..."
+}
+```
+
+#### `DELETE /api/v1/my/api-keys/:id`
+
+Revoke an owned key. Returns `404` if the key doesn't belong to the caller.
 
 ### Enrollment Tokens
 
@@ -235,7 +306,215 @@ curl -fsSL https://your-hub-url:3000/install | bash
 
 The script installs Node.js 22 (if needed) and `@sonde/agent`, then launches the enrollment TUI. Supports Linux (apt, dnf, yum) and macOS (Homebrew).
 
+### Critical Paths
+
+Admin-only endpoints for managing critical paths — predefined ordered chains of infrastructure checkpoints. Requires `admin` role or higher.
+
+#### `POST /api/v1/critical-paths`
+
+Create a new critical path with optional steps.
+
+**Request:**
+```json
+{
+  "name": "storefront",
+  "description": "Storefront request path from LB to DB",
+  "steps": [
+    {
+      "label": "Load Balancer",
+      "targetType": "agent",
+      "targetId": "lb-01",
+      "probes": ["system.cpu.usage", "system.memory.usage"]
+    },
+    {
+      "label": "Web Server",
+      "targetType": "agent",
+      "targetId": "web-01",
+      "probes": ["system.cpu.usage", "nginx.status"]
+    }
+  ]
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "name": "storefront",
+  "description": "Storefront request path from LB to DB",
+  "steps": [...]
+}
+```
+
+#### `GET /api/v1/critical-paths`
+
+List all critical paths with step counts.
+
+**Response:**
+```json
+{
+  "paths": [
+    {
+      "id": "uuid",
+      "name": "storefront",
+      "description": "...",
+      "stepCount": 4,
+      "createdAt": "2026-02-20T12:00:00.000Z",
+      "updatedAt": "2026-02-20T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `GET /api/v1/critical-paths/:id`
+
+Get a critical path with full step details.
+
+#### `PUT /api/v1/critical-paths/:id`
+
+Update path metadata and/or replace steps.
+
+#### `DELETE /api/v1/critical-paths/:id`
+
+Delete a critical path. Steps are cascade-deleted.
+
+#### `POST /api/v1/critical-paths/:id/execute`
+
+Execute all steps in parallel. Returns per-step and per-probe status with timing.
+
+**Response:**
+```json
+{
+  "path": "storefront",
+  "description": "...",
+  "overallStatus": "partial",
+  "totalDurationMs": 1523,
+  "steps": [
+    {
+      "stepOrder": 0,
+      "label": "Load Balancer",
+      "targetType": "agent",
+      "targetId": "lb-01",
+      "status": "pass",
+      "durationMs": 842,
+      "probes": [
+        {
+          "name": "system.cpu.usage",
+          "status": "success",
+          "durationMs": 234,
+          "data": { ... }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Trending
+
+#### `GET /api/v1/trending`
+
+Get aggregate probe trending data. Requires `admin` role.
+
+**Query parameters:**
+- `hours` — Time window (1-24, default 24)
+
+**Response:**
+```json
+{
+  "window": { "sinceHours": 24, "since": "...", "until": "..." },
+  "totalProbes": 142,
+  "totalFailures": 8,
+  "failureRate": 5.6,
+  "byProbe": [{ "probe": "system.disk.usage", "total": 50, "success": 48, "failureRate": 4 }],
+  "byAgent": [{ "agentOrSource": "web-01", "sourceType": "agent", "total": 30, "failures": 2 }],
+  "byHour": [{ "hour": "2026-02-20T14:00:00.000Z", "total": 12, "failures": 1 }],
+  "recentErrors": [{ "timestamp": "...", "probe": "...", "status": "error", "errorMessage": "..." }]
+}
+```
+
+#### `GET /api/v1/trending/analyze/status`
+
+Check if an AI analysis is active or recently completed. Requires `admin` role.
+
+**Response:**
+```json
+{
+  "active": false,
+  "complete": true,
+  "hours": 24,
+  "text": "## Summary\n..."
+}
+```
+
+#### `POST /api/v1/trending/analyze`
+
+Start or join a streaming AI analysis of trending data. Returns chunked `text/plain` response. Requires `admin` role. Returns `503` if no AI API key is configured.
+
+**Query parameters:**
+- `hours` — Time window (1-24, default 24)
+
+If an analysis is already in progress, the response replays buffered text then streams remaining chunks. If a recent analysis completed (< 5 min), returns the full result immediately.
+
 ### Settings
+
+#### `GET /api/v1/settings/ai`
+
+Get AI analysis configuration status. **Requires owner role.**
+
+**Response:**
+```json
+{
+  "configured": true,
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+The API key is never returned — only whether one is configured.
+
+#### `GET /api/v1/settings/ai/status`
+
+Lightweight check for whether AI is configured. **Requires admin role.** Used by the dashboard to show/hide the Activate AI button.
+
+**Response:**
+```json
+{
+  "configured": true
+}
+```
+
+#### `PUT /api/v1/settings/ai`
+
+Update AI analysis settings. **Requires owner role.** Omit `apiKey` to keep the existing key.
+
+**Request:**
+```json
+{
+  "apiKey": "sk-ant-...",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+**Response:** Same as `GET /api/v1/settings/ai`.
+
+#### `POST /api/v1/settings/ai/test`
+
+Test the stored API key against the Claude API. **Requires owner role.**
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+Or on failure:
+```json
+{
+  "success": false,
+  "error": "Invalid API key"
+}
+```
 
 #### `GET /api/v1/settings/mcp-instructions`
 
