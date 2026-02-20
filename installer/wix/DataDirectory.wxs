@@ -17,9 +17,7 @@
             GenericAll="yes" />
           <Permission
             User="LOCAL SERVICE"
-            GenericRead="yes"
-            GenericWrite="yes"
-            GenericExecute="yes" />
+            GenericAll="yes" />
         </CreateFolder>
         <RegistryValue
           Root="HKLM"

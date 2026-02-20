@@ -34,6 +34,7 @@ import {
   filterIntegrationsByAccess,
   isAgentVisible,
 } from './auth/access-groups.js';
+import { hashPassword } from './auth/password.js';
 import { createEntraRoutes, getDecryptedSSOConfig } from './auth/entra.js';
 import { createAuthRoutes } from './auth/local-auth.js';
 import { requireRole } from './auth/rbac.js';
@@ -61,6 +62,7 @@ import {
   ActivateGraphBody,
   BulkTagsBody,
   CreateAccessGroupBody,
+  CreateAdminBody,
   RenameTagBody,
   CreateApiKeyBody,
   CreateAuthorizedGroupBody,
@@ -294,10 +296,14 @@ app.use('/docs/*', sessionMiddleware(sessionManager));
 // Auth routes (login/logout/status)
 app.route(
   '/auth',
-  createAuthRoutes(sessionManager, {
-    adminUser: config.adminUser,
-    adminPassword: config.adminPassword,
-  }),
+  createAuthRoutes(
+    sessionManager,
+    {
+      adminUser: config.adminUser,
+      adminPassword: config.adminPassword,
+    },
+    db,
+  ),
 );
 
 // Entra ID SSO routes (/auth/entra/login, /auth/entra/callback)
@@ -313,6 +319,7 @@ app.route(
 const PUBLIC_API_PATHS = new Set([
   '/api/v1/setup/status',
   '/api/v1/setup/complete',
+  '/api/v1/setup/admin',
   '/api/v1/sso/status',
 ]);
 
@@ -1213,11 +1220,32 @@ app.get('/api/v1/setup/status', (c) => {
   return c.json({
     setupComplete,
     steps: {
-      admin_created: setupComplete,
+      admin_created:
+        db.hasLocalAdmin() ||
+        (config.adminUser !== undefined && config.adminPassword !== undefined),
       api_key_exists: apiKeys.length > 0,
       agent_enrolled: agents.length > 0,
     },
   });
+});
+
+// Create admin account during setup (before setup completes)
+app.post('/api/v1/setup/admin', async (c) => {
+  if (db.getSetupValue('setup_complete') === 'true') {
+    return c.json({ error: 'Setup already completed' }, 409);
+  }
+  if (db.hasLocalAdmin()) {
+    return c.json({ error: 'Admin account already exists' }, 409);
+  }
+
+  const parsed = parseBody(CreateAdminBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  const { hash, salt } = await hashPassword(parsed.data.password);
+  const id = crypto.randomUUID();
+  db.createLocalAdmin(id, parsed.data.username, hash, salt);
+
+  return c.json({ ok: true }, 201);
 });
 
 // Mark setup complete (one-time, no auth for first boot)
@@ -1225,6 +1253,15 @@ app.post('/api/v1/setup/complete', (c) => {
   if (db.getSetupValue('setup_complete') === 'true') {
     return c.json({ error: 'Setup already completed' }, 409);
   }
+
+  // Require admin credentials before completing setup
+  const hasAdmin =
+    db.hasLocalAdmin() ||
+    (config.adminUser !== undefined && config.adminPassword !== undefined);
+  if (!hasAdmin) {
+    return c.json({ error: 'Admin account must be created before completing setup' }, 400);
+  }
+
   db.setSetupValue('setup_complete', 'true');
 
   // Auto-generate a default admin API key if none exist

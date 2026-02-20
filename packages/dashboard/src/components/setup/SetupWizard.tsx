@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { AdminStep } from './steps/AdminStep';
 import { AgentEnrollStep } from './steps/AgentEnrollStep';
 import { AiToolsStep } from './steps/AiToolsStep';
 import { ApiKeyStep } from './steps/ApiKeyStep';
 import { CompleteStep } from './steps/CompleteStep';
 import { WelcomeStep } from './steps/WelcomeStep';
 
-const STEP_LABELS = ['Welcome', 'API Key', 'AI Tools', 'Agent', 'Complete'];
+const STEP_LABELS = ['Welcome', 'Admin', 'API Key', 'AI Tools', 'Agent', 'Complete'];
 
 interface SetupWizardProps {
   onComplete: () => void;
@@ -44,10 +45,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         {/* Step content */}
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-8">
           {currentStep === 0 && <WelcomeStep />}
-          {currentStep === 1 && <ApiKeyStep />}
-          {currentStep === 2 && <AiToolsStep />}
-          {currentStep === 3 && <AgentEnrollStep />}
-          {currentStep === 4 && <CompleteStep onComplete={onComplete} />}
+          {currentStep === 1 && <AdminStep onCreated={next} />}
+          {currentStep === 2 && <ApiKeyStep />}
+          {currentStep === 3 && <AiToolsStep />}
+          {currentStep === 4 && <AgentEnrollStep />}
+          {currentStep === 5 && <CompleteStep onComplete={onComplete} />}
         </div>
 
         {/* Navigation */}
@@ -60,7 +62,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           >
             Back
           </button>
-          {currentStep < STEP_LABELS.length - 1 && (
+          {currentStep < STEP_LABELS.length - 1 && currentStep !== 1 && (
             <button
               type="button"
               onClick={next}
