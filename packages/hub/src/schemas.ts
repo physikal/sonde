@@ -3,6 +3,23 @@ import { z } from 'zod';
 const RoleSchema = z.enum(['member', 'admin', 'owner']);
 const AuthMethodSchema = z.enum(['api_key', 'bearer_token', 'oauth2']);
 
+// --- Setup Admin ---
+
+export const CreateAdminBody = z.object({
+  username: z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(64, 'Username must be at most 64 characters')
+    .regex(
+      /^[a-zA-Z0-9._-]+$/,
+      'Username may only contain letters, numbers, dots, hyphens, and underscores',
+    ),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must be at most 128 characters'),
+});
+
 // --- API Keys ---
 
 export const CreateApiKeyBody = z.object({

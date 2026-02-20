@@ -11,13 +11,16 @@ export function WelcomeStep() {
       </p>
       <ul className="mt-3 space-y-2 text-sm text-gray-400">
         <li className="flex gap-2">
-          <span className="text-blue-400">1.</span> Configure your API key
+          <span className="text-blue-400">1.</span> Create your admin account
         </li>
         <li className="flex gap-2">
-          <span className="text-blue-400">2.</span> Connect your AI tools via MCP
+          <span className="text-blue-400">2.</span> Configure your API key
         </li>
         <li className="flex gap-2">
-          <span className="text-blue-400">3.</span> Enroll your first agent
+          <span className="text-blue-400">3.</span> Connect your AI tools via MCP
+        </li>
+        <li className="flex gap-2">
+          <span className="text-blue-400">4.</span> Enroll your first agent
         </li>
       </ul>
     </div>

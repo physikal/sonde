@@ -12,7 +12,7 @@ function createTestApp() {
 
   const app = new Hono();
   app.use('/auth/*', sessionMiddleware(sm));
-  app.route('/auth', createAuthRoutes(sm, config));
+  app.route('/auth', createAuthRoutes(sm, config, db));
 
   return { app, db, sm };
 }
@@ -157,7 +157,7 @@ describe('local-auth routes', () => {
     const noSm = new SessionManager(noDB);
     const noConfigApp = new Hono();
     noConfigApp.use('/auth/*', sessionMiddleware(noSm));
-    noConfigApp.route('/auth', createAuthRoutes(noSm, {}));
+    noConfigApp.route('/auth', createAuthRoutes(noSm, {}, noDB));
 
     const res = await noConfigApp.request('/auth/local/login', {
       method: 'POST',

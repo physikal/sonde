@@ -86,6 +86,14 @@ export interface AccessGroupRow {
   createdBy: string;
 }
 
+export interface LocalAdminRow {
+  id: string;
+  username: string;
+  passwordHash: string;
+  salt: string;
+  createdAt: string;
+}
+
 export interface IntegrationEventRow {
   id: number;
   integrationId: string;
@@ -1589,6 +1597,42 @@ export class SondeDb {
       }
     }
     return map;
+  }
+
+  // --- Local Admins ---
+
+  createLocalAdmin(
+    id: string,
+    username: string,
+    passwordHash: string,
+    salt: string,
+  ): void {
+    this.db
+      .prepare(
+        'INSERT INTO local_admins (id, username, password_hash, salt) VALUES (?, ?, ?, ?)',
+      )
+      .run(id, username, passwordHash, salt);
+  }
+
+  getLocalAdminByUsername(username: string): LocalAdminRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM local_admins WHERE username = ?')
+      .get(username) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      username: row.username as string,
+      passwordHash: row.password_hash as string,
+      salt: row.salt as string,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  hasLocalAdmin(): boolean {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM local_admins')
+      .get() as { count: number };
+    return row.count > 0;
   }
 
   close(): void {
