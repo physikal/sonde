@@ -1,5 +1,11 @@
 # @sonde/shared
 
+## 0.1.8
+
+### Patch Changes
+
+- updates
+
 ## 0.1.7
 
 ### Patch Changes
