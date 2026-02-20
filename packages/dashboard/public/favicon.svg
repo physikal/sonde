@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="pulseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="32" fill="url(#bgGrad)"/>
+  
+  <g transform="translate(100, 100)">
+    <!-- Outer pulse ring -->
+    <circle cx="0" cy="0" r="72" fill="none" stroke="#6366f1" stroke-width="1.5" opacity="0.2"/>
+    
+    <!-- Middle pulse ring -->
+    <circle cx="0" cy="0" r="55" fill="none" stroke="#818cf8" stroke-width="1.8" opacity="0.35"/>
+    
+    <!-- Inner pulse ring -->
+    <circle cx="0" cy="0" r="38" fill="none" stroke="#a5b4fc" stroke-width="2" opacity="0.55"/>
+    
+    <!-- Sonar sweep -->
+    <path d="M 0 0 L 0 -72 A 72 72 0 0 1 62 36 Z" fill="url(#pulseGrad)" opacity="0.12"/>
+    
+    <!-- Center probe -->
+    <circle cx="0" cy="0" r="12" fill="url(#pulseGrad)" filter="url(#glow)"/>
+    <circle cx="0" cy="0" r="5.5" fill="#e0e7ff"/>
+    
+    <!-- Infrastructure nodes -->
+    <circle cx="55" cy="0" r="5" fill="#06b6d4" opacity="0.85"/>
+    <circle cx="-38" cy="38" r="5" fill="#6366f1" opacity="0.85"/>
+    <circle cx="27" cy="-48" r="5" fill="#818cf8" opacity="0.85"/>
+    <circle cx="-48" cy="-27" r="4.5" fill="#06b6d4" opacity="0.75"/>
+    <circle cx="38" cy="38" r="4.5" fill="#a78bfa" opacity="0.75"/>
+    <circle cx="-20" cy="-52" r="4" fill="#c4b5fd" opacity="0.65"/>
+    
+    <!-- Connection lines -->
+    <line x1="0" y1="0" x2="55" y2="0" stroke="#06b6d4" stroke-width="1.2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-38" y2="38" stroke="#6366f1" stroke-width="1.2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="27" y2="-48" stroke="#818cf8" stroke-width="1.2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-48" y2="-27" stroke="#06b6d4" stroke-width="1.2" opacity="0.35"/>
+    <line x1="0" y1="0" x2="38" y2="38" stroke="#a78bfa" stroke-width="1.2" opacity="0.35"/>
+    <line x1="0" y1="0" x2="-20" y2="-52" stroke="#c4b5fd" stroke-width="1" opacity="0.3"/>
+    
+    <!-- Node-to-node connections (infrastructure mesh) -->
+    <line x1="55" y1="0" x2="38" y2="38" stroke="#06b6d4" stroke-width="0.8" opacity="0.2" stroke-dasharray="3,3"/>
+    <line x1="27" y1="-48" x2="-20" y2="-52" stroke="#818cf8" stroke-width="0.8" opacity="0.2" stroke-dasharray="3,3"/>
+    <line x1="-48" y1="-27" x2="-38" y2="38" stroke="#6366f1" stroke-width="0.8" opacity="0.15" stroke-dasharray="3,3"/>
+  </g>
+  
+  <!-- Small "S" lettermark at bottom -->
+  <text x="100" y="186" text-anchor="middle"
+        font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" 
+        font-size="16" font-weight="700" letter-spacing="2" fill="#64748b" opacity="0.6">
+    S
+  </text>
+</svg>

@@ -21,6 +21,7 @@ COPY packages/shared/src packages/shared/src
 COPY packages/packs/src packages/packs/src
 COPY packages/hub/src packages/hub/src
 COPY packages/dashboard/src packages/dashboard/src
+COPY packages/dashboard/public packages/dashboard/public
 COPY packages/dashboard/index.html packages/dashboard/index.html
 COPY packages/dashboard/vite.config.ts packages/dashboard/vite.config.ts
 COPY packages/dashboard/postcss.config.mjs packages/dashboard/postcss.config.mjs
