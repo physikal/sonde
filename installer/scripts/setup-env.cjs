@@ -3,6 +3,11 @@
  * if the env file does not already exist.
  *
  * Runs as LocalSystem during MSI install — has write access to ProgramData.
+ *
+ * Supports two modes:
+ * - standalone (default): generates a random SONDE_SECRET locally
+ * - keyvault: writes env vars that tell the hub to fetch SONDE_SECRET
+ *   from Azure Key Vault at startup
  */
 'use strict';
 
@@ -16,7 +21,25 @@ const DATA_DIR = path.join(
 );
 const ENV_FILE = path.join(DATA_DIR, 'sonde-hub.env');
 
+/** Parse --key value pairs from process.argv */
+function parseArgs(argv) {
+  const args = {};
+  for (let i = 2; i < argv.length; i++) {
+    const key = argv[i];
+    if (key.startsWith('--') && i + 1 < argv.length) {
+      const name = key.slice(2);
+      const value = argv[i + 1];
+      args[name] = value;
+      i++;
+    }
+  }
+  return args;
+}
+
 function main() {
+  const args = parseArgs(process.argv);
+  const mode = args['mode'] || 'standalone';
+
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   } catch (err) {
@@ -33,9 +56,32 @@ function main() {
     return;
   }
 
+  let content;
+
+  if (mode === 'keyvault') {
+    content = buildKeyVaultEnv(args);
+  } else {
+    content = buildStandaloneEnv();
+  }
+
+  try {
+    fs.writeFileSync(ENV_FILE, content, { encoding: 'utf-8' });
+  } catch (err) {
+    console.error(
+      `Failed to write env file: ${ENV_FILE}\n` +
+      `  ${err.message}\n` +
+      '  Check disk space and directory permissions.',
+    );
+    process.exit(1);
+  }
+
+  console.log(`Created env file: ${ENV_FILE} (mode: ${mode})`);
+}
+
+function buildStandaloneEnv() {
   const secret = crypto.randomBytes(32).toString('hex');
 
-  const content = [
+  return [
     '# Sonde Hub environment configuration',
     '# Generated during installation — do not delete',
     '#',
@@ -52,19 +98,49 @@ function main() {
     '# SONDE_ADMIN_PASSWORD=changeme',
     '',
   ].join('\r\n');
+}
 
-  try {
-    fs.writeFileSync(ENV_FILE, content, { encoding: 'utf-8' });
-  } catch (err) {
-    console.error(
-      `Failed to write env file: ${ENV_FILE}\n` +
-      `  ${err.message}\n` +
-      '  Check disk space and directory permissions.',
-    );
-    process.exit(1);
+function buildKeyVaultEnv(args) {
+  const vaultUrl = args['azure-keyvault-url'] || '';
+  const secretName = args['azure-keyvault-secret-name'] || 'sonde-secret';
+  const authMethod = args['azure-auth-method'] || 'managed_identity';
+
+  const lines = [
+    '# Sonde Hub environment configuration',
+    '# Generated during installation — do not delete',
+    '#',
+    '# SONDE_SECRET is fetched from Azure Key Vault at startup.',
+    '# No encryption key is stored on disk.',
+    '',
+    'SONDE_SECRET_SOURCE=keyvault',
+    `AZURE_KEYVAULT_URL=${vaultUrl}`,
+    `AZURE_KEYVAULT_SECRET_NAME=${secretName}`,
+  ];
+
+  if (authMethod === 'app_registration') {
+    const tenantId = args['azure-tenant-id'] || '';
+    const clientId = args['azure-client-id'] || '';
+    const clientSecret = args['azure-client-secret'] || '';
+
+    lines.push('');
+    lines.push('# Azure App Registration credentials');
+    lines.push(`AZURE_TENANT_ID=${tenantId}`);
+    lines.push(`AZURE_CLIENT_ID=${clientId}`);
+    lines.push(`AZURE_CLIENT_SECRET=${clientSecret}`);
+  } else {
+    lines.push('');
+    lines.push('# Using Managed Identity (auto-detected by Azure SDK)');
   }
 
-  console.log(`Created env file: ${ENV_FILE}`);
+  lines.push('');
+  lines.push('# Uncomment and edit as needed:');
+  lines.push('# PORT=3000');
+  lines.push('# HOST=0.0.0.0');
+  lines.push('# SONDE_ADMIN_USER=admin');
+  lines.push('# SONDE_ADMIN_PASSWORD=changeme');
+  lines.push('');
+
+  return lines.join('\r\n');
 }
 
 main();

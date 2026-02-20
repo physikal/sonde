@@ -16,24 +16,10 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    title: 'My Account',
-    items: [{ to: '/my-api-keys', label: 'My API Keys' }],
-  },
-  {
     title: 'Fleet',
     items: [
       { to: '/', label: 'Overview', minimumRole: 'admin' },
       { to: '/agents', label: 'Agents', minimumRole: 'admin' },
-    ],
-  },
-  {
-    title: 'Manage',
-    items: [
-      { to: '/enrollment', label: 'Enrollment', minimumRole: 'admin' },
-      { to: '/api-keys', label: 'API Keys', minimumRole: 'admin' },
-      { to: '/users', label: 'Users', minimumRole: 'admin' },
-      { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
-      { to: '/integrations', label: 'Integrations', minimumRole: 'admin' },
     ],
   },
   {
@@ -47,6 +33,16 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Manage',
+    items: [
+      { to: '/enrollment', label: 'Enrollment', minimumRole: 'admin' },
+      { to: '/api-keys', label: 'API Keys', minimumRole: 'admin' },
+      { to: '/users', label: 'Users', minimumRole: 'admin' },
+      { to: '/access-groups', label: 'Access Groups', minimumRole: 'admin' },
+      { to: '/integrations', label: 'Integrations', minimumRole: 'admin' },
+    ],
+  },
+  {
     title: 'Settings',
     items: [
       { to: '/settings/tags', label: 'Tags', minimumRole: 'admin' },
@@ -54,6 +50,10 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/settings/mcp-instructions', label: 'MCP Prompt', minimumRole: 'owner' },
       { to: '/settings/sso', label: 'SSO', minimumRole: 'owner' },
     ],
+  },
+  {
+    title: 'My Account',
+    items: [{ to: '/my-api-keys', label: 'My API Keys' }],
   },
 ];
 

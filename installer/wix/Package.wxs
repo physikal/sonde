@@ -36,7 +36,7 @@
     -->
     <SetProperty
       Id="RunSetupEnv"
-      Value="&quot;[INSTALLFOLDER]node\node.exe&quot; &quot;[INSTALLFOLDER]app\installer-scripts\setup-env.cjs&quot;"
+      Value="&quot;[INSTALLFOLDER]node\node.exe&quot; &quot;[INSTALLFOLDER]app\installer-scripts\setup-env.cjs&quot; --mode [SONDE_SECRET_MODE] --azure-keyvault-url &quot;[AZURE_KEYVAULT_URL]&quot; --azure-keyvault-secret-name [AZURE_KEYVAULT_SECRET_NAME] --azure-auth-method [AZURE_AUTH_METHOD] --azure-tenant-id &quot;[AZURE_TENANT_ID]&quot; --azure-client-id &quot;[AZURE_CLIENT_ID]&quot; --azure-client-secret &quot;[AZURE_CLIENT_SECRET]&quot;"
       Before="RunSetupEnv"
       Sequence="execute" />
 
@@ -54,6 +54,13 @@
     </InstallExecuteSequence>
 
     <Property Id="SONDE_SECRET" Secure="yes" />
+    <Property Id="SONDE_SECRET_MODE" Value="standalone" Secure="yes" />
+    <Property Id="AZURE_KEYVAULT_URL" Secure="yes" />
+    <Property Id="AZURE_KEYVAULT_SECRET_NAME" Value="sonde-secret" Secure="yes" />
+    <Property Id="AZURE_AUTH_METHOD" Value="managed_identity" Secure="yes" />
+    <Property Id="AZURE_TENANT_ID" Secure="yes" />
+    <Property Id="AZURE_CLIENT_ID" Secure="yes" />
+    <Property Id="AZURE_CLIENT_SECRET" Secure="yes" Hidden="yes" />
 
   </Package>
 

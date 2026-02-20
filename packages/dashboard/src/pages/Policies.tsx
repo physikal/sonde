@@ -29,7 +29,13 @@ interface Policy {
 
 interface PackDef {
   name: string;
+  type: string;
   probes: Array<{ name: string }>;
+}
+
+interface SuggestionMeta {
+  label: string;
+  type: 'pack' | 'integration';
 }
 
 const KNOWN_CLIENTS = ['claude-desktop', 'claude-code', 'cursor', 'windsurf', 'cline', 'continue'];
@@ -81,16 +87,28 @@ function matchesSearch(key: ApiKey, query: string): boolean {
   );
 }
 
+function SuggestionBadge({ meta }: { meta: SuggestionMeta }) {
+  const colors =
+    meta.type === 'pack' ? 'bg-violet-900/50 text-violet-400' : 'bg-cyan-900/50 text-cyan-400';
+  return (
+    <span className={`ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${colors}`}>
+      {meta.label}
+    </span>
+  );
+}
+
 function TagInput({
   values,
   onChange,
   suggestions,
   placeholder,
+  meta,
 }: {
   values: string[];
   onChange: (values: string[]) => void;
   suggestions: string[];
   placeholder: string;
+  meta?: Map<string, SuggestionMeta>;
 }) {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
@@ -99,9 +117,13 @@ function TagInput({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = input.trim()
-    ? suggestions.filter(
-        (s) => s.toLowerCase().includes(input.toLowerCase()) && !values.includes(s),
-      )
+    ? suggestions.filter((s) => {
+        if (values.includes(s)) return false;
+        const q = input.toLowerCase();
+        if (s.toLowerCase().includes(q)) return true;
+        const m = meta?.get(s);
+        return m ? m.label.toLowerCase().includes(q) : false;
+      })
     : suggestions.filter((s) => !values.includes(s));
 
   const addValue = (val: string) => {
@@ -200,11 +222,12 @@ function TagInput({
                   addValue(s);
                 }}
                 onMouseEnter={() => setHighlighted(i)}
-                className={`w-full px-3 py-1.5 text-left text-sm ${
+                className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm ${
                   i === highlighted ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
                 }`}
               >
-                {s}
+                <span>{s}</span>
+                {meta?.get(s) && <SuggestionBadge meta={meta.get(s) as SuggestionMeta} />}
               </button>
             </li>
           ))}
@@ -224,6 +247,7 @@ export function Policies() {
   const [showHelp, setShowHelp] = useState(false);
   const [agentNames, setAgentNames] = useState<string[]>([]);
   const [probeNames, setProbeNames] = useState<string[]>([]);
+  const [probeMeta, setProbeMeta] = useState<Map<string, SuggestionMeta>>(new Map());
 
   const fetchKeys = useCallback(() => {
     setLoading(true);
@@ -249,12 +273,19 @@ export function Policies() {
     apiFetch<{ packs: PackDef[] }>('/packs')
       .then((data) => {
         const names: string[] = [];
+        const metaMap = new Map<string, SuggestionMeta>();
         for (const pack of data.packs) {
+          const isIntegration = pack.type === 'integration';
           for (const probe of pack.probes) {
             names.push(probe.name);
+            metaMap.set(probe.name, {
+              label: isIntegration ? pack.name : `${pack.name} pack`,
+              type: isIntegration ? 'integration' : 'pack',
+            });
           }
         }
         setProbeNames(names.sort());
+        setProbeMeta(metaMap);
       })
       .catch(() => {});
   }, []);
@@ -423,6 +454,7 @@ export function Policies() {
                             policyJson={k.policyJson}
                             agentSuggestions={agentNames}
                             probeSuggestions={probeNames}
+                            probeMeta={probeMeta}
                             onSaved={() => {
                               setEditingId(null);
                               fetchKeys();
@@ -448,12 +480,14 @@ function PolicyEditor({
   policyJson,
   agentSuggestions,
   probeSuggestions,
+  probeMeta,
   onSaved,
 }: {
   keyId: string;
   policyJson: string;
   agentSuggestions: string[];
   probeSuggestions: string[];
+  probeMeta: Map<string, SuggestionMeta>;
   onSaved: () => void;
 }) {
   const policy = safeParse(policyJson);
@@ -506,6 +540,7 @@ function PolicyEditor({
           onChange={setProbes}
           suggestions={probeSuggestions}
           placeholder="Type to search probes..."
+          meta={probeMeta}
         />
       </div>
       <div>
