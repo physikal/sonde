@@ -6,13 +6,15 @@
 
 **AI infrastructure agent.** Give Claude eyes into your servers.
 
-Sonde is a hub-and-spoke system that lets AI assistants gather information from remote infrastructure for troubleshooting. The hub serves an MCP endpoint that Claude (or any MCP client) connects to. Lightweight agents run on target machines, connecting outbound via WebSocket. Packs define the available probes — structured, read-only operations that return JSON.
+Sonde is a hub-and-spoke system that lets AI assistants gather diagnostic data from remote infrastructure. The hub serves an MCP endpoint that Claude (or any MCP client) connects to. Lightweight agents run on target machines, connecting outbound via WebSocket. Integration packs connect to enterprise systems (ServiceNow, Citrix, Proxmox, Splunk, etc.) directly from the hub — no agent required.
 
 ```
 Claude ──MCP──▸ Hub ──WebSocket──▸ Agent ──probe──▸ Server
-                 │                    │
-              SQLite              7 Packs
-              (audit)        (25 built-in probes)
+                 │
+                 ├── SQLite (audit, config, sessions)
+                 ├── 8 agent packs (35 probes)
+                 ├── 18 integration packs
+                 └── Dashboard (React SPA)
 ```
 
 ## Quick Start
@@ -22,15 +24,21 @@ Claude ──MCP──▸ Hub ──WebSocket──▸ Agent ──probe──�
 ```bash
 docker run -d --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_API_KEY=your-secret-key-min-16-chars \
+  -e SONDE_SECRET=your-secret-key-min-16-chars \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=your-admin-password \
   -v sonde-data:/data \
   ghcr.io/physikal/hub:latest
 ```
 
+Open `http://localhost:3000` to access the dashboard and complete the setup wizard.
+
 ### 2. Install an Agent
 
+From the dashboard, go to **Manage > Enrollment**, generate a token, and run the displayed command on your target machine:
+
 ```bash
-curl -fsSL https://sondeapp.com/install | bash
+curl -fsSL https://your-hub:3000/install | bash
 ```
 
 Or with npm:
@@ -70,31 +78,93 @@ claude mcp add sonde --transport http https://your-hub:3000/mcp \
 
 Then ask: *"What's the disk usage on my-server?"*
 
-## Available Packs
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `health_check` | Broad diagnostics — runs all applicable probes in parallel. Start here. |
+| `list_capabilities` | Discover agents, integrations, probes, and diagnostic categories. |
+| `diagnose` | Deep investigation of a category on an agent or integration. |
+| `probe` | Run a single targeted probe for a specific measurement. |
+| `list_agents` | List all agents with status, packs, and tags. |
+| `agent_overview` | Detailed info for a specific agent. |
+| `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail. |
+
+Use `#tagname` syntax in prompts to filter by tags (e.g., *"Show me #prod agents"*).
+
+## Agent Packs
 
 | Pack | Probes | Description |
 |------|--------|-------------|
-| **system** | `disk.usage`, `memory.usage`, `cpu.usage` | OS metrics |
+| **system** | `disk.usage`, `memory.usage`, `cpu.usage`, `ping`, `traceroute`, `logs.journal`, `logs.dmesg`, `logs.tail` | OS metrics and network diagnostics |
 | **docker** | `containers.list`, `logs.tail`, `images.list`, `daemon.info` | Docker containers and images |
 | **systemd** | `services.list`, `service.status`, `journal.query` | systemd services and journals |
 | **nginx** | `config.test`, `access.log.tail`, `error.log.tail` | Nginx config and logs |
 | **postgres** | `databases.list`, `connections.active`, `query.slow` | PostgreSQL databases and queries |
 | **redis** | `info`, `keys.count`, `memory.usage` | Redis server stats |
 | **mysql** | `databases.list`, `processlist`, `status` | MySQL databases and processes |
+| **proxmox-agent** | `vm.config`, `ha.status`, `lvm`, `ceph.status`, `lxc.config`, `lxc.list`, `cluster.config`, `vm.locks` | Proxmox host-level diagnostics |
 
-7 packs, 25 probes. Agents auto-detect installed software and suggest relevant packs.
+8 packs, 35 probes. Agents auto-detect installed software and suggest relevant packs.
+
+## Integration Packs
+
+Server-side packs that connect to enterprise systems directly from the hub — no agent required. All read-only.
+
+| Pack | Description |
+|------|-------------|
+| **servicenow** | Incidents, CIs, change requests |
+| **citrix** | Endpoint management, delivery groups |
+| **proxmox** | VMs, nodes, cluster status |
+| **vcenter** | VMware vSphere VMs and hosts |
+| **nutanix** | Hyperconverged infrastructure |
+| **splunk** | Log search and alerts |
+| **datadog** | Monitors, metrics, events |
+| **loki** | Grafana Loki log queries |
+| **jira** | Issues and projects |
+| **pagerduty** | Incidents and services |
+| **thousandeyes** | Network monitoring tests |
+| **meraki** | Cisco Meraki networks and devices |
+| **checkpoint** | Security gateways and policies |
+| **a10** | Load balancer virtual servers |
+| **unifi** | UniFi network devices and clients |
+| **unifi-access** | UniFi Access door controllers |
+| **graph** | Microsoft Graph / Entra ID |
+| **httpbin** | Reference integration for testing |
+
+Configure integrations in the dashboard at **Manage > Integrations** with encrypted credential storage (AES-256-GCM).
+
+## Dashboard
+
+Web-based management UI served by the hub. Features:
+
+- **Fleet** — Real-time agent status, tags, bulk operations, search
+- **Enrollment** — Token generation with one-liner install commands
+- **API Keys** — Admin key management with role and policy scoping
+- **My API Keys** — Self-service key creation for members (up to 5 per user)
+- **Policies** — Per-key access restrictions (agents, probes, clients) with search and inline editing
+- **Integrations** — Configure and test enterprise system connections
+- **Users & Groups** — Individual users and Entra security group authorization
+- **Access Groups** — Optional scoping to restrict users to specific agents/integrations
+- **Audit** — Searchable, hash-chained tamper-evident audit log
+- **Try It** — Interactive probe testing without an AI client
+- **Settings** — SSO configuration, MCP prompt customization, tag management
+
+Three-tier RBAC: **member** (MCP only), **admin** (MCP + dashboard), **owner** (admin + SSO/settings). Supports local login and Entra ID SSO.
 
 ## Security
 
-Nine-layer defense-in-depth: dedicated unprivileged user, no raw shell execution, capability ceilings, mTLS, payload signing, output scrubbing, pack signing, agent attestation, and tamper-evident audit logging. See the [Security Model](https://sondeapp.com/reference/security/) docs.
+Defense-in-depth across nine layers: dedicated unprivileged user, no raw shell execution, mTLS, payload signing (RSA-SHA256), output scrubbing, agent attestation, policy engine (per-key agent/probe/client restrictions), Zod schema validation at every boundary, and tamper-evident hash-chained audit logging.
+
+All probes are read-only. Agents never listen on a port. There is no code path from any external input to arbitrary shell execution. See the [Security Model](https://sondeapp.com/reference/security/) docs.
 
 ## Monorepo
 
 | Package | Description |
 |---------|-------------|
 | [`@sonde/shared`](packages/shared) | Protocol Zod schemas, types, crypto utils |
-| [`@sonde/packs`](packages/packs) | Pack definitions (7 built-in packs) |
-| [`@sonde/hub`](packages/hub) | MCP server, WebSocket, DB, dashboard serving |
+| [`@sonde/packs`](packages/packs) | Pack definitions (8 agent + 18 integration packs) |
+| [`@sonde/hub`](packages/hub) | MCP server, WebSocket, DB, REST API, dashboard serving |
 | [`@sonde/agent`](packages/agent) | WebSocket client, probe executor, CLI, TUI |
 | [`@sonde/dashboard`](packages/dashboard) | React 19 SPA (setup wizard + dashboard) |
 | [`@sonde/docs`](packages/docs) | Documentation site (Starlight) |
