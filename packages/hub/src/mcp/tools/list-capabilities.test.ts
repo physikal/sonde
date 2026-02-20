@@ -12,6 +12,8 @@ function createMockDb(agents: Array<Record<string, unknown>> = []): SondeDb {
     getAllAgents: vi.fn().mockReturnValue(agents),
     getAllAgentTags: vi.fn().mockReturnValue(new Map()),
     getAllIntegrationTags: vi.fn().mockReturnValue(new Map()),
+    listCriticalPaths: vi.fn().mockReturnValue([]),
+    getCriticalPathSteps: vi.fn().mockReturnValue([]),
   } as unknown as SondeDb;
 }
 
