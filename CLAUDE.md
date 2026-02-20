@@ -76,6 +76,11 @@ Entra ID SSO via OpenID Connect authorization code flow. SSO config stored in `s
 
 **Current phase: 8a.2** — RBAC engine, authorized users + groups, access groups.
 
+## Planning Rules
+
+- **Verify external APIs before implementing.** Fetch the vendor's official developer docs. Don't rely on community blog posts or memory — APIs change and unofficial endpoints get replaced.
+- **Trace the full feature path.** Before writing code, grep the codebase for an existing feature of the same kind (e.g., an existing integration type) and identify every file that references it. If there's a hardcoded list, a UI component, a route, or a config entry — that's a file you need to touch too.
+
 ## Key Architecture Rules
 
 - Agents connect OUTBOUND to hub (WebSocket). Never listen on a port.

@@ -24,7 +24,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'servicenow',
     label: 'ServiceNow',
-    authMethods: ['api_key', 'oauth2'],
+    authMethods: ['api_key'],
     credentialFields: {
       api_key: [
         {
@@ -38,37 +38,6 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'Password',
           sensitive: true,
           tooltip: 'Password for the ServiceNow user account',
-        },
-      ],
-      oauth2: [
-        {
-          key: 'clientId',
-          label: 'Client ID',
-          tooltip: 'From System OAuth → Application Registry in ServiceNow',
-        },
-        {
-          key: 'clientSecret',
-          label: 'Client Secret',
-          placeholder: 'OAuth application secret',
-          sensitive: true,
-          tooltip: 'Client secret from the OAuth application',
-        },
-        {
-          key: 'username',
-          label: 'Username',
-          placeholder: 'rest_api_user',
-          tooltip: 'ServiceNow user with snc_read_only and itil roles',
-        },
-        {
-          key: 'password',
-          label: 'Password',
-          sensitive: true,
-          tooltip: 'Password for the ServiceNow user account',
-        },
-        {
-          key: 'tokenUrl',
-          label: 'Token URL',
-          tooltip: 'Usually https://<instance>.service-now.com/oauth_token.do',
         },
       ],
     },

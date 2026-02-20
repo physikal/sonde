@@ -6,12 +6,8 @@ import type {
   IntegrationProbeHandler,
 } from '@sonde/shared';
 
-/** Build Authorization header based on auth method */
+/** Build Authorization header (Basic auth with username:password) */
 function buildAuthHeaders(credentials: IntegrationCredentials): Record<string, string> {
-  if (credentials.authMethod === 'oauth2' && credentials.oauth2?.accessToken) {
-    return { Authorization: `Bearer ${credentials.oauth2.accessToken}` };
-  }
-  // api_key = basic auth with username:password
   const { username, password } = credentials.credentials;
   if (username && password) {
     const encoded = Buffer.from(`${username}:${password}`).toString('base64');

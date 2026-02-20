@@ -38,7 +38,7 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Type | Auth Methods | Use Case |
 |---|---|---|
 | Proxmox VE | API Token | Hypervisor fleet monitoring |
-| ServiceNow | Basic / OAuth | CMDB lookups, incident correlation |
+| ServiceNow | Basic (username + password) | CMDB lookups, incident correlation |
 | Citrix | Basic / OAuth | VDA health, session diagnostics |
 | Microsoft Graph | Auto (from SSO) | Entra/Intune device and user data |
 | Splunk | Token / Basic | Log search, saved search results |

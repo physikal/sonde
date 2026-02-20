@@ -12,13 +12,6 @@ const basicCreds: IntegrationCredentials = {
   credentials: { username: 'admin', password: 'secret' },
 };
 
-const oauthCreds: IntegrationCredentials = {
-  packName: 'servicenow',
-  authMethod: 'oauth2',
-  credentials: {},
-  oauth2: { accessToken: 'my-token' },
-};
-
 const handler = (name: string) => {
   const h = servicenowPack.handlers[name];
   if (!h) throw new Error(`Handler ${name} not found`);
@@ -73,14 +66,7 @@ describe('servicenow pack', () => {
       expect(init.headers.Authorization).toBe(expected);
     });
 
-    it('uses bearer token for oauth2 method', async () => {
-      const fetchFn = mockFetch([{ name: 'web01' }]);
-      await handler('ci.lookup')({ query: 'web01' }, config, oauthCreds, fetchFn);
-
-      const init = callArgs(fetchFn, 0)[1] as { headers: Record<string, string> };
-      expect(init.headers.Authorization).toBe('Bearer my-token');
-    });
-  });
+});
 
   describe('testConnection', () => {
     it('returns true on 200', async () => {

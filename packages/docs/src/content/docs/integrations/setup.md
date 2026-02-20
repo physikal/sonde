@@ -68,19 +68,30 @@ Identifies VMs with local storage that are HA-managed, recommending migration co
 
 ### Prerequisites
 
-- ServiceNow instance with API access
-- OAuth app registration or Basic auth credentials
-- User with read access to CMDB tables (cmdb_ci, cmdb_rel_ci, change_request, incident)
+- ServiceNow instance with REST API access
+- User account with `snc_read_only` and `itil` roles
+- Read access to CMDB tables (`cmdb_ci`, `cmdb_rel_ci`, `change_request`, `incident`)
 
 ### Configuration
 
 | Field | Value |
 |---|---|
 | Instance URL | `https://company.service-now.com` |
-| Auth Method | `oauth` or `basic` |
-| Client ID | (for OAuth) |
-| Client Secret | (for OAuth) |
-| Username/Password | (for Basic auth) |
+| Auth Method | `api_key` (Basic auth) |
+| Username | ServiceNow user with `snc_read_only` + `itil` roles |
+| Password | (encrypted at rest) |
+
+Use a dedicated service account for least privilege. The account only needs read access to CMDB and ITSM tables.
+
+### Available Probes
+
+- **ci.lookup** — Look up a configuration item by name or IP address
+- **ci.owner** — Get ownership and support group information for a CI
+- **ci.relationships** — Get upstream and downstream CI relationships
+- **ci.lifecycle** — Get lifecycle and asset information (install date, warranty, EOL)
+- **changes.recent** — Recent change requests associated with a CI (configurable lookback)
+- **incidents.open** — Open incidents associated with a CI
+- **service.health** — Business service overview with child CIs
 
 ### Example Queries
 
