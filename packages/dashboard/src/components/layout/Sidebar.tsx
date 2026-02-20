@@ -118,7 +118,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <aside
         className={`
           ${open ? 'fixed inset-y-0 left-0 z-50 flex' : 'hidden'}
-          w-60 flex-col bg-gray-900 border-r border-gray-800
+          w-60 min-h-0 flex-col overflow-y-auto bg-gray-900 border-r border-gray-800
           lg:relative lg:flex
         `}
       >
