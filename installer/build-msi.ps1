@@ -145,6 +145,7 @@ Copy-Item (Join-Path $InstallerDir 'service-configs/start-hub.cmd') `
 
 # --- Step 5: Build MSI ---
 Write-Host "[5/5] Building MSI with WiX..." -ForegroundColor Yellow
+wix extension add WixToolset.Util.wixext
 $WxsFiles = Get-ChildItem (Join-Path $InstallerDir 'wix') -Filter '*.wxs' |
   ForEach-Object { $_.FullName }
 
