@@ -52,8 +52,16 @@ function main() {
   }
 
   if (fs.existsSync(ENV_FILE)) {
-    console.log(`Env file already exists: ${ENV_FILE} — skipping.`);
-    return;
+    if (mode === 'standalone') {
+      console.log(`Env file already exists: ${ENV_FILE} — skipping.`);
+      return;
+    }
+    const backup = `${ENV_FILE}.bak`;
+    console.log(
+      `Env file exists but mode changed to ${mode} — ` +
+      `backing up to ${backup}`,
+    );
+    fs.copyFileSync(ENV_FILE, backup);
   }
 
   let content;

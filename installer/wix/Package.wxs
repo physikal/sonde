@@ -53,6 +53,8 @@
               Condition="NOT Installed OR REINSTALL" />
     </InstallExecuteSequence>
 
+    <UIRef Id="SondeInstallerUI" />
+
     <Property Id="SONDE_SECRET_MODE" Value="standalone" Secure="yes" />
     <Property Id="AZURE_KEYVAULT_URL" Secure="yes" />
     <Property Id="AZURE_KEYVAULT_SECRET_NAME" Value="sonde-secret" Secure="yes" />
