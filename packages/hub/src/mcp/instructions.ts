@@ -11,23 +11,31 @@ remote machines (via agents) and enterprise systems (via integrations).
 
 ## Workflow
 
-1. ALWAYS call \`list_capabilities\` first to discover available agents,
-   integrations, and their exact probe names.
-2. Use \`health_check\` for broad "what's wrong?" questions — runs all
-   applicable diagnostics in parallel.
-3. Use \`diagnose\` to investigate a specific category after health_check
-   flags an issue.
-4. Use \`probe\` for a single targeted measurement when you already know
-   the exact probe name from list_capabilities.
-5. Use \`query_logs\` for root cause analysis after diagnostics reveal
-   an issue.
-6. Use \`list_agents\` for fleet status, \`agent_overview\` for one agent.
+Start with the broadest applicable tool and drill down:
+
+1. \`health_check\` — Start here. Broad "what's wrong?" or "how is X
+   doing?" questions. Runs all applicable diagnostics in parallel.
+   Accepts agent name, tags, or no args (checks everything).
+2. \`diagnose\` — Investigate a specific category (e.g. "check docker on
+   server-1"). Use after health_check flags an issue, or directly when
+   the user asks about a known category.
+3. \`list_capabilities\` — Discover exact probe names for targeted
+   follow-up. Call this when you need a specific probe name for the
+   \`probe\` tool. No probes executed — metadata only.
+4. \`probe\` — Single targeted measurement using an exact probe name
+   from list_capabilities (e.g. \`system.disk-usage\`).
+5. \`query_logs\` — Root cause analysis via logs after diagnostics
+   reveal an issue.
+6. \`check_critical_path\` — Execute a predefined infrastructure chain.
+   Call list_capabilities to discover available path names.
+7. \`list_agents\` — Fleet roster with status and tags.
+   \`agent_overview\` — Deep detail on one agent.
 
 ## Important Rules
 
-- Never guess probe names. Always discover them via \`list_capabilities\`.
+- Never guess probe names. Discover them via \`list_capabilities\`.
 - Probe names are fully qualified: \`<pack>.<probe>\`, e.g.
-  \`system.disk.usage\`, \`system.network.ping\`, \`docker.containers.list\`.
+  \`system.disk-usage\`, \`system.network.ping\`, \`docker.containers-list\`.
 - Agent probes require the \`agent\` parameter. Integration probes do
   not — omit the agent parameter entirely.
 - Only use the \`tags\` filter when the user explicitly writes #tagname
@@ -61,9 +69,7 @@ export function buildMcpInstructions(
       return `- ${i.name} (${i.type}): ${desc}`;
     });
 
-    parts.push(
-      `## Active Integrations\n\n${lines.join('\n')}`,
-    );
+    parts.push(`## Active Integrations\n\n${lines.join('\n')}`);
   }
 
   return parts.join('\n\n');

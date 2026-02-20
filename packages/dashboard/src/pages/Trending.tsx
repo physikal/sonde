@@ -393,8 +393,8 @@ export function Trending() {
         <HourlySparkline data={data.byHour} />
         {data.byHour.length > 0 && (
           <div className="mt-1 flex justify-between text-[10px] text-gray-600">
-            <span>{data.byHour[0].hour.slice(11, 16)}</span>
-            <span>{data.byHour[data.byHour.length - 1].hour.slice(11, 16)}</span>
+            <span>{data.byHour[0]?.hour.slice(11, 16)}</span>
+            <span>{data.byHour[data.byHour.length - 1]?.hour.slice(11, 16)}</span>
           </div>
         )}
       </div>
