@@ -53,6 +53,12 @@ If Claude Desktop fails to connect with the error `'C:\Program' is not recognize
 
 Restart Claude Desktop after saving the file.
 
+## Built-in instructions
+
+When Claude Desktop connects to Sonde, it automatically receives structured instructions during the MCP handshake. These tell Claude how to use Sonde's tools correctly — discovering probes via `list_capabilities` before running them, using fully-qualified probe names, and understanding which probes are agent-side vs integration-side. No prompt engineering needed on your part.
+
+Owners can customize these instructions (e.g., adding org-specific guidance) from the hub dashboard at **Settings** > **MCP Prompt**. See the [Administration Guide](/hub/administration#mcp-instructions) for details.
+
 ## Available tools
 
 Once connected, Claude Desktop will have access to:

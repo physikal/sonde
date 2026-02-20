@@ -34,6 +34,12 @@ claude
 
 If the connection is working, Claude will call the `list_agents` tool and return results.
 
+## Built-in instructions
+
+When Claude Code connects to Sonde, it automatically receives structured instructions during the MCP handshake. These tell Claude how to use Sonde's tools correctly — discovering probes via `list_capabilities` before running them, using fully-qualified probe names, and understanding which probes are agent-side vs integration-side. No prompt engineering needed on your part.
+
+Owners can customize these instructions (e.g., adding org-specific guidance) from the hub dashboard at **Settings** > **MCP Prompt**. See the [Administration Guide](/hub/administration#mcp-instructions) for details.
+
 ## Available tools
 
 - **health_check** -- Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group (e.g. `#prod`, `#storefront`).

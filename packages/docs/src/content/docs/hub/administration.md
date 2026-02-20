@@ -161,6 +161,51 @@ Each integration shows its status:
 
 Periodically test connections, especially after credential rotations.
 
+## MCP Instructions
+
+The hub sends structured instructions to AI clients during the MCP handshake. These guide the AI's diagnostic workflow — telling it to discover probes via `list_capabilities` before running them, explaining probe naming conventions, and listing active integrations.
+
+### How It Works
+
+Instructions are assembled from three parts:
+
+1. **Custom prefix** (optional) — Organization-specific guidance set by the owner
+2. **Core instructions** (always present) — Sonde workflow guidance, probe naming rules, tool usage order
+3. **Active integrations** (dynamic) — One line per configured integration with its type and description
+
+Instructions are built per-session. When you add or remove an integration, new MCP connections automatically reflect the change. No client-side reconfiguration needed.
+
+### Editing the Custom Prefix
+
+1. Go to **Settings** > **MCP Prompt** (owner only)
+2. Enter your custom text in the prefix field (up to 2000 characters)
+3. Review the full instructions preview below
+4. Click **Save**
+
+Example prefix:
+
+```
+You are assisting the ACME Corp infrastructure team. Our critical
+systems are tagged #prod. Always check #prod agents first when
+asked about outages.
+```
+
+### REST API
+
+```bash
+# Get current instructions
+curl https://your-hub/api/v1/settings/mcp-instructions \
+  -H "Authorization: Bearer owner-api-key"
+
+# Update custom prefix
+curl -X PUT https://your-hub/api/v1/settings/mcp-instructions \
+  -H "Authorization: Bearer owner-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"customPrefix": "Your org-specific guidance here."}'
+```
+
+Both endpoints require the `owner` role.
+
 ## Audit Log
 
 The audit log records every action with tamper-evident integrity:

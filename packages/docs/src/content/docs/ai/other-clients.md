@@ -13,10 +13,11 @@ Sonde works with any MCP-compatible client. This page covers the protocol detail
 ## Connection flow
 
 1. Send an `initialize` JSON-RPC request to `/mcp`.
-2. Note the `mcp-session-id` value in the response headers.
-3. Include the `Mcp-Session-Id` header in all subsequent requests.
-4. Call `tools/list` to discover available tools.
-5. Call `tools/call` with a tool name and arguments to execute operations.
+2. The server response includes an `instructions` field with structured guidance for the AI client — workflow order, probe naming conventions, and active integrations. Clients should surface these instructions to the LLM.
+3. Note the `mcp-session-id` value in the response headers.
+4. Include the `Mcp-Session-Id` header in all subsequent requests.
+5. Call `tools/list` to discover available tools.
+6. Call `tools/call` with a tool name and arguments to execute operations.
 
 ## Available tools
 

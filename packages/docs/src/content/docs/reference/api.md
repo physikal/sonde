@@ -28,6 +28,14 @@ All endpoints (except where noted) require authentication via one of:
 
 The MCP endpoint implements the StreamableHTTP transport for AI client integration.
 
+### MCP Server Instructions
+
+The hub sends an `instructions` string during the MCP initialization handshake. This provides AI clients with structured guidance about Sonde's workflow, probe naming conventions, and active integrations. Instructions are built per-session from:
+
+1. Optional custom prefix (set by owner via `/api/v1/settings/mcp-instructions`)
+2. Core Sonde workflow guidance (always present)
+3. Dynamic list of active integrations
+
 ### `POST /mcp`
 
 Send JSON-RPC messages to the MCP server. Returns JSON or SSE depending on the request.
@@ -226,6 +234,43 @@ curl -fsSL https://your-hub-url:3000/install | bash
 ```
 
 The script installs Node.js 22 (if needed) and `@sonde/agent`, then launches the enrollment TUI. Supports Linux (apt, dnf, yum) and macOS (Homebrew).
+
+### Settings
+
+#### `GET /api/v1/settings/mcp-instructions`
+
+Get the current MCP instructions configuration. **Requires owner role.**
+
+**Response:**
+```json
+{
+  "customPrefix": "Your org-specific guidance here.",
+  "preview": "Your org-specific guidance here.\n\n# Sonde Infrastructure Diagnostics\n..."
+}
+```
+
+The `preview` field contains the full assembled instructions string that AI clients receive.
+
+#### `PUT /api/v1/settings/mcp-instructions`
+
+Update the custom prefix for MCP instructions. **Requires owner role.**
+
+**Request:**
+```json
+{
+  "customPrefix": "You are assisting the ACME Corp infrastructure team."
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "preview": "You are assisting the ACME Corp infrastructure team.\n\n# Sonde Infrastructure Diagnostics\n..."
+}
+```
+
+The `customPrefix` field accepts up to 2000 characters. Set to an empty string to remove the prefix.
 
 ## WebSocket Endpoints
 
