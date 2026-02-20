@@ -37,7 +37,7 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
         <span
           key={tag}
           className="inline-flex items-center rounded-md text-xs font-medium leading-none"
-          style={{ backgroundColor: color.bg, color: color.text }}
+          style={{ backgroundColor: color.deleteBg, color: color.text }}
         >
           <span className="py-1 pl-2 pr-1.5">{tag}</span>
           <button
@@ -47,7 +47,7 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
               onRemove(tag);
             }}
             className="flex items-center rounded-r-md py-1 pr-1.5 pl-1 opacity-60 hover:opacity-100"
-            style={{ backgroundColor: color.deleteBg, color: color.text }}
+            style={{ backgroundColor: color.bg, color: color.text }}
           >
             &times;
           </button>
