@@ -44,6 +44,7 @@ interface CapabilitiesResult {
   agents: AgentCapability[];
   integrations: IntegrationCapability[];
   runbookCategories: RunbookCategoryInfo[];
+  criticalPaths: Array<{ name: string; description: string; stepCount: number }>;
 }
 
 export function handleListCapabilities(
@@ -210,10 +211,17 @@ export function handleListCapabilities(
     }
   }
 
+  const criticalPaths = db.listCriticalPaths().map((p) => ({
+    name: p.name,
+    description: p.description,
+    stepCount: db.getCriticalPathSteps(p.id).length,
+  }));
+
   const result: CapabilitiesResult = {
     agents,
     integrations,
     runbookCategories,
+    criticalPaths,
   };
 
   return {

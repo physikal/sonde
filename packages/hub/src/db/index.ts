@@ -109,6 +109,24 @@ export interface IntegrationEventWithName extends IntegrationEventRow {
   integrationType: string;
 }
 
+export interface CriticalPathRow {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CriticalPathStepRow {
+  id: string;
+  pathId: string;
+  stepOrder: number;
+  label: string;
+  targetType: 'agent' | 'integration';
+  targetId: string;
+  probesJson: string;
+}
+
 export interface AuditEntryWithAgentName {
   id: number;
   timestamp: string;
@@ -1710,6 +1728,140 @@ export class SondeDb {
       .prepare('SELECT COUNT(*) as count FROM local_admins')
       .get() as { count: number };
     return row.count > 0;
+  }
+
+  // --- Critical Paths ---
+
+  createCriticalPath(id: string, name: string, description: string): void {
+    this.db
+      .prepare(
+        'INSERT INTO critical_paths (id, name, description) VALUES (?, ?, ?)',
+      )
+      .run(id, name, description);
+  }
+
+  getCriticalPath(id: string): CriticalPathRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM critical_paths WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) ?? '',
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  getCriticalPathByName(name: string): CriticalPathRow | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM critical_paths WHERE name = ?')
+      .get(name) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) ?? '',
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  listCriticalPaths(): CriticalPathRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM critical_paths ORDER BY name ASC')
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) ?? '',
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    }));
+  }
+
+  updateCriticalPath(
+    id: string,
+    fields: { name?: string; description?: string },
+  ): boolean {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (fields.name !== undefined) {
+      sets.push('name = ?');
+      params.push(fields.name);
+    }
+    if (fields.description !== undefined) {
+      sets.push('description = ?');
+      params.push(fields.description);
+    }
+    if (sets.length === 0) return false;
+
+    sets.push("updated_at = datetime('now')");
+    params.push(id);
+
+    const result = this.db
+      .prepare(`UPDATE critical_paths SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+    return result.changes > 0;
+  }
+
+  deleteCriticalPath(id: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM critical_paths WHERE id = ?')
+      .run(id);
+    return result.changes > 0;
+  }
+
+  getCriticalPathSteps(pathId: string): CriticalPathStepRow[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM critical_path_steps WHERE path_id = ? ORDER BY step_order ASC',
+      )
+      .all(pathId) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: row.id as string,
+      pathId: row.path_id as string,
+      stepOrder: row.step_order as number,
+      label: row.label as string,
+      targetType: row.target_type as 'agent' | 'integration',
+      targetId: row.target_id as string,
+      probesJson: (row.probes_json as string) ?? '[]',
+    }));
+  }
+
+  setCriticalPathSteps(
+    pathId: string,
+    steps: Array<{
+      id: string;
+      stepOrder: number;
+      label: string;
+      targetType: 'agent' | 'integration';
+      targetId: string;
+      probesJson: string;
+    }>,
+  ): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM critical_path_steps WHERE path_id = ?')
+        .run(pathId);
+      const insert = this.db.prepare(
+        'INSERT INTO critical_path_steps (id, path_id, step_order, label, target_type, target_id, probes_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const step of steps) {
+        insert.run(
+          step.id,
+          pathId,
+          step.stepOrder,
+          step.label,
+          step.targetType,
+          step.targetId,
+          step.probesJson,
+        );
+      }
+    });
+    tx();
   }
 
   close(): void {

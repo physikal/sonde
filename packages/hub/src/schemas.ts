@@ -184,6 +184,39 @@ export const UpdateMcpInstructionsBody = z.object({
 // --- Probes / Diagnostics ---
 // Reuse ProbeInput and DiagnoseInput from @sonde/shared (exported via mcp.ts)
 
+// --- Critical Paths ---
+
+const CriticalPathStepSchema = z.object({
+  label: z.string().min(1, 'label is required'),
+  targetType: z.enum(['agent', 'integration']),
+  targetId: z.string().min(1, 'targetId is required'),
+  probes: z.array(z.string()).default([]),
+});
+
+export const CreateCriticalPathBody = z.object({
+  name: z
+    .string()
+    .min(1, 'name is required')
+    .max(100, 'name must be at most 100 characters')
+    .regex(
+      /^[a-zA-Z0-9._-]+$/,
+      'name may only contain letters, numbers, dots, hyphens, and underscores',
+    ),
+  description: z.string().max(500).default(''),
+  steps: z.array(CriticalPathStepSchema).default([]),
+});
+
+export const UpdateCriticalPathBody = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-zA-Z0-9._-]+$/)
+    .optional(),
+  description: z.string().max(500).optional(),
+  steps: z.array(CriticalPathStepSchema).optional(),
+});
+
 // --- Validation helper ---
 
 export function parseBody<S extends z.ZodTypeAny>(

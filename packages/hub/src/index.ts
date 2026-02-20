@@ -69,6 +69,7 @@ import {
   CreateApiKeyBody,
   CreateAuthorizedGroupBody,
   CreateAuthorizedUserBody,
+  CreateCriticalPathBody,
   CreateIntegrationBody,
   CreateSsoBody,
   SetTagsBody,
@@ -77,6 +78,7 @@ import {
   UpdateApiKeyPolicyBody,
   UpdateAuthorizedGroupBody,
   UpdateAuthorizedUserBody,
+  UpdateCriticalPathBody,
   UpdateIntegrationBody,
   UpdateMcpInstructionsBody,
   UpdateSsoBody,
@@ -399,6 +401,7 @@ app.use('/api/v1/activity/*', requireRole('admin'));
 app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
 app.use('/api/v1/settings/mcp-instructions', requireRole('owner'));
+app.use('/api/v1/critical-paths/*', requireRole('admin'));
 
 app.get('/health', (c) =>
   c.json({
@@ -1101,6 +1104,199 @@ app.patch('/api/v1/integrations/tags', requireRole('admin'), async (c) => {
   if (parsed.data.add) db.addIntegrationTags(parsed.data.ids, parsed.data.add);
   if (parsed.data.remove) db.removeIntegrationTags(parsed.data.ids, parsed.data.remove);
   return c.json({ ok: true });
+});
+
+// --- Critical Paths endpoints ---
+
+app.post('/api/v1/critical-paths', async (c) => {
+  const parsed = parseBody(CreateCriticalPathBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+
+  const id = crypto.randomUUID();
+  try {
+    db.createCriticalPath(id, body.name, body.description);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'A critical path with this name already exists' }, 409);
+    }
+    throw error;
+  }
+
+  if (body.steps.length > 0) {
+    db.setCriticalPathSteps(
+      id,
+      body.steps.map((step, i) => ({
+        id: crypto.randomUUID(),
+        stepOrder: i,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        probesJson: JSON.stringify(step.probes),
+      })),
+    );
+  }
+
+  const steps = db.getCriticalPathSteps(id);
+  return c.json({ id, name: body.name, description: body.description, steps }, 201);
+});
+
+app.get('/api/v1/critical-paths', (c) => {
+  const paths = db.listCriticalPaths().map((p) => ({
+    ...p,
+    stepCount: db.getCriticalPathSteps(p.id).length,
+  }));
+  return c.json({ paths });
+});
+
+app.get('/api/v1/critical-paths/:id', (c) => {
+  const path = db.getCriticalPath(c.req.param('id'));
+  if (!path) return c.json({ error: 'Critical path not found' }, 404);
+  const steps = db.getCriticalPathSteps(path.id);
+  return c.json({ ...path, steps });
+});
+
+app.put('/api/v1/critical-paths/:id', async (c) => {
+  const parsed = parseBody(UpdateCriticalPathBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+  const id = c.req.param('id');
+
+  const existing = db.getCriticalPath(id);
+  if (!existing) return c.json({ error: 'Critical path not found' }, 404);
+
+  if (body.name !== undefined || body.description !== undefined) {
+    try {
+      db.updateCriticalPath(id, {
+        name: body.name,
+        description: body.description,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+        return c.json({ error: 'A critical path with this name already exists' }, 409);
+      }
+      throw error;
+    }
+  }
+
+  if (body.steps) {
+    db.setCriticalPathSteps(
+      id,
+      body.steps.map((step, i) => ({
+        id: crypto.randomUUID(),
+        stepOrder: i,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        probesJson: JSON.stringify(step.probes),
+      })),
+    );
+  }
+
+  const updated = db.getCriticalPath(id);
+  const steps = db.getCriticalPathSteps(id);
+  return c.json({ ...updated, steps });
+});
+
+app.delete('/api/v1/critical-paths/:id', (c) => {
+  const deleted = db.deleteCriticalPath(c.req.param('id'));
+  if (!deleted) return c.json({ error: 'Critical path not found' }, 404);
+  return c.json({ ok: true });
+});
+
+app.post('/api/v1/critical-paths/:id/execute', async (c) => {
+  const id = c.req.param('id');
+  const path = db.getCriticalPath(id);
+  if (!path) return c.json({ error: 'Critical path not found' }, 404);
+
+  const steps = db.getCriticalPathSteps(path.id);
+  if (steps.length === 0) {
+    return c.json({ error: 'Critical path has no steps' }, 400);
+  }
+
+  const overallStart = Date.now();
+
+  const stepResults = await Promise.allSettled(
+    steps.map(async (step) => {
+      const probes: string[] = JSON.parse(step.probesJson);
+      const stepStart = Date.now();
+
+      const probeResults = await Promise.allSettled(
+        probes.map(async (probeName) => {
+          const probeStart = Date.now();
+          try {
+            const agent = step.targetType === 'agent' ? step.targetId : undefined;
+            const response = await probeRouter.execute(probeName, undefined, agent);
+            return {
+              name: probeName,
+              status: response.status === 'success' ? 'success' as const : 'error' as const,
+              durationMs: Date.now() - probeStart,
+              data: response.data,
+            };
+          } catch (error) {
+            return {
+              name: probeName,
+              status: 'error' as const,
+              durationMs: Date.now() - probeStart,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        }),
+      );
+
+      const resolvedProbes = probeResults.map((r) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { name: 'unknown', status: 'error' as const, durationMs: 0, error: 'Promise rejected' },
+      );
+
+      const allPass = resolvedProbes.every((p) => p.status === 'success');
+      const allFail = resolvedProbes.every((p) => p.status !== 'success');
+      const stepStatus = resolvedProbes.length === 0
+        ? 'pass' as const
+        : allPass
+          ? 'pass' as const
+          : allFail
+            ? 'fail' as const
+            : 'partial' as const;
+
+      return {
+        stepOrder: step.stepOrder,
+        label: step.label,
+        targetType: step.targetType,
+        targetId: step.targetId,
+        status: stepStatus,
+        durationMs: Date.now() - stepStart,
+        probes: resolvedProbes,
+      };
+    }),
+  );
+
+  const resolvedSteps = stepResults.map((r, i) =>
+    r.status === 'fulfilled'
+      ? r.value
+      : {
+          stepOrder: steps[i]!.stepOrder,
+          label: steps[i]!.label,
+          targetType: steps[i]!.targetType,
+          targetId: steps[i]!.targetId,
+          status: 'fail' as const,
+          durationMs: 0,
+          probes: [],
+        },
+  );
+
+  const allPass = resolvedSteps.every((s) => s.status === 'pass');
+  const allFail = resolvedSteps.every((s) => s.status === 'fail');
+  const overallStatus = allPass ? 'pass' : allFail ? 'fail' : 'partial';
+
+  return c.json({
+    path: path.name,
+    description: path.description,
+    overallStatus,
+    totalDurationMs: Date.now() - overallStart,
+    steps: resolvedSteps,
+  });
 });
 
 // Agent list endpoint (unauthenticated — dashboard needs it, filtered by access groups if user context exists)

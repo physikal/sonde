@@ -42,6 +42,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Diagnostics',
     items: [
       { to: '/try-it', label: 'Try It', minimumRole: 'admin' },
+      { to: '/critical-paths', label: 'Critical Paths', minimumRole: 'admin' },
       { to: '/audit', label: 'Audit Log', minimumRole: 'admin' },
       { to: '/policies', label: 'Policies', minimumRole: 'admin' },
     ],

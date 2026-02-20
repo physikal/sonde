@@ -18,6 +18,7 @@ import { handleHealthCheck } from './tools/health-check.js';
 import { handleListAgents } from './tools/list-agents.js';
 import { handleListCapabilities } from './tools/list-capabilities.js';
 import { handleProbe } from './tools/probe.js';
+import { handleCheckCriticalPath } from './tools/check-critical-path.js';
 import { handleQueryLogs } from './tools/query-logs.js';
 
 /**
@@ -249,6 +250,20 @@ export function createMcpHandler(
         const online = dispatcher.getOnlineAgents();
         const connectedAgents = [...online.map((a) => a.name), ...online.map((a) => a.id)];
         return handleQueryLogs(args, probeRouter, db, auth, connectedAgents);
+      },
+    );
+
+    server.registerTool(
+      'check_critical_path',
+      {
+        description:
+          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). All steps execute in parallel, returning pass/fail per hop with timing. Use list_capabilities to discover available paths.',
+        inputSchema: z.object({
+          path: z.string().describe('Critical path name (e.g. "storefront")'),
+        }),
+      },
+      async (args) => {
+        return handleCheckCriticalPath(args, probeRouter, db, auth);
       },
     );
 

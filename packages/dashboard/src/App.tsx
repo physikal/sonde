@@ -21,6 +21,8 @@ import { Settings } from './pages/Settings';
 import { TagsManagement } from './pages/TagsManagement';
 import { TryIt } from './pages/TryIt';
 import { Users } from './pages/Users';
+import { CriticalPaths } from './pages/CriticalPaths';
+import { CriticalPathDetail } from './pages/CriticalPathDetail';
 
 function AppRoutes() {
   const { status, loading: setupLoading, refetch } = useSetupStatus();
@@ -66,6 +68,8 @@ function AppRoutes() {
           <Route path="integrations/:id" element={<IntegrationDetail />} />
           <Route path="audit" element={<Audit />} />
           <Route path="try-it" element={<TryIt />} />
+          <Route path="critical-paths" element={<CriticalPaths />} />
+          <Route path="critical-paths/:id" element={<CriticalPathDetail />} />
           <Route path="settings" element={<Navigate to="/settings/sso" replace />} />
           <Route path="settings/sso" element={<Settings />} />
           <Route path="settings/mcp-instructions" element={<McpInstructions />} />
