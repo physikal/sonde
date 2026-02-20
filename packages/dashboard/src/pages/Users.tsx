@@ -27,6 +27,40 @@ export function Users() {
   return (
     <div className="space-y-8 p-8">
       <h1 className="text-2xl font-semibold text-white">Users &amp; Groups</h1>
+
+      <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-5">
+        <h2 className="text-sm font-medium text-gray-300 uppercase tracking-wide">Roles</h2>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
+            <dt className="flex items-center gap-2">
+              <span className="inline-block rounded-full border bg-gray-800 text-gray-300 border-gray-700 px-2 py-0.5 text-xs font-medium">
+                member
+              </span>
+            </dt>
+            <dd className="mt-1.5 text-sm text-gray-400">
+              MCP access only. Connects via Claude Desktop or Claude Code with an API key.
+              Full diagnostic capability across all agents and integrations.
+              Cannot access the Hub dashboard.
+            </dd>
+          </div>
+          <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
+            <dt className="flex items-center gap-2">
+              <span className="inline-block rounded-full border bg-blue-900/50 text-blue-300 border-blue-700 px-2 py-0.5 text-xs font-medium">
+                admin
+              </span>
+            </dt>
+            <dd className="mt-1.5 text-sm text-gray-400">
+              Everything in Member, plus Hub dashboard access.
+              Can enroll agents, manage integrations, manage users and groups, and create API keys.
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-gray-500">
+          The <span className="text-amber-400/80">owner</span> role is reserved for the bootstrap
+          admin configured via environment variables and cannot be assigned here.
+        </p>
+      </div>
+
       <IndividualUsersSection />
       <AuthorizedGroupsSection />
     </div>
@@ -149,7 +183,6 @@ function IndividualUsersSection() {
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
           </select>
         </div>
         <button
@@ -193,7 +226,6 @@ function IndividualUsersSection() {
                     >
                       <option value="member">member</option>
                       <option value="admin">admin</option>
-                      <option value="owner">owner</option>
                     </select>
                   </td>
                   <td className="py-3 pr-4">
@@ -369,7 +401,6 @@ function AuthorizedGroupsSection() {
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
           </select>
         </div>
         <button
@@ -414,7 +445,6 @@ function AuthorizedGroupsSection() {
                     >
                       <option value="member">member</option>
                       <option value="admin">admin</option>
-                      <option value="owner">owner</option>
                     </select>
                   </td>
                   <td className="py-3 pr-4 text-gray-400 text-xs">

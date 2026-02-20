@@ -9,7 +9,7 @@ The official Docker image is the recommended way to run the Sonde hub in product
 The official image is published to GitHub Container Registry:
 
 ```
-ghcr.io/sonde-dev/hub
+ghcr.io/physikal/hub
 ```
 
 Available tags:
@@ -26,12 +26,14 @@ Available tags:
 docker run -d \
   --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_SECRET=your-secret-key \
+  -e SONDE_SECRET=$(openssl rand -hex 32) \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
-Then open `http://localhost:3000` to complete the setup wizard.
+Then open `http://localhost:3000` and log in with the admin credentials you set above.
 
 ## Docker run options
 
@@ -48,7 +50,7 @@ docker run -d \
   -e SONDE_ADMIN_PASSWORD=change-me \
   -e SONDE_DB_PATH=/data/sonde.db \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
 | Flag | Purpose |
@@ -57,8 +59,8 @@ docker run -d \
 | `-p 3000:3000` | Expose the hub on port 3000. Change the host port as needed. |
 | `-e SONDE_SECRET=...` | Required. Encryption root of trust (at least 16 characters). |
 | `-e SONDE_HUB_URL=...` | Public URL. Required for SSO callbacks and agent enrollment. |
-| `-e SONDE_ADMIN_USER=...` | Required. Bootstrap admin username for dashboard access. |
-| `-e SONDE_ADMIN_PASSWORD=...` | Required. Bootstrap admin password. |
+| `-e SONDE_ADMIN_USER=...` | Bootstrap admin username. Required to access the dashboard. |
+| `-e SONDE_ADMIN_PASSWORD=...` | Bootstrap admin password. Required to access the dashboard. |
 | `-e SONDE_DB_PATH=/data/sonde.db` | SQLite path inside the container. |
 | `-v sonde-data:/data` | Persist the SQLite database across restarts. |
 
@@ -75,8 +77,10 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     environment:
-      SONDE_SECRET: your-secret-key
+      SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET env var}
       SONDE_DB_PATH: /data/sonde.db
+      SONDE_ADMIN_USER: admin
+      SONDE_ADMIN_PASSWORD: ${SONDE_ADMIN_PASSWORD:?Set SONDE_ADMIN_PASSWORD env var}
     volumes:
       - hub-data:/data
     ports:
@@ -97,10 +101,12 @@ To use the published image instead of building from source, replace the `build` 
 ```yaml
 services:
   sonde-hub:
-    image: ghcr.io/sonde-dev/hub:latest
+    image: ghcr.io/physikal/hub:latest
     environment:
-      SONDE_SECRET: your-secret-key
+      SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET env var}
       SONDE_DB_PATH: /data/sonde.db
+      SONDE_ADMIN_USER: admin
+      SONDE_ADMIN_PASSWORD: ${SONDE_ADMIN_PASSWORD:?Set SONDE_ADMIN_PASSWORD env var}
     volumes:
       - hub-data:/data
     ports:

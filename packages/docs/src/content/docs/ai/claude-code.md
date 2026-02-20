@@ -34,15 +34,21 @@ claude
 
 If the connection is working, Claude will call the `list_agents` tool and return results.
 
+## Built-in instructions
+
+When Claude Code connects to Sonde, it automatically receives structured instructions during the MCP handshake. These tell Claude how to use Sonde's tools correctly — discovering probes via `list_capabilities` before running them, using fully-qualified probe names, and understanding which probes are agent-side vs integration-side. No prompt engineering needed on your part.
+
+Owners can customize these instructions (e.g., adding org-specific guidance) from the hub dashboard at **Settings** > **MCP Prompt**. See the [Administration Guide](/hub/administration#mcp-instructions) for details.
+
 ## Available tools
 
-- **list_agents** -- List all agents with connection status
-- **agent_overview** -- Detailed info for a specific agent
-- **probe** -- Execute a probe on a target agent or integration
-- **diagnose** -- Run a diagnostic runbook against an agent or integration
-- **list_capabilities** -- Discover all agents, integrations, and diagnostic categories
-- **health_check** -- Run diagnostics across all agents and integrations in parallel
-- **query_logs** -- Query logs from agents (Docker, systemd, nginx) or the hub audit trail
+- **health_check** -- Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group (e.g. `#prod`, `#storefront`).
+- **list_capabilities** -- Discover all agents, integrations, their individual probes, and diagnostic categories. Use to find what specific probes are available for follow-up.
+- **diagnose** -- Deep investigation of a specific category on an agent or integration (e.g. "check docker on server-1").
+- **probe** -- Run a single targeted probe for a specific measurement. Good for follow-up after diagnose.
+- **list_agents** -- List all agents with connection status, packs, and tags.
+- **agent_overview** -- Detailed info for a specific agent.
+- **query_logs** -- Investigate root cause by checking logs (Docker, systemd, nginx) or the hub audit trail.
 
 ## Tag filtering
 
@@ -51,6 +57,9 @@ Use `#tagname` in your prompts to filter agents and integrations by tag:
 ```
 > Show me #prod agents
 > Run diagnostics on #database #linux
+> What's wrong with the #storefront servers?
 ```
 
 The `#` prefix is required — without it, words are treated as natural language and no tag filtering occurs. Multiple tags use AND logic (all must match). Tags are assigned by admins in the dashboard.
+
+Tag filtering works with `list_agents`, `list_capabilities`, and `health_check`. When `health_check` is called with tags, it runs diagnostics across all matching agents in parallel and returns unified findings.

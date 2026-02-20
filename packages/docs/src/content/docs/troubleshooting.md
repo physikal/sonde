@@ -10,7 +10,7 @@ Common issues and their solutions when deploying and using Sonde.
 
 **"SONDE_SECRET is required"** — Set the `SONDE_SECRET` environment variable. Generate one with `openssl rand -hex 32`.
 
-**"SONDE_ADMIN_PASSWORD is required"** — Set both `SONDE_ADMIN_USER` and `SONDE_ADMIN_PASSWORD` environment variables.
+**Can't log into the dashboard** — Set both `SONDE_ADMIN_USER` and `SONDE_ADMIN_PASSWORD` environment variables. The hub starts without them, but dashboard login requires either these credentials or Entra SSO.
 
 **Port 3000 already in use** — Another service is using the port. Change the port mapping in docker-compose.yml or stop the conflicting service.
 
@@ -83,7 +83,7 @@ The Ink TUI requires an interactive terminal (TTY). This happens when:
 - Running through a pipe or script
 - Running as a systemd service without `--headless`
 
-Use `sonde --headless` for non-interactive environments, or run `sonde` directly in an SSH session.
+Use `sonde start --headless` for non-interactive environments, or run `sonde` directly in an SSH session.
 
 ### Node.js version mismatch
 
@@ -200,4 +200,4 @@ If you encounter an issue not covered here:
 1. Check hub logs: `docker compose logs -f sonde-hub`
 2. Check agent logs: `journalctl -u sonde-agent -f`
 3. Check the dashboard audit log for error details
-4. File an issue on the [GitHub repository](https://github.com/sonde-dev/sonde) with logs and reproduction steps
+4. File an issue on the [GitHub repository](https://github.com/physikal/sonde) with logs and reproduction steps

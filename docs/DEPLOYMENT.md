@@ -36,7 +36,7 @@ One-click from GitHub. Docker Compose with Traefik labels:
 ```yaml
 services:
   sonde-hub:
-    image: ghcr.io/sonde-dev/hub:latest
+    image: ghcr.io/physikal/hub:latest
     restart: unless-stopped
     ports:
       - "3000:3000"

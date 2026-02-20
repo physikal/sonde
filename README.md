@@ -1,6 +1,6 @@
 # Sonde
 
-[![CI](https://github.com/sonde-dev/sonde/actions/workflows/ci.yml/badge.svg)](https://github.com/sonde-dev/sonde/actions/workflows/ci.yml)
+[![CI](https://github.com/physikal/sonde/actions/workflows/ci.yml/badge.svg)](https://github.com/physikal/sonde/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@sonde/agent)](https://www.npmjs.com/package/@sonde/agent)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -24,7 +24,7 @@ docker run -d --name sonde-hub \
   -p 3000:3000 \
   -e SONDE_API_KEY=your-secret-key-min-16-chars \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
 ### 2. Install an Agent

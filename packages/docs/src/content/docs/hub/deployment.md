@@ -9,14 +9,16 @@ The Sonde hub is the central server that agents connect to. It serves the MCP AP
 The fastest way to run the hub:
 
 ```bash
-docker run -d \
+docker run -d --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_SECRET=your-secret-key \
+  -e SONDE_SECRET=$(openssl rand -hex 32) \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
-This starts the hub on port 3000 with SQLite data persisted in a named volume.
+This starts the hub on port 3000 with SQLite data persisted in a named volume. `SONDE_ADMIN_USER` and `SONDE_ADMIN_PASSWORD` are needed to log into the dashboard.
 
 See the [Docker deployment guide](/hub/docker/) for advanced options, Compose files, and building from source.
 
@@ -27,16 +29,17 @@ The repository includes a ready-to-use Compose file at `docker/docker-compose.ym
 ```yaml
 services:
   sonde-hub:
-    build:
-      context: ..
-      dockerfile: docker/hub.Dockerfile
+    image: ghcr.io/physikal/hub:latest
     environment:
-      SONDE_SECRET: your-secret-key
+      SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET env var}
       SONDE_DB_PATH: /data/sonde.db
+      SONDE_ADMIN_USER: admin
+      SONDE_ADMIN_PASSWORD: ${SONDE_ADMIN_PASSWORD:?Set SONDE_ADMIN_PASSWORD env var}
     volumes:
       - hub-data:/data
     ports:
       - '3000:3000'
+    restart: unless-stopped
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/health']
       interval: 5s
@@ -51,7 +54,8 @@ volumes:
 Start with:
 
 ```bash
-cd docker
+export SONDE_SECRET=$(openssl rand -hex 32)
+export SONDE_ADMIN_PASSWORD=your-strong-password
 docker compose up -d
 ```
 
@@ -62,7 +66,7 @@ The `hub-data` volume persists the SQLite database across container restarts. Se
 Clone the repo and build all packages:
 
 ```bash
-git clone https://github.com/sonde-dev/sonde.git
+git clone https://github.com/physikal/sonde.git
 cd sonde
 npm install
 npm run build
@@ -135,7 +139,7 @@ For Dokploy users, deploy directly from GitHub:
 1. Create a new application in Dokploy.
 2. Point it at the Sonde repository.
 3. Set the Dockerfile path to `docker/hub.Dockerfile` (or the root `Dockerfile` if present).
-4. Add the required environment variables: `SONDE_SECRET`, `SONDE_HUB_URL` (your public URL), and optionally `SONDE_ADMIN_USER` / `SONDE_ADMIN_PASSWORD` for local admin login.
+4. Add the required environment variables: `SONDE_SECRET`, `SONDE_HUB_URL` (your public URL), `SONDE_ADMIN_USER`, and `SONDE_ADMIN_PASSWORD`.
 5. Deploy.
 
 Dokploy handles builds, restarts, and TLS via its built-in Traefik integration.

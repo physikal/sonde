@@ -33,5 +33,6 @@ function djb2(str: string): number {
 
 /** Returns a deterministic bg/text color pair for a tag string. */
 export function getTagColor(tag: string): TagColor {
-  return PALETTE[djb2(tag) % PALETTE.length];
+  // Safe: PALETTE is non-empty and index is modulo PALETTE.length
+  return PALETTE[djb2(tag) % PALETTE.length]!;
 }

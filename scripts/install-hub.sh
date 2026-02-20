@@ -5,7 +5,7 @@ set -euo pipefail
 
 # ── Constants ────────────────────────────────────────────────────────
 SONDE_VERSION="0.1.0"
-SONDE_REPO="https://github.com/sonde-dev/sonde.git"
+SONDE_REPO="https://github.com/physikal/sonde.git"
 SONDE_BRANCH="main"
 HUB_PORT=3000
 
@@ -22,7 +22,7 @@ if [ ! -t 0 ]; then
   echo "Error: This script requires interactive input."
   echo "Download and run it directly:"
   echo ""
-  echo "  curl -fsSL https://raw.githubusercontent.com/sonde-dev/sonde/main/scripts/install-hub.sh -o install-hub.sh"
+  echo "  curl -fsSL https://raw.githubusercontent.com/physikal/sonde/main/scripts/install-hub.sh -o install-hub.sh"
   echo "  bash install-hub.sh"
   echo ""
   exit 1

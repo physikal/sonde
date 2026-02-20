@@ -158,6 +158,15 @@ Configure per-API-key access policies: restrict to specific agents (glob pattern
 
 ## Settings (Owner Only)
 
+### MCP Prompt
+
+Customize the instructions sent to AI clients during the MCP handshake.
+
+- **Custom Prefix** — Free-text field (up to 2000 characters) prepended before the core Sonde instructions. Use this for organization-specific guidance, persona hints, or priority rules (e.g., "Always check #prod agents first during outages").
+- **Full Instructions Preview** — Read-only view of the complete instructions string that AI clients receive. Includes your custom prefix, core Sonde workflow guidance, and a dynamic list of active integrations.
+
+Instructions are assembled per-session, so new MCP connections always reflect the current state (integrations added/removed, prefix changes). No client-side changes are needed — AI clients receive the updated instructions automatically on their next connection.
+
 ### SSO Configuration
 
 Configure Entra ID single sign-on.
@@ -181,6 +190,7 @@ See [Security & Authentication](/reference/security) for the full Entra SSO setu
 | Integration management | No | Yes | Yes |
 | User management | No | Yes | Yes |
 | SSO configuration | No | No | Yes |
+| MCP Prompt customization | No | No | Yes |
 
 **Members** are MCP-only users. They connect through Claude or API keys and have full diagnostic capability, but cannot access the dashboard. If they try to log in, they see a message directing them to connect via Claude Desktop or Claude Code.
 

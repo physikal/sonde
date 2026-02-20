@@ -14,6 +14,7 @@ import { Fleet } from './pages/Fleet';
 import { IntegrationDetail } from './pages/IntegrationDetail';
 import { Integrations } from './pages/Integrations';
 import { Login } from './pages/Login';
+import { McpInstructions } from './pages/McpInstructions';
 import { Policies } from './pages/Policies';
 import { Settings } from './pages/Settings';
 import { TagsManagement } from './pages/TagsManagement';
@@ -87,6 +88,7 @@ function AppRoutes() {
           <Route path="try-it" element={<TryIt />} />
           <Route path="settings" element={<Navigate to="/settings/sso" replace />} />
           <Route path="settings/sso" element={<Settings />} />
+          <Route path="settings/mcp-instructions" element={<McpInstructions />} />
           <Route path="settings/tags" element={<TagsManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

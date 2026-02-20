@@ -64,6 +64,22 @@ sonde start --headless
 |---|---|
 | `--headless` | Run without TUI. Suitable for systemd services or background execution. |
 
+### `sonde stop`
+
+Stop the background agent process.
+
+```bash
+sonde stop
+```
+
+### `sonde restart`
+
+Restart the agent in background mode.
+
+```bash
+sonde restart
+```
+
 ### `sonde status`
 
 Display current agent status, including name, hub URL, agent ID, and config file path.

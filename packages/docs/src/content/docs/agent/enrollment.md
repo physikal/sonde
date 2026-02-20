@@ -41,7 +41,8 @@ Either `--token` or `--key` is required.
 2. It sends a registration message with its name, version, and available packs.
 3. The hub assigns a UUID and acknowledges the registration.
 4. If using a token, the hub mints a scoped API key (e.g., `agent:<name>`) and returns it in the acknowledgement.
-5. The agent saves its configuration to `~/.sonde/config.json`.
+5. If the hub has mTLS enabled (`SONDE_TLS=true`), it issues a client certificate to the agent.
+6. The agent saves its configuration to `~/.sonde/config.json`.
 
 ## Stable identity
 
@@ -49,7 +50,7 @@ Re-enrolling with the same `--name` reuses the existing UUID. This means you can
 
 ## mTLS certificates
 
-If the hub has mTLS enabled, it issues a client certificate and CA certificate during enrollment. These are saved to `~/.sonde/` and used for all subsequent connections:
+If the hub has mTLS enabled (`SONDE_TLS=true`), it issues a client certificate and CA certificate during enrollment. These are saved to `~/.sonde/` and used for all subsequent connections:
 
 - `~/.sonde/cert.pem` -- agent client certificate
 - `~/.sonde/key.pem` -- agent private key

@@ -9,20 +9,24 @@ Get Sonde running in three steps: deploy the hub, install an agent, and connect 
 ```bash
 docker run -d --name sonde-hub \
   -p 3000:3000 \
-  -e SONDE_SECRET=your-secret-key-min-16-chars \
+  -e SONDE_SECRET=$(openssl rand -hex 32) \
+  -e SONDE_ADMIN_USER=admin \
+  -e SONDE_ADMIN_PASSWORD=change-me \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and complete the setup wizard. The wizard walks through API key configuration, AI tool registration, and agent enrollment.
+Open [http://localhost:3000](http://localhost:3000) and log in with the admin credentials you set above. The setup wizard walks through API key configuration, AI tool registration, and agent enrollment.
 
 ## Step 2: Install an Agent
 
 On the target machine you want to monitor:
 
 ```bash
-curl -fsSL https://sondeapp.com/install | bash
+curl -fsSL https://your-hub-url:3000/install | sh
 ```
+
+The hub serves this bootstrap script directly. It installs Node.js 22, the `@sonde/agent` package, and launches the interactive setup TUI.
 
 Or install manually with npm:
 

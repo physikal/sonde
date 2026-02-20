@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Fragment>
+    <ComponentGroup Id="HubServiceComponents" Directory="ServiceDir">
+
+      <!-- WinSW executable (renamed to sonde-hub.exe) -->
+      <Component Id="WinSWExe" Guid="*">
+        <File Id="SondeHubExe"
+              Source="$(var.StageDir)\service\sonde-hub.exe"
+              KeyPath="yes" />
+
+        <ServiceInstall
+          Id="SondeHubService"
+          Name="SondeHub"
+          DisplayName="Sonde Hub"
+          Description="Sonde AI Infrastructure Hub — MCP server and agent coordinator"
+          Type="ownProcess"
+          Start="auto"
+          ErrorControl="normal"
+          Account="NT AUTHORITY\LocalService" />
+
+        <util:ServiceConfig
+          ServiceName="SondeHub"
+          FirstFailureActionType="restart"
+          SecondFailureActionType="restart"
+          ThirdFailureActionType="none"
+          RestartServiceDelayInSeconds="30"
+          ResetPeriodInDays="1" />
+
+        <ServiceControl
+          Id="SondeHubServiceControl"
+          Name="SondeHub"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+      </Component>
+
+      <!-- WinSW XML config -->
+      <Component Id="WinSWConfig" Guid="*">
+        <File Id="SondeHubXml"
+              Source="$(var.StageDir)\service\sonde-hub.xml"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Start wrapper script -->
+      <Component Id="StartScript" Guid="*">
+        <File Id="StartHubCmd"
+              Source="$(var.StageDir)\service\start-hub.cmd"
+              KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

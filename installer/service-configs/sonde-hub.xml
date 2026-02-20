@@ -1,0 +1,24 @@
+<service>
+  <id>SondeHub</id>
+  <name>Sonde Hub</name>
+  <description>Sonde AI Infrastructure Hub</description>
+
+  <executable>%BASE%\start-hub.cmd</executable>
+
+  <workingdirectory>%PROGRAMFILES%\Sonde\app</workingdirectory>
+
+  <log mode="roll-by-size">
+    <logpath>%PROGRAMDATA%\Sonde\logs</logpath>
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="none" />
+
+  <resetfailure>1 day</resetfailure>
+
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+  <stoptimeout>15 sec</stoptimeout>
+</service>

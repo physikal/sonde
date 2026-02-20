@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { TagInput } from '../components/common/TagInput';
 import { useToast } from '../components/common/Toast';
 import { ActivityLog } from '../components/integration/ActivityLog';
 import { apiFetch } from '../lib/api';
@@ -479,6 +480,7 @@ interface Integration {
   lastTestedAt: string | null;
   lastTestResult: string | null;
   createdAt: string;
+  tags: string[];
 }
 
 export function IntegrationDetail() {
@@ -534,6 +536,32 @@ export function IntegrationDetail() {
       .then((data) => setApiKeyNames(new Map(data.keys.map((k) => [k.id, k.name]))))
       .catch(() => {});
   }, [fetchIntegration, fetchEvents]);
+
+  const handleTagAdd = async (tag: string) => {
+    if (!id || !integration) return;
+    try {
+      await apiFetch(`/integrations/${id}/tags`, {
+        method: 'PUT',
+        body: JSON.stringify({ tags: [...integration.tags, tag] }),
+      });
+      fetchIntegration();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to add tag', 'error');
+    }
+  };
+
+  const handleTagRemove = async (tag: string) => {
+    if (!id || !integration) return;
+    try {
+      await apiFetch(`/integrations/${id}/tags`, {
+        method: 'PUT',
+        body: JSON.stringify({ tags: integration.tags.filter((t) => t !== tag) }),
+      });
+      fetchIntegration();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to remove tag', 'error');
+    }
+  };
 
   const typeDef = integration ? INTEGRATION_TYPES.find((t) => t.value === integration.type) : null;
 
@@ -720,6 +748,12 @@ export function IntegrationDetail() {
             <dd className="mt-0.5 text-sm text-gray-300 font-mono truncate">{integration.id}</dd>
           </div>
         </dl>
+      </div>
+
+      {/* Tags */}
+      <div className="mt-4">
+        <h2 className="text-sm font-medium text-gray-400 mb-2">Tags</h2>
+        <TagInput tags={integration.tags} onAdd={handleTagAdd} onRemove={handleTagRemove} />
       </div>
 
       {/* Connection Status */}

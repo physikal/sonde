@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+    <!-- C:\Program Files\Sonde\ -->
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Sonde">
+        <Directory Id="NodeDir" Name="node" />
+        <Directory Id="AppDir" Name="app">
+          <Directory Id="InstallerScriptsDir" Name="installer-scripts" />
+        </Directory>
+        <Directory Id="ServiceDir" Name="service" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- C:\ProgramData\Sonde\ -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="Sonde">
+        <Directory Id="LogsDir" Name="logs" />
+      </Directory>
+    </StandardDirectory>
+  </Fragment>
+
+</Wix>

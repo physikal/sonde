@@ -1,10 +1,17 @@
 import type { Pack } from '@sonde/packs';
+import type { IntegrationPack } from '@sonde/shared';
 import type { SondeDb } from '../../db/index.js';
 import type { AuthContext } from '../../engine/policy.js';
 import { evaluateAgentAccess } from '../../engine/policy.js';
 import type { RunbookEngine } from '../../engine/runbooks.js';
 import type { IntegrationManager } from '../../integrations/manager.js';
 import type { AgentDispatcher } from '../../ws/dispatcher.js';
+
+interface ProbeInfo {
+  name: string;
+  description: string;
+  params?: Record<string, { type: string; description: string; required?: boolean }>;
+}
 
 interface AgentCapability {
   name: string;
@@ -13,6 +20,7 @@ interface AgentCapability {
   lastSeen: string;
   packs: Array<{ name: string; version: string }>;
   runbookCategories: string[];
+  probes: ProbeInfo[];
   tags: string[];
 }
 
@@ -21,6 +29,7 @@ interface IntegrationCapability {
   type: string;
   status: string;
   diagnosticCategories: string[];
+  probes: ProbeInfo[];
   tags: string[];
 }
 
@@ -28,10 +37,7 @@ interface RunbookCategoryInfo {
   category: string;
   type: 'simple' | 'diagnostic';
   description?: string;
-  params?: Record<
-    string,
-    { type: string; description: string; required?: boolean }
-  >;
+  params?: Record<string, { type: string; description: string; required?: boolean }>;
 }
 
 interface CapabilitiesResult {
@@ -48,6 +54,7 @@ export function handleListCapabilities(
   packRegistry: ReadonlyMap<string, Pack>,
   auth?: AuthContext,
   filterTags?: string[],
+  integrationPacks?: IntegrationPack[],
 ): {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
@@ -70,16 +77,36 @@ export function handleListCapabilities(
     .filter((agent) => {
       if (!auth) return true;
       return (
-        evaluateAgentAccess(auth, agent.name).allowed ||
-        evaluateAgentAccess(auth, agent.id).allowed
+        evaluateAgentAccess(auth, agent.name).allowed || evaluateAgentAccess(auth, agent.id).allowed
       );
     })
     .map((agent) => {
       const matchingCategories: string[] = [];
+      const probes: ProbeInfo[] = [];
       for (const pack of agent.packs) {
         const category = packToCategory.get(pack.name);
         if (category) {
           matchingCategories.push(category);
+        }
+        const packDef = packRegistry.get(pack.name);
+        if (packDef) {
+          for (const probe of packDef.manifest.probes) {
+            const info: ProbeInfo = {
+              name: `${pack.name}.${probe.name}`,
+              description: probe.description,
+            };
+            if (probe.params) {
+              info.params = {};
+              for (const [k, v] of Object.entries(probe.params)) {
+                info.params[k] = {
+                  type: v.type,
+                  description: v.description,
+                  ...(v.required ? { required: true } : {}),
+                };
+              }
+            }
+            probes.push(info);
+          }
         }
       }
 
@@ -97,47 +124,72 @@ export function handleListCapabilities(
           version: p.version,
         })),
         runbookCategories: matchingCategories,
+        probes,
         tags: agentTagMap.get(agent.id) ?? [],
       };
     });
 
   if (filterTags && filterTags.length > 0) {
     const normalized = filterTags.map((t) => t.replace(/^#/, ''));
-    agents = agents.filter((a) =>
-      normalized.every((t) => a.tags.includes(t)),
-    );
+    agents = agents.filter((a) => normalized.every((t) => a.tags.includes(t)));
   }
 
   // Build integration type → diagnostic categories mapping
   const activeIntegrations = integrationManager.list();
   const allCategories = runbookEngine.getCategories();
 
-  const integrations: IntegrationCapability[] = activeIntegrations.map(
-    (integration) => {
-      const matchingCategories = allCategories.filter((cat) => {
-        const diagnosticRunbook =
-          runbookEngine.getDiagnosticRunbook(cat);
-        if (!diagnosticRunbook) return false;
-        return cat.startsWith(integration.type + '-') ||
-          cat === integration.type;
-      });
+  // Build integration pack name → manifest lookup
+  const intPackByName = new Map<string, IntegrationPack>();
+  if (integrationPacks) {
+    for (const pack of integrationPacks) {
+      intPackByName.set(pack.manifest.name, pack);
+    }
+  }
 
-      return {
-        name: integration.name,
-        type: integration.type,
-        status: integration.status,
-        diagnosticCategories: matchingCategories,
-        tags: integrationTagMap.get(integration.id) ?? [],
-      };
-    },
-  );
+  const integrations: IntegrationCapability[] = activeIntegrations.map((integration) => {
+    const matchingCategories = allCategories.filter((cat) => {
+      const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(cat);
+      if (!diagnosticRunbook) return false;
+      return cat.startsWith(`${integration.type}-`) || cat === integration.type;
+    });
+
+    const probes: ProbeInfo[] = [];
+    const intPack = intPackByName.get(integration.type);
+    if (intPack) {
+      for (const probe of intPack.manifest.probes) {
+        const info: ProbeInfo = {
+          name: `${integration.type}.${probe.name}`,
+          description: probe.description,
+        };
+        if (probe.params) {
+          info.params = {};
+          for (const [k, v] of Object.entries(probe.params)) {
+            info.params[k] = {
+              type: v.type,
+              description: v.description,
+              ...(v.required ? { required: true } : {}),
+            };
+          }
+        }
+        probes.push(info);
+      }
+    }
+
+    return {
+      name: integration.name,
+      type: integration.type,
+      status: integration.status,
+      diagnosticCategories: matchingCategories,
+      probes,
+      tags: integrationTagMap.get(integration.id) ?? [],
+    };
+  });
 
   // Collect all runbook category metadata
   const runbookCategories: RunbookCategoryInfo[] = [];
 
   for (const category of allCategories) {
-    const diagnosticRunbook =
-      runbookEngine.getDiagnosticRunbook(category);
+    const diagnosticRunbook = runbookEngine.getDiagnosticRunbook(category);
     if (diagnosticRunbook) {
       runbookCategories.push({
         category,
@@ -165,8 +217,6 @@ export function handleListCapabilities(
   };
 
   return {
-    content: [
-      { type: 'text', text: JSON.stringify(result, null, 2) },
-    ],
+    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
   };
 }

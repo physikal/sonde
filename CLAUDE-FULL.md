@@ -400,7 +400,7 @@ User adds a Compose application in Dokploy, points to Sonde repo. Dokploy handle
 ```yaml
 services:
   sonde-hub:
-    image: ghcr.io/sonde-dev/hub:latest
+    image: ghcr.io/physikal/hub:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -723,7 +723,7 @@ Daily Use:
 - **Name:** Sonde
 - **Domain targets:** sonde.dev (primary), getsonde.dev, usesonde.com (fallbacks)
 - **npm org:** @sonde
-- **GitHub:** sonde-dev/sonde
+- **GitHub:** physikal/sonde
 - **Metaphor:** A radiosonde — a small instrument package sent into an environment to gather data and transmit it back to a ground station
 
 ---
@@ -1186,7 +1186,7 @@ Production hardening and public readiness.
 
 ## CI/CD Pipeline
 
-### Repository: GitHub (sonde-dev/sonde monorepo)
+### Repository: GitHub (physikal/sonde monorepo)
 
 ### Branch Strategy
 - `main` — stable, always deployable, protected
@@ -1229,7 +1229,7 @@ Triggered when dev merges to main (or manual dispatch for hotfix):
    c. On merge, changesets bot creates a "Version Packages" PR
    d. Merging that PR triggers publish
 3. Build artifacts:
-   a. Hub Docker image → push to ghcr.io/sonde-dev/hub:latest + :sha + :v{version}
+   a. Hub Docker image → push to ghcr.io/physikal/hub:latest + :sha + :v{version}
    b. Agent npm package → publish @sonde/agent to npm
    c. Packs npm package → publish @sonde/packs to npm
    d. Shared npm package → publish @sonde/shared to npm
@@ -1246,7 +1246,7 @@ Runs on cron (2am UTC) from main:
 
 ```
 1. Full CI pipeline
-2. Build + push: ghcr.io/sonde-dev/hub:nightly
+2. Build + push: ghcr.io/physikal/hub:nightly
 3. Publish to npm with dist-tag "nightly": @sonde/agent@nightly
 4. Run extended integration tests (longer timeouts, stress tests)
 ```
@@ -1272,7 +1272,7 @@ Developer pushes code
   → PR from dev to main → CI checks pass → merge to main
   → Changesets creates version PR → merge
   → GitHub Actions builds hub Docker image
-  → Pushes to ghcr.io/sonde-dev/hub:v1.2.0 + :latest
+  → Pushes to ghcr.io/physikal/hub:v1.2.0 + :latest
   → Self-hosted users:
     - Watchtower auto-pulls new image and restarts
     - OR Dokploy webhook triggers redeploy from ghcr.io
@@ -1325,7 +1325,7 @@ New pack version published to npm (@sonde/packs@1.3.0 includes docker pack v1.2.
 ### CI/CD Infrastructure Diagram
 
 ```
-GitHub Repo (sonde-dev/sonde)
+GitHub Repo (physikal/sonde)
   │
   ├─→ PR opened
   │     └─→ GitHub Actions: ci.yml

@@ -96,6 +96,24 @@ export interface IntegrationEventRow {
   createdAt: string;
 }
 
+export interface IntegrationEventWithName extends IntegrationEventRow {
+  integrationName: string;
+  integrationType: string;
+}
+
+export interface AuditEntryWithAgentName {
+  id: number;
+  timestamp: string;
+  apiKeyId: string;
+  agentId: string;
+  probe: string;
+  status: string;
+  durationMs: number;
+  requestJson: string | null;
+  responseJson: string | null;
+  agentName: string | null;
+}
+
 export interface AuditEntry {
   apiKeyId?: string;
   agentId: string;
@@ -1295,6 +1313,58 @@ export class SondeDb {
       message: (row.message as string) ?? null,
       detailJson: (row.detail_json as string) ?? null,
       createdAt: row.created_at as string,
+    }));
+  }
+
+  getRecentIntegrationEventsAll(limit: number): IntegrationEventWithName[] {
+    const rows = this.db
+      .prepare(
+        `SELECT ie.id, ie.integration_id, ie.event_type, ie.status, ie.message,
+                ie.detail_json, ie.created_at, i.name AS integration_name, i.type AS integration_type
+         FROM integration_events ie
+         JOIN integrations i ON ie.integration_id = i.id
+         ORDER BY ie.id DESC
+         LIMIT ?`,
+      )
+      .all(limit) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: row.id as number,
+      integrationId: row.integration_id as string,
+      eventType: row.event_type as string,
+      status: (row.status as string) ?? null,
+      message: (row.message as string) ?? null,
+      detailJson: (row.detail_json as string) ?? null,
+      createdAt: row.created_at as string,
+      integrationName: row.integration_name as string,
+      integrationType: row.integration_type as string,
+    }));
+  }
+
+  getAuditEntriesWithNames(limit: number): AuditEntryWithAgentName[] {
+    const rows = this.db
+      .prepare(
+        `SELECT al.id, al.timestamp, al.api_key_id, al.agent_id, al.probe, al.status,
+                al.duration_ms, al.request_json, al.response_json,
+                a.name AS agent_name
+         FROM audit_log al
+         INNER JOIN agents a ON al.agent_id = a.id
+         ORDER BY al.id DESC
+         LIMIT ?`,
+      )
+      .all(limit) as Array<Record<string, unknown>>;
+
+    return rows.map((r) => ({
+      id: r.id as number,
+      timestamp: r.timestamp as string,
+      apiKeyId: r.api_key_id as string,
+      agentId: r.agent_id as string,
+      probe: r.probe as string,
+      status: r.status as string,
+      durationMs: r.duration_ms as number,
+      requestJson: (r.request_json as string) ?? null,
+      responseJson: (r.response_json as string) ?? null,
+      agentName: (r.agent_name as string) ?? null,
     }));
   }
 

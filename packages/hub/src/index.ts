@@ -74,9 +74,11 @@ import {
   UpdateAuthorizedGroupBody,
   UpdateAuthorizedUserBody,
   UpdateIntegrationBody,
+  UpdateMcpInstructionsBody,
   UpdateSsoBody,
   parseBody,
 } from './schemas.js';
+import { buildMcpInstructions } from './mcp/instructions.js';
 import { semverLt, startVersionCheckLoop } from './version-check.js';
 import { AgentDispatcher } from './ws/dispatcher.js';
 import { setupWsServer } from './ws/server.js';
@@ -356,8 +358,10 @@ app.use('/api/v1/authorized-users/*', requireRole('admin'));
 app.use('/api/v1/authorized-groups/*', requireRole('admin'));
 app.use('/api/v1/access-groups/*', requireRole('admin'));
 app.use('/api/v1/audit/*', requireRole('admin'));
+app.use('/api/v1/activity/*', requireRole('admin'));
 app.use('/api/v1/integrations/*', requireRole('admin'));
 app.use('/api/v1/sso/entra', requireRole('owner'));
+app.use('/api/v1/settings/mcp-instructions', requireRole('owner'));
 
 app.get('/health', (c) =>
   c.json({
@@ -497,6 +501,23 @@ app.put('/api/v1/sso/entra', async (c) => {
   db.upsertSsoConfig(tenantId, clientId, clientSecretEnc, enabled);
   syncGraphIntegrationCredentials();
   return c.json({ ok: true });
+});
+
+// --- MCP instructions endpoints ---
+
+app.get('/api/v1/settings/mcp-instructions', (c) => {
+  const customPrefix = db.getHubSetting('mcp_instructions_prefix') ?? '';
+  const preview = buildMcpInstructions(db, integrationManager, probeRouter);
+  return c.json({ customPrefix, preview });
+});
+
+app.put('/api/v1/settings/mcp-instructions', async (c) => {
+  const parsed = parseBody(UpdateMcpInstructionsBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+
+  db.setHubSetting('mcp_instructions_prefix', parsed.data.customPrefix);
+  const preview = buildMcpInstructions(db, integrationManager, probeRouter);
+  return c.json({ ok: true, preview });
 });
 
 // --- Authorized users endpoints ---
@@ -833,7 +854,10 @@ app.get('/api/v1/integrations/:id', (c) => {
   if (!integration) {
     return c.json({ error: 'Integration not found' }, 404);
   }
-  return c.json(integration);
+  return c.json({
+    ...integration,
+    tags: db.getIntegrationTags(c.req.param('id')),
+  });
 });
 
 app.put('/api/v1/integrations/:id', async (c) => {
@@ -1020,6 +1044,7 @@ app.get('/api/v1/agents/:id', (c) => {
       : agent.status === 'degraded'
         ? 'degraded'
         : 'offline',
+    tags: db.getAgentTags(agent.id),
   });
 });
 
@@ -1069,6 +1094,19 @@ app.get('/api/v1/audit', (c) => {
 app.get('/api/v1/audit/verify', (c) => {
   const result = db.verifyAuditChain();
   return c.json(result);
+});
+
+// Global activity feeds for Overview dashboard
+app.get('/api/v1/activity/integrations', (c) => {
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const events = db.getRecentIntegrationEventsAll(limit);
+  return c.json({ events });
+});
+
+app.get('/api/v1/activity/agents', (c) => {
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const entries = db.getAuditEntriesWithNames(limit);
+  return c.json({ entries });
 });
 
 // Pack manifests (unauthenticated — dashboard needs probe metadata for Try It)
@@ -1410,6 +1448,16 @@ process.on('SIGINT', () => {
   db.close();
   process.exit(0);
 });
+
+if (process.platform === 'win32') {
+  process.on('SIGBREAK', () => {
+    console.log('\nShutting down (SIGBREAK)...');
+    sessionManager.stopCleanupLoop();
+    server.close();
+    db.close();
+    process.exit(0);
+  });
+}
 
 export {
   app,

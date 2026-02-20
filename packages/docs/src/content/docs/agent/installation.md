@@ -9,10 +9,10 @@ The Sonde agent is a lightweight daemon that runs on target machines and connect
 The fastest way to install is the one-liner bootstrap script. It installs Node.js 22, the `@sonde/agent` npm package globally, and launches the interactive setup TUI:
 
 ```bash
-curl -fsSL https://sondeapp.com/install | bash
+curl -fsSL https://your-hub-url/install | sh
 ```
 
-The script auto-detects your platform and package manager:
+The hub serves this bootstrap script directly (requires `SONDE_HUB_URL` to be set on the hub). The script auto-detects your platform and package manager:
 
 - **Debian / Ubuntu** -- installs via `apt`
 - **RHEL / Fedora** -- installs via `dnf`

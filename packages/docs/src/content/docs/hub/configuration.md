@@ -10,8 +10,8 @@ All hub configuration is done through environment variables. There are no config
 |---|---|---|---|
 | `SONDE_SECRET` | Yes | — | Encryption root of trust (AES-256-GCM) and fallback auth secret. Must be at least 16 characters. |
 | `SONDE_HUB_URL` | No | — | Public URL of the hub (e.g., `https://mcp.example.com`). Required for SSO callback URLs and agent enrollment. Used in install scripts and enrollment token payloads. |
-| `SONDE_ADMIN_USER` | Yes | — | Username for the bootstrap admin login. Required to access the dashboard and configure SSO, integrations, etc. |
-| `SONDE_ADMIN_PASSWORD` | Yes | — | Password for the bootstrap admin login. Choose a strong value. |
+| `SONDE_ADMIN_USER` | Recommended | — | Username for the bootstrap admin login. Required to access the dashboard and configure SSO, integrations, etc. The hub starts without it, but you won't be able to log in. |
+| `SONDE_ADMIN_PASSWORD` | Recommended | — | Password for the bootstrap admin login. Choose a strong value. Must be set together with `SONDE_ADMIN_USER`. |
 | `PORT` | No | `3000` | HTTP port the hub listens on. |
 | `HOST` | No | `0.0.0.0` | Bind address. Set to `127.0.0.1` to restrict to localhost. |
 | `SONDE_DB_PATH` | No | `./sonde.db` | Path to the SQLite database file. In Docker, this defaults to `/data/sonde.db`. |
@@ -36,7 +36,7 @@ docker run -d \
   -e PORT=8080 \
   -p 8080:8080 \
   -v sonde-data:/data \
-  ghcr.io/sonde-dev/hub:latest
+  ghcr.io/physikal/hub:latest
 ```
 
 **Docker Compose:**
@@ -44,7 +44,7 @@ docker run -d \
 ```yaml
 services:
   sonde-hub:
-    image: ghcr.io/sonde-dev/hub:latest
+    image: ghcr.io/physikal/hub:latest
     environment:
       SONDE_SECRET: your-secret-key
       SONDE_HUB_URL: https://mcp.example.com

@@ -2,7 +2,7 @@
 #
 # Deploy via Dokploy UI:
 #   1. Create a new Compose project in Dokploy
-#   2. Set the Git repository to: https://github.com/sonde-dev/sonde.git
+#   2. Set the Git repository to: https://github.com/physikal/sonde.git
 #   3. Set the compose path to: docker/docker-compose.dokploy.yml
 #   4. Add these environment variables in Dokploy:
 #      - SONDE_SECRET   (required) — generate with: openssl rand -hex 32

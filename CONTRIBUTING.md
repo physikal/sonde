@@ -113,4 +113,4 @@ Build order is managed by Turborepo — `npm run build` handles it automatically
 
 ## Questions?
 
-Open an issue on [GitHub](https://github.com/sonde-dev/sonde/issues) or start a discussion.
+Open an issue on [GitHub](https://github.com/physikal/sonde/issues) or start a discussion.

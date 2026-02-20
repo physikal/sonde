@@ -1,6 +1,6 @@
 # Sonde CI/CD Pipeline
 
-## Repository: GitHub (sonde-dev/sonde monorepo)
+## Repository: GitHub (physikal/sonde monorepo)
 
 ## Branch Strategy
 
@@ -34,7 +34,7 @@ Turborepo caches — unchanged packages skip.
 1. Full CI pipeline
 2. Changesets version bump → "Version Packages" PR
 3. Build:
-   a. Hub Docker image → ghcr.io/sonde-dev/hub:latest + :sha + :v{version}
+   a. Hub Docker image → ghcr.io/physikal/hub:latest + :sha + :v{version}
    b. Dashboard → bundled into hub image as static assets
 4. Publish @sonde/* to npm
 5. GitHub Release with auto-generated changelog
@@ -46,7 +46,7 @@ Cron 2am UTC from main:
 
 ```
 1. Full CI + extended tests
-2. ghcr.io/sonde-dev/hub:nightly
+2. ghcr.io/physikal/hub:nightly
 3. @sonde/agent@nightly on npm
 ```
 

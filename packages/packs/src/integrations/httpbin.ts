@@ -62,11 +62,7 @@ export const httpbinPack: IntegrationPack = {
   },
 
   testConnection: async (config, _credentials, fetchFn) => {
-    try {
-      const res = await fetchFn(`${config.endpoint}/ip`);
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const res = await fetchFn(`${config.endpoint}/ip`);
+    return res.ok;
   },
 };

@@ -57,13 +57,13 @@ The hub exposes these tools to AI clients via the MCP protocol:
 
 | Tool | Description |
 |------|-------------|
-| `list_agents` | List all agents with connection status and loaded packs |
-| `agent_overview` | Detailed info for a single agent (OS, uptime, packs, recent probes) |
-| `probe` | Execute a specific probe on a named agent or integration |
-| `diagnose` | Run a diagnostic runbook (a battery of probes with analysis) |
-| `list_capabilities` | Discover all agents, integrations, and diagnostic categories |
-| `health_check` | Run diagnostics across all agents and integrations in parallel |
-| `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail |
+| `health_check` | Start here for broad "is something wrong?" questions. Runs all applicable diagnostics in parallel. Supports tag filtering to scope to a group (e.g. `#prod`, `#storefront`). |
+| `list_capabilities` | Discover all agents, integrations, their individual probes, and diagnostic categories. Use to find what specific probes are available for follow-up. |
+| `diagnose` | Deep investigation of a specific category on an agent or integration (e.g. "check docker on server-1"). |
+| `probe` | Run a single targeted probe for a specific measurement. Good for follow-up after diagnose. |
+| `list_agents` | List all agents with connection status, packs, and tags. |
+| `agent_overview` | Detailed info for a specific agent (OS, uptime, packs, recent probes). |
+| `query_logs` | Investigate root cause by checking logs (Docker, systemd, nginx) or the hub audit trail. |
 
 ## Design Rules
 

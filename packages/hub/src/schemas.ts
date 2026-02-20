@@ -158,6 +158,12 @@ export const TagImportBody = z.object({
   ),
 });
 
+// --- MCP Instructions ---
+
+export const UpdateMcpInstructionsBody = z.object({
+  customPrefix: z.string().max(2000).default(''),
+});
+
 // --- Probes / Diagnostics ---
 // Reuse ProbeInput and DiagnoseInput from @sonde/shared (exported via mcp.ts)
 

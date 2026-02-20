@@ -73,4 +73,4 @@ Three complementary ways to access logs:
 - **Tagline:** "Launch a Sonde into your infrastructure. Let AI read the data."
 - **Domain targets:** sonde.dev, sonde.sh, sondeai.dev
 - **npm org:** @sonde
-- **GitHub:** sonde-dev/sonde
+- **GitHub:** physikal/sonde
