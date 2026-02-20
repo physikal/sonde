@@ -410,7 +410,111 @@ Execute all steps in parallel. Returns per-step and per-probe status with timing
 }
 ```
 
+### Trending
+
+#### `GET /api/v1/trending`
+
+Get aggregate probe trending data. Requires `admin` role.
+
+**Query parameters:**
+- `hours` — Time window (1-24, default 24)
+
+**Response:**
+```json
+{
+  "window": { "sinceHours": 24, "since": "...", "until": "..." },
+  "totalProbes": 142,
+  "totalFailures": 8,
+  "failureRate": 5.6,
+  "byProbe": [{ "probe": "system.disk.usage", "total": 50, "success": 48, "failureRate": 4 }],
+  "byAgent": [{ "agentOrSource": "web-01", "sourceType": "agent", "total": 30, "failures": 2 }],
+  "byHour": [{ "hour": "2026-02-20T14:00:00.000Z", "total": 12, "failures": 1 }],
+  "recentErrors": [{ "timestamp": "...", "probe": "...", "status": "error", "errorMessage": "..." }]
+}
+```
+
+#### `GET /api/v1/trending/analyze/status`
+
+Check if an AI analysis is active or recently completed. Requires `admin` role.
+
+**Response:**
+```json
+{
+  "active": false,
+  "complete": true,
+  "hours": 24,
+  "text": "## Summary\n..."
+}
+```
+
+#### `POST /api/v1/trending/analyze`
+
+Start or join a streaming AI analysis of trending data. Returns chunked `text/plain` response. Requires `admin` role. Returns `503` if no AI API key is configured.
+
+**Query parameters:**
+- `hours` — Time window (1-24, default 24)
+
+If an analysis is already in progress, the response replays buffered text then streams remaining chunks. If a recent analysis completed (< 5 min), returns the full result immediately.
+
 ### Settings
+
+#### `GET /api/v1/settings/ai`
+
+Get AI analysis configuration status. **Requires owner role.**
+
+**Response:**
+```json
+{
+  "configured": true,
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+The API key is never returned — only whether one is configured.
+
+#### `GET /api/v1/settings/ai/status`
+
+Lightweight check for whether AI is configured. **Requires admin role.** Used by the dashboard to show/hide the Activate AI button.
+
+**Response:**
+```json
+{
+  "configured": true
+}
+```
+
+#### `PUT /api/v1/settings/ai`
+
+Update AI analysis settings. **Requires owner role.** Omit `apiKey` to keep the existing key.
+
+**Request:**
+```json
+{
+  "apiKey": "sk-ant-...",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+**Response:** Same as `GET /api/v1/settings/ai`.
+
+#### `POST /api/v1/settings/ai/test`
+
+Test the stored API key against the Claude API. **Requires owner role.**
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+Or on failure:
+```json
+{
+  "success": false,
+  "error": "Invalid API key"
+}
+```
 
 #### `GET /api/v1/settings/mcp-instructions`
 

@@ -153,6 +153,28 @@ Optional scoping to restrict users to specific agents or integrations.
 
 ## Diagnostics
 
+### Trending
+
+The Trending page shows aggregate probe activity and failure patterns over a configurable time window (1, 6, 12, or 24 hours). Data refreshes automatically every 30 seconds.
+
+**Stat cards** at the top show total probes, total failures, and failure rate with color-coded severity (green < 5%, amber 5-20%, red > 20%).
+
+**Volume Over Time** — A sparkline chart showing hourly probe volume with red segments for failures. Hover for exact counts.
+
+**Breakdowns** — Two side-by-side panels:
+- **Probes by Failure Rate** — Which probes are failing most, with average duration
+- **Targets by Failure Rate** — Which agents/integrations have the highest failure rates
+
+**Recent Errors** — Table of the latest failures with timestamp, probe, target, status, duration, and error message.
+
+#### Activate AI
+
+When an AI API key is configured (see [AI Analysis settings](#ai-analysis) below), the Trending page shows an **Activate AI** button. Clicking it sends the aggregate trending data to Claude for automated diagnosis.
+
+The analysis streams back in real-time, appearing in a panel below the stat cards. Claude identifies failure patterns, likely root causes, and recommends specific Sonde commands to run next.
+
+**Shared analysis:** If multiple admins have the Trending page open, only one Claude API call is made. Other admins see the same analysis stream (or the completed result if they arrive later). Results are cached for 5 minutes.
+
 ### Try It Panel
 
 A built-in diagnostic testing interface:
@@ -225,6 +247,17 @@ Customize the instructions sent to AI clients during the MCP handshake.
 
 Instructions are assembled per-session, so new MCP connections always reflect the current state (integrations added/removed, prefix changes). No client-side changes are needed — AI clients receive the updated instructions automatically on their next connection.
 
+### AI Analysis
+
+Configure the Claude API connection for automated trending analysis. The API key is encrypted at rest using `SONDE_SECRET`.
+
+- **API Key** — Enter your Anthropic API key (from [console.anthropic.com](https://console.anthropic.com))
+- **Model** — Select Claude Sonnet 4 (default) or Claude Opus 4
+- **Test Connection** — Validates the API key against the Claude API
+- Leave the API key field blank when saving to keep the existing key
+
+Once configured, the **Activate AI** button appears on the [Trending](#trending) page for all admins.
+
 ### SSO Configuration
 
 Configure Entra ID single sign-on.
@@ -248,6 +281,8 @@ See [Security & Authentication](/reference/security) for the full Entra SSO setu
 | Enrollment, admin API key management | No | Yes | Yes |
 | Integration management | No | Yes | Yes |
 | User management | No | Yes | Yes |
+| Trending (view + Activate AI) | No | Yes | Yes |
+| AI Analysis configuration | No | No | Yes |
 | SSO configuration | No | No | Yes |
 | MCP Prompt customization | No | No | Yes |
 
