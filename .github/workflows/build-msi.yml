@@ -2,7 +2,7 @@ name: Build MSI
 
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
     paths:
       - 'installer/**'
       - 'packages/hub/**'
