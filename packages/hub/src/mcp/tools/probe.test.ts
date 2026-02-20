@@ -52,7 +52,7 @@ describe('handleProbe', () => {
     expect(parsed.status).toBe('success');
     expect(parsed.data.filesystems).toHaveLength(1);
 
-    expect(probeRouter.execute).toHaveBeenCalledWith('system.disk.usage', undefined, 'test-agent');
+    expect(probeRouter.execute).toHaveBeenCalledWith('system.disk.usage', undefined, 'test-agent', undefined);
   });
 
   it('logs audit entry on success', async () => {
@@ -158,7 +158,7 @@ describe('handleProbe', () => {
     const result = await handleProbe({ probe: 'cloudflare.zones.list' }, probeRouter, db);
 
     expect(result.isError).toBeUndefined();
-    expect(probeRouter.execute).toHaveBeenCalledWith('cloudflare.zones.list', undefined, undefined);
+    expect(probeRouter.execute).toHaveBeenCalledWith('cloudflare.zones.list', undefined, undefined, undefined);
 
     const auditCall = (db.logAudit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(auditCall.agentId).toBe('cloudflare');
