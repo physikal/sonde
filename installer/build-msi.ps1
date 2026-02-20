@@ -75,8 +75,7 @@ $NodeExtract = Join-Path $env:TEMP "node-v${NodeVersion}-win-x64"
 if (-not (Test-Path $NodeExtract)) {
   Expand-Archive -Path $NodeZip -DestinationPath $env:TEMP -Force
 }
-Copy-Item (Join-Path $NodeExtract "node-v${NodeVersion}-win-x64\node.exe") `
-  -Destination $NodeStage
+Copy-Item (Join-Path $NodeExtract 'node.exe') -Destination $NodeStage
 
 # --- Step 2: Build monorepo ---
 Write-Host "[2/5] Building monorepo packages..." -ForegroundColor Yellow
