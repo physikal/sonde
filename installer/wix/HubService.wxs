@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Fragment>
     <ComponentGroup Id="HubServiceComponents" Directory="ServiceDir">
@@ -18,12 +19,15 @@
           Type="ownProcess"
           Start="auto"
           ErrorControl="normal"
-          Account="NT AUTHORITY\LocalService">
-          <ServiceConfig
-            DelayedAutoStart="yes"
-            OnInstall="yes"
-            OnReinstall="yes" />
-        </ServiceInstall>
+          Account="NT AUTHORITY\LocalService" />
+
+        <util:ServiceConfig
+          ServiceName="SondeHub"
+          FirstFailureActionType="restart"
+          SecondFailureActionType="restart"
+          ThirdFailureActionType="none"
+          RestartServiceDelayInSeconds="30"
+          ResetPeriodInDays="1" />
 
         <ServiceControl
           Id="SondeHubServiceControl"

@@ -49,9 +49,8 @@
       Return="check" />
 
     <InstallExecuteSequence>
-      <Custom Action="RunSetupEnv" After="InstallFiles">
-        NOT Installed OR REINSTALL
-      </Custom>
+      <Custom Action="RunSetupEnv" After="InstallFiles"
+              Condition="NOT Installed OR REINSTALL" />
     </InstallExecuteSequence>
 
     <Property Id="SONDE_SECRET" Secure="yes" />
