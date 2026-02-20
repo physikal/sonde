@@ -75,7 +75,7 @@ export function createMcpHandler(
       'probe',
       {
         description:
-          'Run a single targeted probe for a specific measurement. IMPORTANT: You must call list_capabilities first to discover valid probe names — they change as agents connect/disconnect. Use for follow-up after diagnose reveals something worth investigating. For agent probes, specify the agent name/ID. For integration probes (external APIs), the agent parameter can be omitted.',
+          'Run a single targeted probe. Requires an exact probe name from list_capabilities (e.g. "system.disk-usage") — call list_capabilities first if you do not already have probe names. For agent probes, specify the agent name/ID. For integration probes, omit the agent parameter.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -94,7 +94,7 @@ export function createMcpHandler(
       'diagnose',
       {
         description:
-          'Deep investigation of a specific category on an agent or integration. IMPORTANT: You must call list_capabilities first to discover valid categories and agent names — they change dynamically. Use after health_check flags an issue or when the user asks about a specific category (e.g. "check docker on server-1"). For agent categories (e.g. system, docker), specify the agent. For integration categories (e.g. proxmox-vm, proxmox-cluster), do NOT specify an agent — these run server-side via external APIs.',
+          'Investigate a specific diagnostic category on an agent or integration. Use after health_check flags an issue, or directly when the user asks about a known category (e.g. "check docker on server-1"). For agent categories (system, docker, systemd), specify the agent. For integration categories (proxmox-vm, proxmox-cluster), omit the agent — these run server-side via external APIs.',
         inputSchema: z.object({
           agent: z
             .string()
@@ -128,7 +128,7 @@ export function createMcpHandler(
       'list_agents',
       {
         description:
-          'Fleet inventory: list registered agents with status and tags. NOT for starting diagnostic workflows — call list_capabilities first instead, which returns agents AND their available probes/categories. Only use list_agents when the user specifically asks to see their fleet roster or agent metadata. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "show #prod agents"). Do NOT infer tags from natural language.',
+          'List all registered agents with their status, packs, tags, and last seen time. Use when the user asks about their fleet or specific agents. For diagnostic workflows, prefer health_check instead. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "show #prod agents"). Do NOT infer tags from natural language.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
@@ -147,7 +147,7 @@ export function createMcpHandler(
       'agent_overview',
       {
         description:
-          'Get detailed information about a single agent including pack details and status. Call list_capabilities first to discover agent names and their probes.',
+          'Get detailed information about a single agent including pack details and status.',
         inputSchema: z.object({
           agent: z.string().describe('Agent name or ID'),
         }),
@@ -161,7 +161,7 @@ export function createMcpHandler(
       'list_capabilities',
       {
         description:
-          'REQUIRED FIRST STEP — call this before any other Sonde tool. Returns all available agents, integrations, their exact probe names, and diagnostic categories. You need this data to know what probes exist and what agents/integrations to target. No probes executed — returns metadata only. Agents run probes on remote machines. Integrations run probes server-side via external APIs. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "check #prod #database"). Do NOT infer tags from natural language.',
+          'Discover available agents, integrations, their exact probe names, diagnostic categories, and critical paths. Call this when you need specific probe names for the probe tool, or to discover what categories and paths are available. No probes executed — returns metadata only. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "check #prod #database"). Do NOT infer tags from natural language.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
@@ -189,7 +189,7 @@ export function createMcpHandler(
       'health_check',
       {
         description:
-          'Start here for broad "is something wrong?" questions. IMPORTANT: You must call list_capabilities first to discover available agents and integrations before using this tool. Runs all applicable diagnostics in parallel and returns unified findings sorted by severity (critical → warning → info). Use tags to scope to a group of agents/integrations (e.g. #prod, #storefront). For deeper investigation of a specific finding, follow up with diagnose for a full category runbook, probe for a single data point, or query_logs for root cause analysis. Skips categories that require user-provided parameters.',
+          'Best starting point for diagnostics. Use for "what\'s wrong?", "how is X doing?", or any broad diagnostic question. Runs all applicable diagnostics in parallel across agents and integrations, returns unified findings sorted by severity (critical → warning → info). Specify an agent name for one machine, use tags to scope to a group (e.g. #prod, #storefront), or omit both to check everything. For deeper investigation, follow up with diagnose (category drill-down), probe (single measurement via list_capabilities), or query_logs (root cause).',
         inputSchema: z.object({
           agent: z.string().optional().describe('Agent name or ID for agent-specific checks'),
           categories: z
@@ -224,7 +224,7 @@ export function createMcpHandler(
       'query_logs',
       {
         description:
-          "Investigate root cause by checking logs after diagnostics reveal an issue. IMPORTANT: You must call list_capabilities first to discover available agents. For agent logs (systemd, docker, nginx), specify the agent. For audit logs, no agent is needed — this queries the hub's activity log.",
+          "Investigate root cause by checking logs after diagnostics reveal an issue. For agent logs (systemd, docker, nginx), specify the agent. For audit logs, no agent is needed — this queries the hub's activity log.",
         inputSchema: z.object({
           source: z
             .enum(['systemd', 'docker', 'nginx', 'audit'])
@@ -254,7 +254,7 @@ export function createMcpHandler(
       'check_critical_path',
       {
         description:
-          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). IMPORTANT: You must call list_capabilities first to discover available path names. All steps execute in parallel, returning pass/fail per hop with timing.',
+          'Execute a predefined critical path — an ordered chain of infrastructure checkpoints (e.g. load balancer → web server → app server → database). All steps execute in parallel, returning pass/fail per hop with timing. Call list_capabilities to discover available path names.',
         inputSchema: z.object({
           path: z.string().describe('Critical path name (e.g. "storefront")'),
         }),
