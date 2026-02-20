@@ -48,7 +48,7 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | Loki | Basic / Bearer | LogQL queries, label discovery |
 | Jira | Basic (email + API token) | Issue search, project listing, change history |
 | PagerDuty | Token | Incidents, services, on-call schedules |
-| UniFi Network | Session (username/password) | Site health, devices, clients, events, alarms |
-| UniFi Access | Bearer token | Door status, access logs, reader/hub devices |
+| UniFi Network | API Key (`X-API-KEY`) | Devices, clients, networks, WAN, device stats |
+| UniFi Access | Bearer Token | Door status, access logs, reader/hub devices |
 
 For per-type setup instructions (required permissions, credential format, example queries), see the [Integration Packs Setup](/integrations/setup) page.

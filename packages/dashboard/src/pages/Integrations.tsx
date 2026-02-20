@@ -484,35 +484,17 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     value: 'unifi',
     label: 'UniFi Network',
     description:
-      'Site health, devices, clients, events, alarms, port forwards',
+      'Devices, clients, networks, WAN, device stats (official API)',
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
         {
-          key: 'username',
-          label: 'Username',
-          placeholder: 'Controller admin username',
-          tooltip: 'Local admin account on the UniFi controller',
-        },
-        {
-          key: 'password',
-          label: 'Password',
-          placeholder: 'Controller admin password',
+          key: 'apiKey',
+          label: 'API Key',
+          placeholder: 'UniFi Network API key',
           sensitive: true,
-        },
-        {
-          key: 'site',
-          label: 'Site',
-          placeholder: 'default',
           tooltip:
-            'UniFi site name. Leave as "default" for single-site deployments.',
-        },
-        {
-          key: 'controllerType',
-          label: 'Controller Type',
-          placeholder: 'udm',
-          tooltip:
-            '"udm" for UDM/UDM-Pro/UDM-SE, "selfhosted" for Cloud Key or manual install',
+            'Generate in Network > Settings > Control Plane > Integrations',
         },
       ],
     },
@@ -577,7 +559,7 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   checkpoint: 'https://mgmt-server.corp.local',
   a10: 'https://thunder01.corp.local',
   unifi: 'https://192.168.1.1',
-  'unifi-access': 'https://192.168.1.1/proxy/access/api/v1/developer',
+  'unifi-access': 'https://192.168.1.1/proxy/access/api/v1/developer/',
   custom: 'https://api.example.com',
 };
 
@@ -603,9 +585,9 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
   checkpoint: 'Check Point Management Server IP/hostname. Default port 443.',
   a10: 'A10 Thunder/vThunder management IP. Default port 443.',
   unifi:
-    'UDM: https://192.168.1.1. Self-hosted: https://host:8443. Self-signed cert is common.',
+    'Your UDM/UDM-Pro IP (e.g. https://192.168.1.1). Requires Network App 9.0.108+. Self-signed cert is common.',
   'unifi-access':
-    'Through UDM: https://ip/proxy/access/api/v1/developer. Direct: https://host:12445/api/v1/developer.',
+    'Through UDM: https://ip/proxy/access/api/v1/developer/. Direct: https://host:12445/api/v1/developer/.',
 };
 
 const NAME_PLACEHOLDERS: Record<string, string> = {

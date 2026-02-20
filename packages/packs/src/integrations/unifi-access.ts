@@ -6,40 +6,41 @@ import type {
   IntegrationProbeHandler,
 } from '@sonde/shared';
 
-// --- Auth helper ---
+// --- API helper ---
 
-function buildAuthHeaders(
-  credentials: IntegrationCredentials,
-  config: IntegrationConfig,
-): Record<string, string> {
-  const token = credentials.credentials.apiToken ?? '';
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/json',
-    ...config.headers,
-  };
-}
-
-// --- UniFi Access API helper ---
-
-/** Fetch a UniFi Access API endpoint with bearer token auth */
-export async function accessFetch(
+/**
+ * Fetch a UniFi Access developer API endpoint.
+ * Auth: Authorization: Bearer <token>
+ * Token generated in UniFi Access > Settings > Developer API.
+ * Base path set by user in endpoint config (includes /proxy/access/api/v1/developer
+ * when accessed through UDM, or direct on port 12445).
+ */
+export async function accessFetch<T = unknown>(
   path: string,
   config: IntegrationConfig,
   credentials: IntegrationCredentials,
   fetchFn: FetchFn,
-): Promise<unknown> {
+): Promise<T> {
+  const token = credentials.credentials.apiToken ?? '';
   const endpoint = config.endpoint.replace(/\/$/, '');
   const url = `${endpoint}/${path}`;
-  const headers = buildAuthHeaders(credentials, config);
 
-  const res = await fetchFn(url, { headers });
+  const res = await fetchFn(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      ...config.headers,
+    },
+  });
+
   if (!res.ok) {
-    throw new Error(`UniFi Access API returned ${res.status}: ${res.statusText}`);
+    throw new Error(
+      `UniFi Access API returned ${res.status}: ${res.statusText}`,
+    );
   }
 
-  const data = (await res.json()) as { data?: unknown };
-  return data.data ?? data;
+  const body = (await res.json()) as { data?: T };
+  return (body.data ?? body) as T;
 }
 
 // --- Probe handlers ---
@@ -50,12 +51,12 @@ const doors: IntegrationProbeHandler = async (
   credentials,
   fetchFn,
 ) => {
-  const result = (await accessFetch(
+  const result = await accessFetch<Array<Record<string, unknown>>>(
     'doors',
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
 
   return {
     doors: result.map((d) => ({
@@ -69,24 +70,26 @@ const doors: IntegrationProbeHandler = async (
   };
 };
 
-const doorLogs: IntegrationProbeHandler = async (
+const systemLogs: IntegrationProbeHandler = async (
   params,
   config,
   credentials,
   fetchFn,
 ) => {
-  const doorId = (params?.door_id as string) ?? '';
-  if (!doorId) throw new Error('door_id parameter is required');
+  const pageSize = (params?.limit as number) || 25;
+  const topic = (params?.topic as string) ?? '';
 
-  const limit = (params?.limit as number) || 50;
-  const result = (await accessFetch(
-    `doors/${doorId}/logs?limit=${limit}`,
+  let path = `system/logs?page_size=${pageSize}`;
+  if (topic) path += `&topic=${encodeURIComponent(topic)}`;
+
+  const result = await accessFetch<Array<Record<string, unknown>>>(
+    path,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
 
-  return { logs: result, count: result.length, doorId };
+  return { logs: result, count: result.length };
 };
 
 const accessDevices: IntegrationProbeHandler = async (
@@ -95,12 +98,12 @@ const accessDevices: IntegrationProbeHandler = async (
   credentials,
   fetchFn,
 ) => {
-  const result = (await accessFetch(
+  const result = await accessFetch<Array<Record<string, unknown>>>(
     'devices',
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
 
   return {
     devices: result.map((d) => ({
@@ -122,9 +125,9 @@ export const unifiAccessPack: IntegrationPack = {
   manifest: {
     name: 'unifi-access',
     type: 'integration',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
-      'Ubiquiti UniFi Access — door status, access logs, reader/hub devices',
+      'Ubiquiti UniFi Access — doors, access logs, reader/hub devices',
     requires: { groups: [], files: [], commands: [] },
     probes: [
       {
@@ -135,18 +138,20 @@ export const unifiAccessPack: IntegrationPack = {
         timeout: 15000,
       },
       {
-        name: 'door.logs',
-        description: 'Access event log for a specific door',
+        name: 'logs',
+        description:
+          'Access event log (door unlocks, denied attempts, etc.)',
         capability: 'observe',
         params: {
-          door_id: {
+          topic: {
             type: 'string',
-            description: 'Door ID',
-            required: true,
+            description:
+              'Filter by topic (e.g. "access.logs.add"). Omit for all.',
+            required: false,
           },
           limit: {
             type: 'number',
-            description: 'Maximum log entries to return (default: 50)',
+            description: 'Page size (default: 25)',
             required: false,
           },
         },
@@ -169,15 +174,21 @@ export const unifiAccessPack: IntegrationPack = {
 
   handlers: {
     doors,
-    'door.logs': doorLogs,
+    logs: systemLogs,
     devices: accessDevices,
   },
 
   testConnection: async (config, credentials, fetchFn) => {
+    const token = credentials.credentials.apiToken ?? '';
     const endpoint = config.endpoint.replace(/\/$/, '');
-    const headers = buildAuthHeaders(credentials, config);
 
-    const res = await fetchFn(`${endpoint}/doors`, { headers });
+    const res = await fetchFn(`${endpoint}/doors`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        ...config.headers,
+      },
+    });
     return res.ok;
   },
 };

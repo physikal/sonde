@@ -435,29 +435,11 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     credentialFields: {
       api_key: [
         {
-          key: 'username',
-          label: 'Username',
-          placeholder: 'Controller admin username',
-          tooltip: 'Local admin account on the UniFi controller',
-        },
-        {
-          key: 'password',
-          label: 'Password',
+          key: 'apiKey',
+          label: 'API Key',
           sensitive: true,
-        },
-        {
-          key: 'site',
-          label: 'Site',
-          placeholder: 'default',
           tooltip:
-            'UniFi site name. Leave as "default" for single-site deployments.',
-        },
-        {
-          key: 'controllerType',
-          label: 'Controller Type',
-          placeholder: 'udm',
-          tooltip:
-            '"udm" for UDM/UDM-Pro/UDM-SE, "selfhosted" for Cloud Key or manual install',
+            'Generate in Network > Settings > Control Plane > Integrations',
         },
       ],
     },

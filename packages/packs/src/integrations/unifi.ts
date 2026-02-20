@@ -6,122 +6,123 @@ import type {
   IntegrationProbeHandler,
 } from '@sonde/shared';
 
-// --- Session cache ---
+// --- Paginated response shape from official API ---
 
-interface CachedSession {
-  cookie: string;
-  expiresAt: number;
+interface PagedResponse<T> {
+  offset: number;
+  limit: number;
+  count: number;
+  totalCount: number;
+  data: T[];
 }
 
-let sessionCache: CachedSession | null = null;
+// --- API helper ---
 
-/** Session TTL: 25 minutes (UniFi sessions expire after ~30 min idle) */
-const SESSION_TTL_MS = 25 * 60 * 1000;
-
-function loginPath(controllerType: string): string {
-  return controllerType === 'selfhosted' ? '/api/login' : '/api/auth/login';
-}
-
-function basePath(controllerType: string, site: string): string {
-  return controllerType === 'selfhosted'
-    ? `/api/s/${site}/`
-    : `/proxy/network/api/s/${site}/`;
-}
-
-/** Authenticate to UniFi controller and cache the session cookie */
-export async function ensureSession(
-  config: IntegrationConfig,
-  credentials: IntegrationCredentials,
-  fetchFn: FetchFn,
-): Promise<string> {
-  if (sessionCache && Date.now() < sessionCache.expiresAt) {
-    return sessionCache.cookie;
-  }
-
-  const { username, password } = credentials.credentials;
-  const controllerType = credentials.credentials.controllerType ?? 'udm';
-  const endpoint = config.endpoint.replace(/\/$/, '');
-  const url = `${endpoint}${loginPath(controllerType)}`;
-
-  const res = await fetchFn(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...config.headers },
-    body: JSON.stringify({ username, password }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`UniFi login failed: ${res.status} ${res.statusText}`);
-  }
-
-  const setCookie = res.headers.get('set-cookie') ?? '';
-  if (!setCookie) {
-    throw new Error('UniFi login succeeded but no session cookie returned');
-  }
-
-  // Extract the first cookie (TOKEN= or unifises=)
-  const cookie = setCookie.split(';')[0] ?? setCookie;
-  sessionCache = { cookie, expiresAt: Date.now() + SESSION_TTL_MS };
-  return cookie;
-}
-
-/** Clear the cached session (used for testing) */
-export function clearSessionCache(): void {
-  sessionCache = null;
-}
-
-// --- UniFi API helper ---
-
-/** Fetch a UniFi Network API endpoint with session auth and 401 retry */
-export async function unifiFetch(
+/**
+ * Fetch a UniFi Network official API endpoint.
+ * Auth: X-API-KEY header. Base path: /proxy/network/integration
+ * Docs: Settings > Control Plane > Integrations on your controller,
+ * or https://developer.ui.com/network/v10.1.84/gettingstarted
+ */
+export async function unifiFetch<T = unknown>(
   path: string,
   config: IntegrationConfig,
   credentials: IntegrationCredentials,
   fetchFn: FetchFn,
-): Promise<unknown> {
-  const site = credentials.credentials.site ?? 'default';
-  const controllerType = credentials.credentials.controllerType ?? 'udm';
+): Promise<T> {
+  const apiKey = credentials.credentials.apiKey ?? '';
   const endpoint = config.endpoint.replace(/\/$/, '');
-  const base = basePath(controllerType, site);
-  const url = `${endpoint}${base}${path}`;
+  const url = `${endpoint}/proxy/network/integration${path}`;
 
-  const attempt = async (cookie: string): Promise<Response> => {
-    return fetchFn(url, {
-      headers: {
-        Cookie: cookie,
-        Accept: 'application/json',
-        ...config.headers,
-      },
-    });
-  };
-
-  let cookie = await ensureSession(config, credentials, fetchFn);
-  let res = await attempt(cookie);
-
-  // Retry once on 401 (expired session)
-  if (res.status === 401) {
-    clearSessionCache();
-    cookie = await ensureSession(config, credentials, fetchFn);
-    res = await attempt(cookie);
-  }
+  const res = await fetchFn(url, {
+    headers: {
+      'X-API-KEY': apiKey,
+      Accept: 'application/json',
+      ...config.headers,
+    },
+  });
 
   if (!res.ok) {
-    throw new Error(`UniFi API returned ${res.status}: ${res.statusText}`);
+    throw new Error(
+      `UniFi Network API returned ${res.status}: ${res.statusText}`,
+    );
   }
 
-  const data = (await res.json()) as { data?: unknown };
-  return data.data ?? data;
+  return (await res.json()) as T;
+}
+
+/** Collect all pages from a paginated endpoint (max 200 per page) */
+async function fetchAllPages<T>(
+  path: string,
+  config: IntegrationConfig,
+  credentials: IntegrationCredentials,
+  fetchFn: FetchFn,
+  maxItems = 1000,
+): Promise<T[]> {
+  const results: T[] = [];
+  let offset = 0;
+  const limit = 200;
+
+  while (results.length < maxItems) {
+    const sep = path.includes('?') ? '&' : '?';
+    const page = await unifiFetch<PagedResponse<T>>(
+      `${path}${sep}offset=${offset}&limit=${limit}`,
+      config,
+      credentials,
+      fetchFn,
+    );
+    results.push(...page.data);
+    if (results.length >= page.totalCount) break;
+    offset += limit;
+  }
+
+  return results;
+}
+
+/** Resolve the siteId — uses the first site unless overridden */
+async function resolveSiteId(
+  config: IntegrationConfig,
+  credentials: IntegrationCredentials,
+  fetchFn: FetchFn,
+): Promise<string> {
+  const explicit = credentials.credentials.siteId ?? '';
+  if (explicit) return explicit;
+
+  const sites = await unifiFetch<PagedResponse<{ id: string; name: string }>>(
+    '/v1/sites?limit=1',
+    config,
+    credentials,
+    fetchFn,
+  );
+  const first = sites.data[0];
+  if (!first) throw new Error('No sites found on this UniFi controller');
+  return first.id;
 }
 
 // --- Probe handlers ---
 
-const siteHealth: IntegrationProbeHandler = async (
+const appInfo: IntegrationProbeHandler = async (
   _params,
   config,
   credentials,
   fetchFn,
 ) => {
-  const result = await unifiFetch('stat/health', config, credentials, fetchFn);
-  return { health: result };
+  return unifiFetch('/v1/info', config, credentials, fetchFn);
+};
+
+const sites: IntegrationProbeHandler = async (
+  _params,
+  config,
+  credentials,
+  fetchFn,
+) => {
+  const result = await fetchAllPages<Record<string, unknown>>(
+    '/v1/sites',
+    config,
+    credentials,
+    fetchFn,
+  );
+  return { sites: result, count: result.length };
 };
 
 const devices: IntegrationProbeHandler = async (
@@ -130,25 +131,25 @@ const devices: IntegrationProbeHandler = async (
   credentials,
   fetchFn,
 ) => {
-  const result = (await unifiFetch(
-    'stat/device',
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  const result = await fetchAllPages<Record<string, unknown>>(
+    `/v1/sites/${siteId}/devices`,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
 
   return {
     devices: result.map((d) => ({
-      mac: d.mac,
+      id: d.id,
+      macAddress: d.macAddress,
+      ipAddress: d.ipAddress,
       name: d.name,
       model: d.model,
-      type: d.type,
-      version: d.version,
-      ip: d.ip,
-      uptime: d.uptime,
       state: d.state,
-      adopted: d.adopted,
-      upgradable: d.upgradable,
+      firmwareVersion: d.firmwareVersion,
+      firmwareUpdatable: d.firmwareUpdatable,
+      features: d.features,
     })),
     count: result.length,
   };
@@ -160,21 +161,38 @@ const deviceDetail: IntegrationProbeHandler = async (
   credentials,
   fetchFn,
 ) => {
-  const mac = (params?.mac as string) ?? '';
-  if (!mac) throw new Error('mac parameter is required (device MAC address)');
+  const deviceId = (params?.device_id as string) ?? '';
+  if (!deviceId) {
+    throw new Error('device_id parameter is required (device UUID)');
+  }
 
-  const result = (await unifiFetch(
-    `stat/device/${mac}`,
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  return unifiFetch(
+    `/v1/sites/${siteId}/devices/${deviceId}`,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
+};
 
-  if (!Array.isArray(result) || result.length === 0) {
-    throw new Error(`No device found with MAC ${mac}`);
+const deviceStats: IntegrationProbeHandler = async (
+  params,
+  config,
+  credentials,
+  fetchFn,
+) => {
+  const deviceId = (params?.device_id as string) ?? '';
+  if (!deviceId) {
+    throw new Error('device_id parameter is required (device UUID)');
   }
 
-  return { device: result[0] };
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  return unifiFetch(
+    `/v1/sites/${siteId}/devices/${deviceId}/statistics/latest`,
+    config,
+    credentials,
+    fetchFn,
+  );
 };
 
 const clients: IntegrationProbeHandler = async (
@@ -183,89 +201,56 @@ const clients: IntegrationProbeHandler = async (
   credentials,
   fetchFn,
 ) => {
-  const result = (await unifiFetch(
-    'stat/sta',
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  const result = await fetchAllPages<Record<string, unknown>>(
+    `/v1/sites/${siteId}/clients`,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
+  );
 
   return {
     clients: result.map((c) => ({
-      mac: c.mac,
-      hostname: c.hostname ?? c.name,
-      ip: c.ip,
-      network: c.network,
-      essid: c.essid,
-      signal: c.signal,
-      experience: c.satisfaction,
-      uptime: c.uptime,
-      rxBytes: c.rx_bytes,
-      txBytes: c.tx_bytes,
-      isWired: c.is_wired,
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      ipAddress: c.ipAddress,
+      connectedAt: c.connectedAt,
     })),
     count: result.length,
   };
 };
 
-const events: IntegrationProbeHandler = async (
-  params,
-  config,
-  credentials,
-  fetchFn,
-) => {
-  const limit = (params?.limit as number) || 50;
-  const result = (await unifiFetch(
-    `stat/event?_limit=${limit}`,
-    config,
-    credentials,
-    fetchFn,
-  )) as Array<Record<string, unknown>>;
-
-  return { events: result, count: result.length };
-};
-
-const alarms: IntegrationProbeHandler = async (
+const networks: IntegrationProbeHandler = async (
   _params,
   config,
   credentials,
   fetchFn,
 ) => {
-  const result = (await unifiFetch(
-    'stat/alarm',
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  const result = await fetchAllPages<Record<string, unknown>>(
+    `/v1/sites/${siteId}/networks`,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
-
-  return { alarms: result, count: result.length };
+  );
+  return { networks: result, count: result.length };
 };
 
-const portForwards: IntegrationProbeHandler = async (
+const wans: IntegrationProbeHandler = async (
   _params,
   config,
   credentials,
   fetchFn,
 ) => {
-  const result = (await unifiFetch(
-    'rest/portforward',
+  const siteId = await resolveSiteId(config, credentials, fetchFn);
+  const result = await fetchAllPages<Record<string, unknown>>(
+    `/v1/sites/${siteId}/wans`,
     config,
     credentials,
     fetchFn,
-  )) as Array<Record<string, unknown>>;
-
-  return {
-    portForwards: result.map((pf) => ({
-      name: pf.name,
-      enabled: pf.enabled,
-      proto: pf.proto,
-      src: pf.src,
-      dstPort: pf.dst_port,
-      fwd: pf.fwd,
-      fwdPort: pf.fwd_port,
-    })),
-    count: result.length,
-  };
+  );
+  return { wans: result, count: result.length };
 };
 
 // --- Pack definition ---
@@ -274,14 +259,21 @@ export const unifiPack: IntegrationPack = {
   manifest: {
     name: 'unifi',
     type: 'integration',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
-      'Ubiquiti UniFi Network — site health, devices, clients, events, alarms, port forwards',
+      'Ubiquiti UniFi Network — devices, clients, networks, WAN, device stats (official API)',
     requires: { groups: [], files: [], commands: [] },
     probes: [
       {
-        name: 'site.health',
-        description: 'Overall site health summary (ISP, switches, APs, gateways)',
+        name: 'info',
+        description: 'Application version and basic info',
+        capability: 'observe',
+        params: {},
+        timeout: 10000,
+      },
+      {
+        name: 'sites',
+        description: 'List all sites on this controller',
         capability: 'observe',
         params: {},
         timeout: 15000,
@@ -289,19 +281,34 @@ export const unifiPack: IntegrationPack = {
       {
         name: 'devices',
         description:
-          'List all network devices with status, model, firmware, uptime',
+          'List adopted devices with state, model, firmware, features',
         capability: 'observe',
         params: {},
         timeout: 15000,
       },
       {
         name: 'device.detail',
-        description: 'Single device detail by MAC address',
+        description:
+          'Full device details including interfaces and uplink',
         capability: 'observe',
         params: {
-          mac: {
+          device_id: {
             type: 'string',
-            description: 'Device MAC address',
+            description: 'Device UUID',
+            required: true,
+          },
+        },
+        timeout: 15000,
+      },
+      {
+        name: 'device.stats',
+        description:
+          'Latest device statistics — CPU, memory, uptime, load averages',
+        capability: 'observe',
+        params: {
+          device_id: {
+            type: 'string',
+            description: 'Device UUID',
             required: true,
           },
         },
@@ -309,35 +316,21 @@ export const unifiPack: IntegrationPack = {
       },
       {
         name: 'clients',
-        description:
-          'Active clients with hostname, IP, MAC, signal, experience',
+        description: 'Connected clients with type, IP, connection time',
         capability: 'observe',
         params: {},
         timeout: 15000,
       },
       {
-        name: 'events',
-        description: 'Recent network events',
-        capability: 'observe',
-        params: {
-          limit: {
-            type: 'number',
-            description: 'Maximum events to return (default: 50)',
-            required: false,
-          },
-        },
-        timeout: 15000,
-      },
-      {
-        name: 'alarms',
-        description: 'Active alarms and alerts',
+        name: 'networks',
+        description: 'List configured networks (VLANs, etc.)',
         capability: 'observe',
         params: {},
         timeout: 15000,
       },
       {
-        name: 'port.forwards',
-        description: 'Port forwarding rules',
+        name: 'wans',
+        description: 'WAN interface definitions',
         capability: 'observe',
         params: {},
         timeout: 15000,
@@ -345,24 +338,29 @@ export const unifiPack: IntegrationPack = {
     ],
     runbook: {
       category: 'network',
-      probes: ['site.health', 'devices', 'alarms'],
+      probes: ['info', 'devices', 'clients'],
       parallel: true,
     },
   },
 
   handlers: {
-    'site.health': siteHealth,
+    info: appInfo,
+    sites,
     devices,
     'device.detail': deviceDetail,
+    'device.stats': deviceStats,
     clients,
-    events,
-    alarms,
-    'port.forwards': portForwards,
+    networks,
+    wans,
   },
 
   testConnection: async (config, credentials, fetchFn) => {
-    await ensureSession(config, credentials, fetchFn);
-    const result = await unifiFetch('stat/health', config, credentials, fetchFn);
-    return Array.isArray(result);
+    const result = await unifiFetch<{ applicationVersion: string }>(
+      '/v1/info',
+      config,
+      credentials,
+      fetchFn,
+    );
+    return typeof result.applicationVersion === 'string';
   },
 };
