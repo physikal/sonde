@@ -146,6 +146,7 @@ Copy-Item (Join-Path $InstallerDir 'service-configs/start-hub.cmd') `
 # --- Step 5: Build MSI ---
 Write-Host "[5/5] Building MSI with WiX..." -ForegroundColor Yellow
 wix extension add WixToolset.Util.wixext/5.0.2
+wix extension add WixToolset.UI.wixext/5.0.2
 $WxsFiles = Get-ChildItem (Join-Path $InstallerDir 'wix') -Filter '*.wxs' |
   ForEach-Object { $_.FullName }
 
@@ -154,6 +155,7 @@ $MsiPath = Join-Path $OutDir "sonde-hub-${Version}-x64.msi"
 $WixArgs = @('build')
 $WixArgs += $WxsFiles
 $WixArgs += '-ext', 'WixToolset.Util.wixext'
+$WixArgs += '-ext', 'WixToolset.UI.wixext'
 $WixArgs += '-d', "StageDir=$StageDir"
 $WixArgs += '-d', "Version=$Version"
 $WixArgs += '-arch', 'x64'

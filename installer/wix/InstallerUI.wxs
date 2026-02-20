@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Fragment>
+    <UI Id="SondeInstallerUI">
+      <ui:WixUI Id="WixUI_Minimal" />
+
+      <!-- SecretModeDlg: choose standalone vs keyvault -->
+      <Dialog Id="SecretModeDlg" Width="370" Height="270"
+              Title="!(loc.InstallDirDlg_Title)">
+        <Control Id="BannerBitmap" Type="Bitmap"
+                 X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line"
+                 X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line"
+                 X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Title" Type="Text"
+                 X="20" Y="50" Width="330" Height="15"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="{\WixUI_Font_Title}Secret Storage Configuration" />
+        <Control Id="Description" Type="Text"
+                 X="25" Y="68" Width="320" Height="30"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="Choose how Sonde Hub stores its encryption secret. Standalone generates a random key locally. Azure Key Vault fetches the key from your vault at startup." />
+
+        <Control Id="SecretModeGroup" Type="RadioButtonGroup"
+                 X="25" Y="110" Width="320" Height="65"
+                 Property="SONDE_SECRET_MODE">
+          <RadioButtonGroup Property="SONDE_SECRET_MODE">
+            <RadioButton Value="standalone"
+                         X="0" Y="0" Width="320" Height="18"
+                         Text="Standalone — generate a random key locally" />
+            <RadioButton Value="keyvault"
+                         X="0" Y="25" Width="320" Height="18"
+                         Text="Azure Key Vault — fetch key from vault at startup" />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="Back" Type="PushButton"
+                 X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="WelcomeDlg">1</Publish>
+        </Control>
+        <Control Id="Next" Type="PushButton"
+                 X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="AzureConfigDlg">
+            <![CDATA[SONDE_SECRET_MODE = "keyvault"]]>
+          </Publish>
+          <Publish Event="NewDialog" Value="VerifyReadyDlg">
+            <![CDATA[SONDE_SECRET_MODE <> "keyvault"]]>
+          </Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton"
+                 X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+      </Dialog>
+
+      <!-- AzureConfigDlg: Key Vault URL, secret name, auth method, creds -->
+      <Dialog Id="AzureConfigDlg" Width="370" Height="270"
+              Title="!(loc.InstallDirDlg_Title)">
+        <Control Id="BannerBitmap" Type="Bitmap"
+                 X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line"
+                 X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line"
+                 X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Title" Type="Text"
+                 X="20" Y="50" Width="330" Height="15"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="{\WixUI_Font_Title}Azure Key Vault Configuration" />
+
+        <!-- Key Vault URL -->
+        <Control Id="VaultUrlLabel" Type="Text"
+                 X="25" Y="70" Width="120" Height="13"
+                 NoPrefix="yes" Text="Key Vault URL:" />
+        <Control Id="VaultUrlEdit" Type="Edit"
+                 X="145" Y="68" Width="200" Height="18"
+                 Property="AZURE_KEYVAULT_URL" />
+
+        <!-- Secret Name -->
+        <Control Id="SecretNameLabel" Type="Text"
+                 X="25" Y="94" Width="120" Height="13"
+                 NoPrefix="yes" Text="Secret Name:" />
+        <Control Id="SecretNameEdit" Type="Edit"
+                 X="145" Y="92" Width="200" Height="18"
+                 Property="AZURE_KEYVAULT_SECRET_NAME" />
+
+        <!-- Auth Method -->
+        <Control Id="AuthMethodLabel" Type="Text"
+                 X="25" Y="118" Width="120" Height="13"
+                 NoPrefix="yes" Text="Auth Method:" />
+        <Control Id="AuthMethodGroup" Type="RadioButtonGroup"
+                 X="145" Y="116" Width="200" Height="40"
+                 Property="AZURE_AUTH_METHOD">
+          <RadioButtonGroup Property="AZURE_AUTH_METHOD">
+            <RadioButton Value="managed_identity"
+                         X="0" Y="0" Width="200" Height="18"
+                         Text="Managed Identity" />
+            <RadioButton Value="app_registration"
+                         X="0" Y="20" Width="200" Height="18"
+                         Text="App Registration" />
+          </RadioButtonGroup>
+        </Control>
+
+        <!-- Tenant ID (App Registration only) -->
+        <Control Id="TenantIdLabel" Type="Text"
+                 X="25" Y="162" Width="120" Height="13"
+                 NoPrefix="yes"
+                 Text="Tenant ID (App Reg only):" />
+        <Control Id="TenantIdEdit" Type="Edit"
+                 X="145" Y="160" Width="200" Height="18"
+                 Property="AZURE_TENANT_ID" />
+
+        <!-- Client ID (App Registration only) -->
+        <Control Id="ClientIdLabel" Type="Text"
+                 X="25" Y="186" Width="120" Height="13"
+                 NoPrefix="yes"
+                 Text="Client ID (App Reg only):" />
+        <Control Id="ClientIdEdit" Type="Edit"
+                 X="145" Y="184" Width="200" Height="18"
+                 Property="AZURE_CLIENT_ID" />
+
+        <!-- Client Secret (App Registration only) -->
+        <Control Id="ClientSecretLabel" Type="Text"
+                 X="25" Y="210" Width="120" Height="13"
+                 NoPrefix="yes"
+                 Text="Client Secret (App Reg only):" />
+        <Control Id="ClientSecretEdit" Type="Edit"
+                 X="145" Y="208" Width="200" Height="18"
+                 Property="AZURE_CLIENT_SECRET" Password="yes" />
+
+        <Control Id="Back" Type="PushButton"
+                 X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="SecretModeDlg">1</Publish>
+        </Control>
+        <Control Id="Next" Type="PushButton"
+                 X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton"
+                 X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+      </Dialog>
+
+      <!-- Navigation overrides: inject custom dialogs into WixUI_Minimal flow -->
+
+      <!-- WelcomeDlg Next → SecretModeDlg (overrides default → VerifyReadyDlg) -->
+      <Publish Dialog="WelcomeDlg" Control="Next"
+               Event="NewDialog" Value="SecretModeDlg"
+               Order="2">1</Publish>
+
+      <!-- VerifyReadyDlg Back → AzureConfigDlg (if keyvault) -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="AzureConfigDlg"
+               Order="2">
+        <![CDATA[SONDE_SECRET_MODE = "keyvault"]]>
+      </Publish>
+
+      <!-- VerifyReadyDlg Back → SecretModeDlg (if standalone) -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="SecretModeDlg"
+               Order="2">
+        <![CDATA[SONDE_SECRET_MODE <> "keyvault"]]>
+      </Publish>
+    </UI>
+  </Fragment>
+
+</Wix>
