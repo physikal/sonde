@@ -129,7 +129,7 @@ export function TagsManagement() {
     <div className="space-y-6 p-8">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-semibold text-white">Tags</h1>
-        <span className="rounded-full bg-gray-800 px-2.5 py-0.5 text-xs text-gray-400">
+        <span className="rounded-full bg-gray-800 px-2.5 py-1 text-xs font-medium leading-none text-gray-400">
           {tags.length}
         </span>
       </div>

@@ -33,7 +33,7 @@ export function Users() {
         <dl className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
             <dt className="flex items-center gap-2">
-              <span className="inline-block rounded-full border bg-gray-800 text-gray-300 border-gray-700 px-2 py-0.5 text-xs font-medium">
+              <span className="inline-block rounded-full border border-gray-700 bg-gray-800 px-2.5 py-1 text-xs font-medium leading-none text-gray-300">
                 member
               </span>
             </dt>
@@ -45,7 +45,7 @@ export function Users() {
           </div>
           <div className="rounded-md border border-gray-800 bg-gray-900 px-4 py-3">
             <dt className="flex items-center gap-2">
-              <span className="inline-block rounded-full border bg-blue-900/50 text-blue-300 border-blue-700 px-2 py-0.5 text-xs font-medium">
+              <span className="inline-block rounded-full border border-blue-700 bg-blue-900/50 px-2.5 py-1 text-xs font-medium leading-none text-blue-300">
                 admin
               </span>
             </dt>
@@ -230,17 +230,17 @@ function IndividualUsersSection() {
                   </td>
                   <td className="py-3 pr-4">
                     {user.enabled ? (
-                      <span className="inline-block rounded-full bg-emerald-900/50 px-2 py-0.5 text-xs text-emerald-400">
+                      <span className="inline-block rounded-full bg-emerald-900/50 px-2.5 py-1 text-xs font-medium leading-none text-emerald-400">
                         enabled
                       </span>
                     ) : (
-                      <span className="inline-block rounded-full bg-red-900/50 px-2 py-0.5 text-xs text-red-400">
+                      <span className="inline-block rounded-full bg-red-900/50 px-2.5 py-1 text-xs font-medium leading-none text-red-400">
                         disabled
                       </span>
                     )}
                   </td>
                   <td className="py-3 pr-4">
-                    <span className="inline-block rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+                    <span className="inline-block rounded-full bg-gray-800 px-2.5 py-1 text-xs font-medium leading-none text-gray-400">
                       {user.createdBy}
                     </span>
                   </td>

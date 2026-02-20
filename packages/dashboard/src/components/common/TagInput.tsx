@@ -27,7 +27,7 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1"
+      className="flex flex-wrap items-center gap-1.5"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
@@ -36,17 +36,18 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
         return (
         <span
           key={tag}
-          className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs"
+          className="inline-flex items-center rounded-md text-xs font-medium leading-none"
           style={{ backgroundColor: color.bg, color: color.text }}
         >
-          {tag}
+          <span className="py-1 pl-2 pr-1.5">{tag}</span>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onRemove(tag);
             }}
-            className="ml-0.5 text-gray-500 hover:text-gray-200"
+            className="flex items-center rounded-r-md py-1 pr-1.5 pl-1 opacity-60 hover:opacity-100"
+            style={{ backgroundColor: color.deleteBg, color: color.text }}
           >
             &times;
           </button>
@@ -68,7 +69,7 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
           }}
           placeholder="tag"
           autoFocus
-          className="w-16 rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-xs text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+          className="w-20 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
         />
       ) : (
         <button
@@ -77,7 +78,7 @@ export function TagInput({ tags, onAdd, onRemove }: TagInputProps) {
             e.stopPropagation();
             setEditing(true);
           }}
-          className="rounded bg-gray-800 px-1 py-0.5 text-xs text-gray-500 hover:text-gray-300"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-800 text-sm font-medium text-gray-500 hover:bg-gray-700 hover:text-gray-300"
         >
           +
         </button>

@@ -5,7 +5,7 @@ export function TagBadge({ tag }: { tag: string }) {
 
   return (
     <span
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs"
+      className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium leading-none"
       style={{ backgroundColor: color.bg, color: color.text }}
     >
       {tag}
