@@ -128,7 +128,7 @@ export function createMcpHandler(
       'list_agents',
       {
         description:
-          'List all registered agents with their status, packs, tags, and last seen time. Use when the user asks about their fleet or specific agents. For diagnostic workflows, prefer health_check (to run checks) or list_capabilities (to discover available probes). Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "show #prod agents"). Do NOT infer tags from natural language.',
+          'Fleet inventory: list registered agents with status and tags. NOT for starting diagnostic workflows — call list_capabilities first instead, which returns agents AND their available probes/categories. Only use list_agents when the user specifically asks to see their fleet roster or agent metadata. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "show #prod agents"). Do NOT infer tags from natural language.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
@@ -147,7 +147,7 @@ export function createMcpHandler(
       'agent_overview',
       {
         description:
-          'Get detailed information about a single agent including pack details and status.',
+          'Get detailed information about a single agent including pack details and status. Call list_capabilities first to discover agent names and their probes.',
         inputSchema: z.object({
           agent: z.string().describe('Agent name or ID'),
         }),
@@ -161,7 +161,7 @@ export function createMcpHandler(
       'list_capabilities',
       {
         description:
-          'Discover available agents, integrations, their individual probes, and diagnostic categories. Use to find what specific probes you can run for follow-up after health_check reveals an issue. No probes executed — returns metadata only. Agents run probes on remote machines. Integrations run probes server-side via external APIs. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "check #prod #database"). Do NOT infer tags from natural language.',
+          'REQUIRED FIRST STEP — call this before any other Sonde tool. Returns all available agents, integrations, their exact probe names, and diagnostic categories. You need this data to know what probes exist and what agents/integrations to target. No probes executed — returns metadata only. Agents run probes on remote machines. Integrations run probes server-side via external APIs. Optionally filter by tags (AND logic). IMPORTANT: Only apply tag filtering when the user explicitly uses #tagname syntax (e.g. "check #prod #database"). Do NOT infer tags from natural language.',
         inputSchema: z.object({
           tags: z
             .array(z.string())
