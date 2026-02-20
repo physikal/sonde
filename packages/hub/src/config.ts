@@ -1,10 +1,14 @@
 import { DEFAULT_HUB_PORT } from '@sonde/shared';
+import { fetchSecretFromKeyVault } from './keyvault.js';
 import { logger } from './logger.js';
+
+export type SecretSource = 'local' | 'keyvault';
 
 export interface HubConfig {
   port: number;
   host: string;
   secret: string;
+  secretSource: SecretSource;
   dbPath: string;
   tlsEnabled: boolean;
   hubUrl?: string;
@@ -12,17 +16,40 @@ export interface HubConfig {
   adminPassword?: string;
 }
 
-export function loadConfig(): HubConfig {
-  let secret = process.env.SONDE_SECRET;
-  if (!secret && process.env.SONDE_API_KEY) {
-    secret = process.env.SONDE_API_KEY;
-    logger.warn(
-      'SONDE_API_KEY is deprecated — use SONDE_SECRET instead. API keys are now managed via the dashboard.',
+export async function loadConfig(): Promise<HubConfig> {
+  const secretSource = (process.env.SONDE_SECRET_SOURCE ?? 'local') as string;
+  if (secretSource !== 'local' && secretSource !== 'keyvault') {
+    throw new Error(
+      `Invalid SONDE_SECRET_SOURCE: "${secretSource}". Must be "local" or "keyvault".`,
     );
   }
-  if (!secret) {
-    throw new Error('SONDE_SECRET environment variable is required');
+
+  let secret: string | undefined;
+
+  if (secretSource === 'keyvault') {
+    const vaultUrl = process.env.AZURE_KEYVAULT_URL;
+    if (!vaultUrl) {
+      throw new Error(
+        'AZURE_KEYVAULT_URL is required when SONDE_SECRET_SOURCE=keyvault. ' +
+          'Set it to your vault URL, e.g. https://sonde-vault.vault.azure.net',
+      );
+    }
+
+    const secretName = process.env.AZURE_KEYVAULT_SECRET_NAME ?? 'sonde-secret';
+    secret = await fetchSecretFromKeyVault(vaultUrl, secretName);
+  } else {
+    secret = process.env.SONDE_SECRET;
+    if (!secret && process.env.SONDE_API_KEY) {
+      secret = process.env.SONDE_API_KEY;
+      logger.warn(
+        'SONDE_API_KEY is deprecated — use SONDE_SECRET instead. API keys are now managed via the dashboard.',
+      );
+    }
+    if (!secret) {
+      throw new Error('SONDE_SECRET environment variable is required');
+    }
   }
+
   if (secret.length < 16) {
     throw new Error('SONDE_SECRET must be at least 16 characters.');
   }
@@ -39,6 +66,7 @@ export function loadConfig(): HubConfig {
     port,
     host: process.env.HOST ?? '0.0.0.0',
     secret,
+    secretSource: secretSource as SecretSource,
     dbPath: process.env.SONDE_DB_PATH ?? './sonde.db',
     tlsEnabled: process.env.SONDE_TLS === 'true',
     hubUrl: process.env.SONDE_HUB_URL || undefined,

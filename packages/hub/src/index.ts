@@ -91,7 +91,7 @@ import { semverLt, startVersionCheckLoop } from './version-check.js';
 import { AgentDispatcher } from './ws/dispatcher.js';
 import { setupWsServer } from './ws/server.js';
 
-const config = loadConfig();
+const config = await loadConfig();
 const db = new SondeDb(config.dbPath);
 const sessionManager = new SessionManager(db);
 sessionManager.startCleanupLoop();
@@ -1903,6 +1903,7 @@ server.listen(config.port, config.host, () => {
   console.log(`  WebSocket: ${wsProtocol}://${config.host}:${config.port}/ws/agent`);
   console.log(`  Health:    ${protocol}://${config.host}:${config.port}/health`);
   console.log(`  Database:  ${config.dbPath}`);
+  console.log(`  Secret:    ${config.secretSource === 'keyvault' ? 'Azure Key Vault' : 'local env'}`);
   if (config.tlsEnabled) console.log('  TLS:       enabled (mTLS)');
   if (config.adminUser) console.log('  Admin auth: enabled');
   if (config.hubUrl) console.log(`  OAuth:     ${config.hubUrl}`);
