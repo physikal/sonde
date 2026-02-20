@@ -67,6 +67,7 @@ The following tools are available to AI clients via `tools/list` and `tools/call
 | `list_agents` | List all agents with connection status, packs, and tags. | Optional `tags` |
 | `agent_overview` | Detailed info for a specific agent. | `agent` (name or ID) |
 | `query_logs` | Query logs from agents (Docker, systemd, nginx) or the hub audit trail. | `source`, optional `agent`, filters |
+| `check_critical_path` | Execute a predefined critical path — an ordered chain of infrastructure checkpoints. All steps run in parallel, returning pass/fail per hop with timing. | `path` (name) |
 
 The `tags` parameter accepts an array of tag names (without `#` prefix). When provided, results are filtered to agents and integrations matching **all** specified tags (AND logic).
 
@@ -304,6 +305,110 @@ curl -fsSL https://your-hub-url:3000/install | bash
 ```
 
 The script installs Node.js 22 (if needed) and `@sonde/agent`, then launches the enrollment TUI. Supports Linux (apt, dnf, yum) and macOS (Homebrew).
+
+### Critical Paths
+
+Admin-only endpoints for managing critical paths — predefined ordered chains of infrastructure checkpoints. Requires `admin` role or higher.
+
+#### `POST /api/v1/critical-paths`
+
+Create a new critical path with optional steps.
+
+**Request:**
+```json
+{
+  "name": "storefront",
+  "description": "Storefront request path from LB to DB",
+  "steps": [
+    {
+      "label": "Load Balancer",
+      "targetType": "agent",
+      "targetId": "lb-01",
+      "probes": ["system.cpu.usage", "system.memory.usage"]
+    },
+    {
+      "label": "Web Server",
+      "targetType": "agent",
+      "targetId": "web-01",
+      "probes": ["system.cpu.usage", "nginx.status"]
+    }
+  ]
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "name": "storefront",
+  "description": "Storefront request path from LB to DB",
+  "steps": [...]
+}
+```
+
+#### `GET /api/v1/critical-paths`
+
+List all critical paths with step counts.
+
+**Response:**
+```json
+{
+  "paths": [
+    {
+      "id": "uuid",
+      "name": "storefront",
+      "description": "...",
+      "stepCount": 4,
+      "createdAt": "2026-02-20T12:00:00.000Z",
+      "updatedAt": "2026-02-20T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `GET /api/v1/critical-paths/:id`
+
+Get a critical path with full step details.
+
+#### `PUT /api/v1/critical-paths/:id`
+
+Update path metadata and/or replace steps.
+
+#### `DELETE /api/v1/critical-paths/:id`
+
+Delete a critical path. Steps are cascade-deleted.
+
+#### `POST /api/v1/critical-paths/:id/execute`
+
+Execute all steps in parallel. Returns per-step and per-probe status with timing.
+
+**Response:**
+```json
+{
+  "path": "storefront",
+  "description": "...",
+  "overallStatus": "partial",
+  "totalDurationMs": 1523,
+  "steps": [
+    {
+      "stepOrder": 0,
+      "label": "Load Balancer",
+      "targetType": "agent",
+      "targetId": "lb-01",
+      "status": "pass",
+      "durationMs": 842,
+      "probes": [
+        {
+          "name": "system.cpu.usage",
+          "status": "success",
+          "durationMs": 234,
+          "data": { ... }
+        }
+      ]
+    }
+  ]
+}
+```
 
 ### Settings
 

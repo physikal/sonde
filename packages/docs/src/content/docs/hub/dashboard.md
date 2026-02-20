@@ -165,6 +165,38 @@ A built-in diagnostic testing interface:
 
 Useful for testing probe functionality without needing an AI client connected.
 
+### Critical Paths
+
+Define ordered chains of infrastructure checkpoints that Claude can traverse with a single MCP tool call. For example, a "storefront" path might check: Load Balancer -> Web Server -> App Server -> Database.
+
+**Creating a path:**
+
+1. Navigate to **Diagnostics** > **Critical Paths**
+2. Click **Create Critical Path**
+3. Enter a name (used by the MCP tool, e.g. `storefront`) and optional description
+4. Add steps using the **+** button in the chain diagram
+
+**Each step defines a checkpoint:**
+
+- **Label** — Display name (e.g. "Load Balancer")
+- **Target Type** — Agent (probes on a remote machine) or Integration (probes via external API)
+- **Target** — Which agent or integration to check
+- **Probes** — Which probes to run (filtered to available probes for the selected target)
+
+**Chain diagram:**
+
+The visual chain shows steps connected with arrows. Each step card shows the step number, label, target badge, and probe count. After execution, steps show color-coded borders (green = pass, red = fail, amber = partial) with duration badges.
+
+Use the arrow buttons on hover to reorder steps. Click any step to edit it.
+
+**Running a path:**
+
+Click **Run Path** to execute all steps in parallel. Results overlay on the chain diagram. An overall status banner shows pass/fail/partial with total duration.
+
+**MCP integration:**
+
+AI clients can execute paths directly via `check_critical_path({ path: "storefront" })`. The `list_capabilities` tool includes available critical paths in its output.
+
 ### Policies
 
 Configure per-API-key access policies across three dimensions:
@@ -212,6 +244,7 @@ See [Security & Authentication](/reference/security) for the full Entra SSO setu
 | MCP tools (probe, diagnose, etc.) | Yes | Yes | Yes |
 | Dashboard — My API Keys | Yes | Yes | Yes |
 | Dashboard — Fleet, agents, diagnostics | No | Yes | Yes |
+| Critical path management | No | Yes | Yes |
 | Enrollment, admin API key management | No | Yes | Yes |
 | Integration management | No | Yes | Yes |
 | User management | No | Yes | Yes |
