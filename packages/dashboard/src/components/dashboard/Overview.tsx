@@ -121,10 +121,10 @@ export function Overview() {
   }
 
   return (
-    <div className="p-8">
+    <div className="flex h-full flex-col p-8">
       <h1 className="text-2xl font-semibold text-white">Overview</h1>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Hub status card */}
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Hub Status</p>
@@ -158,17 +158,17 @@ export function Overview() {
       </div>
 
       {/* Activity panels */}
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Integration activity */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-800 px-4 py-3">
+        <div className="flex min-h-0 flex-col rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-gray-800 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">Integration Activity</h2>
             <span className="text-xs text-gray-500">({integrationEvents.length})</span>
           </div>
           {integrationEvents.length === 0 ? (
             <p className="px-4 py-6 text-sm text-gray-500">No integration events yet.</p>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {integrationEvents.map((event) => {
                 const base = TYPE_BADGES[event.eventType] ?? {
                   bg: 'bg-gray-800',
@@ -215,15 +215,15 @@ export function Overview() {
         </div>
 
         {/* Agent activity */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-gray-800 px-4 py-3">
+        <div className="flex min-h-0 flex-col rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-gray-800 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">Agent Activity</h2>
             <span className="text-xs text-gray-500">({agentAudit.length})</span>
           </div>
           {agentAudit.length === 0 ? (
             <p className="px-4 py-6 text-sm text-gray-500">No agent activity yet.</p>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {agentAudit.map((entry) => (
                   <button
                     key={entry.id}

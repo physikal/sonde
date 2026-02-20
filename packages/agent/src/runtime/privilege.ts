@@ -6,13 +6,16 @@ export function checkNotRoot(): void {
     console.error('Error: sonde agent must not run as root.');
     console.error('');
     if (sondeUserExists()) {
-      console.error('A "sonde" user exists. Run the agent as that user:');
-      console.error('  su -s /bin/sh sonde -c "sonde start --headless"');
+      console.error('A "sonde" user exists. Install the systemd service:');
+      console.error('  sonde service install');
+      console.error('');
+      console.error('Or start interactively as the sonde user:');
+      console.error('  su -s /bin/sh sonde -c "sonde start"');
     } else {
       console.error('Create a dedicated user and re-run the installer:');
       console.error('  useradd --system --home-dir /var/lib/sonde --create-home \\');
       console.error('    --shell /usr/sbin/nologin sonde');
-      console.error('  su -s /bin/sh sonde -c "sonde install --hub <HUB_URL>"');
+      console.error('  sonde service install');
     }
     process.exit(1);
   }
