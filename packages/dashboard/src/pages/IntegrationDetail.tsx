@@ -429,6 +429,56 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'unifi',
+    label: 'UniFi Network',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'Controller admin username',
+          tooltip: 'Local admin account on the UniFi controller',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          sensitive: true,
+        },
+        {
+          key: 'site',
+          label: 'Site',
+          placeholder: 'default',
+          tooltip:
+            'UniFi site name. Leave as "default" for single-site deployments.',
+        },
+        {
+          key: 'controllerType',
+          label: 'Controller Type',
+          placeholder: 'udm',
+          tooltip:
+            '"udm" for UDM/UDM-Pro/UDM-SE, "selfhosted" for Cloud Key or manual install',
+        },
+      ],
+    },
+  },
+  {
+    value: 'unifi-access',
+    label: 'UniFi Access',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'apiToken',
+          label: 'API Token',
+          sensitive: true,
+          tooltip:
+            'Bearer token from UniFi Access settings (Developer API)',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     authMethods: ['api_key', 'bearer_token', 'oauth2'],

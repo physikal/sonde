@@ -481,6 +481,62 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
     },
   },
   {
+    value: 'unifi',
+    label: 'UniFi Network',
+    description:
+      'Site health, devices, clients, events, alarms, port forwards',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'username',
+          label: 'Username',
+          placeholder: 'Controller admin username',
+          tooltip: 'Local admin account on the UniFi controller',
+        },
+        {
+          key: 'password',
+          label: 'Password',
+          placeholder: 'Controller admin password',
+          sensitive: true,
+        },
+        {
+          key: 'site',
+          label: 'Site',
+          placeholder: 'default',
+          tooltip:
+            'UniFi site name. Leave as "default" for single-site deployments.',
+        },
+        {
+          key: 'controllerType',
+          label: 'Controller Type',
+          placeholder: 'udm',
+          tooltip:
+            '"udm" for UDM/UDM-Pro/UDM-SE, "selfhosted" for Cloud Key or manual install',
+        },
+      ],
+    },
+  },
+  {
+    value: 'unifi-access',
+    label: 'UniFi Access',
+    description:
+      'Door status, access event logs, reader and hub devices',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'apiToken',
+          label: 'API Token',
+          placeholder: 'UniFi Access API token',
+          sensitive: true,
+          tooltip:
+            'Bearer token from UniFi Access settings (Developer API)',
+        },
+      ],
+    },
+  },
+  {
     value: 'custom',
     label: 'Custom',
     description: 'Connect to any REST API',
@@ -520,6 +576,8 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   meraki: 'https://api.meraki.com',
   checkpoint: 'https://mgmt-server.corp.local',
   a10: 'https://thunder01.corp.local',
+  unifi: 'https://192.168.1.1',
+  'unifi-access': 'https://192.168.1.1/proxy/access/api/v1/developer',
   custom: 'https://api.example.com',
 };
 
@@ -544,6 +602,10 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
   meraki: 'Always https://api.meraki.com for all accounts',
   checkpoint: 'Check Point Management Server IP/hostname. Default port 443.',
   a10: 'A10 Thunder/vThunder management IP. Default port 443.',
+  unifi:
+    'UDM: https://192.168.1.1. Self-hosted: https://host:8443. Self-signed cert is common.',
+  'unifi-access':
+    'Through UDM: https://ip/proxy/access/api/v1/developer. Direct: https://host:12445/api/v1/developer.',
 };
 
 const NAME_PLACEHOLDERS: Record<string, string> = {
@@ -563,6 +625,8 @@ const NAME_PLACEHOLDERS: Record<string, string> = {
   meraki: 'e.g. meraki-prod',
   checkpoint: 'e.g. checkpoint-mgmt-01',
   a10: 'e.g. a10-thunder-01',
+  unifi: 'e.g. unifi-home',
+  'unifi-access': 'e.g. unifi-access-office',
   custom: 'e.g. my-integration',
 };
 
