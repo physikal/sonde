@@ -26,6 +26,7 @@
       <ComponentGroupRef Id="HubAppFiles" />
       <ComponentGroupRef Id="HubServiceComponents" />
       <ComponentGroupRef Id="DataDirectoryComponents" />
+      <ComponentRef Id="RememberProperties" />
     </Feature>
 
     <!--
@@ -55,14 +56,52 @@
 
     <UIRef Id="SondeInstallerUI" />
 
-    <Property Id="SONDE_SECRET_MODE" Value="standalone" Secure="yes" />
-    <Property Id="AZURE_KEYVAULT_URL" Secure="yes" />
-    <Property Id="AZURE_KEYVAULT_SECRET_NAME" Value="sonde-secret" Secure="yes" />
-    <Property Id="AZURE_AUTH_METHOD" Value="managed_identity" Secure="yes" />
-    <Property Id="AZURE_TENANT_ID" Secure="yes" />
-    <Property Id="AZURE_CLIENT_ID" Secure="yes" />
+    <Property Id="SONDE_SECRET_MODE" Value="standalone" Secure="yes">
+      <RegistrySearch Id="RememberSecretMode" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="SecretMode" Type="raw" />
+    </Property>
+    <Property Id="AZURE_KEYVAULT_URL" Secure="yes">
+      <RegistrySearch Id="RememberVaultUrl" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="AzureKeyVaultUrl" Type="raw" />
+    </Property>
+    <Property Id="AZURE_KEYVAULT_SECRET_NAME" Value="sonde-secret" Secure="yes">
+      <RegistrySearch Id="RememberSecretName" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="AzureKeyVaultSecretName" Type="raw" />
+    </Property>
+    <Property Id="AZURE_AUTH_METHOD" Value="managed_identity" Secure="yes">
+      <RegistrySearch Id="RememberAuthMethod" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="AzureAuthMethod" Type="raw" />
+    </Property>
+    <Property Id="AZURE_TENANT_ID" Secure="yes">
+      <RegistrySearch Id="RememberTenantId" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="AzureTenantId" Type="raw" />
+    </Property>
+    <Property Id="AZURE_CLIENT_ID" Secure="yes">
+      <RegistrySearch Id="RememberClientId" Root="HKLM"
+                      Key="SOFTWARE\Sonde\Hub" Name="AzureClientId" Type="raw" />
+    </Property>
     <Property Id="AZURE_CLIENT_SECRET" Secure="yes" Hidden="yes" />
 
   </Package>
+
+  <Fragment>
+    <Component Id="RememberProperties" Directory="INSTALLFOLDER"
+               Guid="4f8a2c6e-b3d1-4e7f-9a5c-8d2e1f0b3a6c">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Sonde\Hub">
+        <RegistryValue Name="SecretMode" Value="[SONDE_SECRET_MODE]"
+                       Type="string" KeyPath="yes" />
+        <RegistryValue Name="AzureKeyVaultUrl" Value="[AZURE_KEYVAULT_URL]"
+                       Type="string" />
+        <RegistryValue Name="AzureKeyVaultSecretName"
+                       Value="[AZURE_KEYVAULT_SECRET_NAME]" Type="string" />
+        <RegistryValue Name="AzureAuthMethod" Value="[AZURE_AUTH_METHOD]"
+                       Type="string" />
+        <RegistryValue Name="AzureTenantId" Value="[AZURE_TENANT_ID]"
+                       Type="string" />
+        <RegistryValue Name="AzureClientId" Value="[AZURE_CLIENT_ID]"
+                       Type="string" />
+      </RegistryKey>
+    </Component>
+  </Fragment>
 
 </Wix>

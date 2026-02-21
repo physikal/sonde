@@ -17,12 +17,12 @@ describe('runMigrations', () => {
 
     const applied = runMigrations(db);
 
-    expect(applied).toBe(12);
+    expect(applied).toBe(14);
 
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(14);
 
     // Verify tables from migration 001 exist
     const tables = db
@@ -72,7 +72,7 @@ describe('runMigrations', () => {
     db.pragma('foreign_keys = ON');
 
     const first = runMigrations(db);
-    expect(first).toBe(12);
+    expect(first).toBe(14);
 
     const second = runMigrations(db);
     expect(second).toBe(0);
@@ -80,7 +80,7 @@ describe('runMigrations', () => {
     const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
       version: number;
     };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(14);
   });
 
   it('should apply only new migrations when a new one is added', async () => {
@@ -95,7 +95,7 @@ describe('runMigrations', () => {
     const { migrations } = await import('./migrations/index.js');
 
     const fakeMigration: Migration = {
-      version: 13,
+      version: 15,
       up: (database) => {
         database.exec(
           'CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, data TEXT NOT NULL)',
@@ -112,7 +112,7 @@ describe('runMigrations', () => {
       const row = db.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
         version: number;
       };
-      expect(row.version).toBe(13);
+      expect(row.version).toBe(15);
 
       // Verify test_table was created
       const tables = db

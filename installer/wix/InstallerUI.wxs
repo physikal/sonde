@@ -1,10 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 
   <Fragment>
     <UI Id="SondeInstallerUI">
-      <ui:WixUI Id="WixUI_Minimal" />
+      <!-- Required font styles -->
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <!-- Standard dialog references -->
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="ExitDialog" />
+      <DialogRef Id="WelcomeDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+      <DialogRef Id="VerifyReadyDlg" />
+
+      <!-- =============== Custom Dialogs =============== -->
 
       <!-- SecretModeDlg: choose standalone vs keyvault -->
       <Dialog Id="SecretModeDlg" Width="370" Height="270"
@@ -42,7 +62,10 @@
         <Control Id="Back" Type="PushButton"
                  X="180" Y="243" Width="56" Height="17"
                  Text="!(loc.WixUIBack)">
-          <Publish Event="NewDialog" Value="WelcomeDlg" />
+          <Publish Event="NewDialog" Value="WelcomeDlg"
+                   Condition="NOT Installed" />
+          <Publish Event="NewDialog" Value="MaintenanceTypeDlg"
+                   Condition="Installed" />
         </Control>
         <Control Id="Next" Type="PushButton"
                  X="236" Y="243" Width="56" Height="17"
@@ -152,25 +175,98 @@
         </Control>
       </Dialog>
 
-      <!-- Navigation overrides: inject custom dialogs into WixUI_Minimal flow -->
+      <!-- =============== Fresh Install Navigation =============== -->
 
-      <!-- WelcomeDlg Next → SecretModeDlg (overrides default → VerifyReadyDlg) -->
+      <!-- WelcomeDlg Next → SecretModeDlg (fresh install) -->
       <Publish Dialog="WelcomeDlg" Control="Next"
                Event="NewDialog" Value="SecretModeDlg"
-               Order="2" />
+               Condition="NOT Installed" />
 
-      <!-- VerifyReadyDlg Back → AzureConfigDlg (if keyvault) -->
+      <!-- WelcomeDlg Next → VerifyReadyDlg (patch) -->
+      <Publish Dialog="WelcomeDlg" Control="Next"
+               Event="NewDialog" Value="VerifyReadyDlg"
+               Condition="Installed AND PATCH" />
+
+      <!-- =============== Maintenance Navigation =============== -->
+
+      <!-- MaintenanceWelcomeDlg Next → MaintenanceTypeDlg -->
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next"
+               Event="NewDialog" Value="MaintenanceTypeDlg" />
+
+      <!-- MaintenanceTypeDlg: Change → set mode, reinstall flag, go to SecretModeDlg -->
+      <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
+               Event="[WixUI_InstallMode]" Value="Change" Order="1" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
+               Event="[REINSTALL]" Value="ALL" Order="2" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
+               Event="NewDialog" Value="SecretModeDlg" Order="3" />
+
+      <!-- MaintenanceTypeDlg: Repair → set mode, reinstall flag, go to VerifyReadyDlg -->
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
+               Event="[WixUI_InstallMode]" Value="Repair" Order="1" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
+               Event="[REINSTALL]" Value="ALL" Order="2" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
+               Event="NewDialog" Value="VerifyReadyDlg" Order="3" />
+
+      <!-- MaintenanceTypeDlg: Remove → set mode, remove flag, go to VerifyReadyDlg -->
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
+               Event="[WixUI_InstallMode]" Value="Remove" Order="1" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
+               Event="[REMOVE]" Value="ALL" Order="2" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
+               Event="NewDialog" Value="VerifyReadyDlg" Order="3" />
+
+      <!-- MaintenanceTypeDlg: Back → MaintenanceWelcomeDlg -->
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back"
+               Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+
+      <!-- =============== VerifyReadyDlg Back Navigation =============== -->
+      <!-- Order determines priority: last matching condition wins -->
+
+      <!-- Maintenance (Repair/Remove fallback) → MaintenanceTypeDlg -->
       <Publish Dialog="VerifyReadyDlg" Control="Back"
-               Event="NewDialog" Value="AzureConfigDlg"
-               Order="2"
-               Condition="SONDE_SECRET_MODE = &quot;keyvault&quot;" />
+               Event="NewDialog" Value="MaintenanceTypeDlg"
+               Order="1"
+               Condition="Installed" />
 
-      <!-- VerifyReadyDlg Back → SecretModeDlg (if standalone) -->
+      <!-- Fresh install + standalone → SecretModeDlg -->
       <Publish Dialog="VerifyReadyDlg" Control="Back"
                Event="NewDialog" Value="SecretModeDlg"
                Order="2"
-               Condition="SONDE_SECRET_MODE &lt;&gt; &quot;keyvault&quot;" />
+               Condition="NOT Installed AND SONDE_SECRET_MODE &lt;&gt; &quot;keyvault&quot;" />
+
+      <!-- Fresh install + keyvault → AzureConfigDlg -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="AzureConfigDlg"
+               Order="3"
+               Condition="NOT Installed AND SONDE_SECRET_MODE = &quot;keyvault&quot;" />
+
+      <!-- Maintenance Change + keyvault → AzureConfigDlg -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="AzureConfigDlg"
+               Order="4"
+               Condition="Installed AND WixUI_InstallMode = &quot;Change&quot; AND SONDE_SECRET_MODE = &quot;keyvault&quot;" />
+
+      <!-- Maintenance Change + standalone → SecretModeDlg -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="SecretModeDlg"
+               Order="5"
+               Condition="Installed AND WixUI_InstallMode = &quot;Change&quot; AND SONDE_SECRET_MODE &lt;&gt; &quot;keyvault&quot;" />
+
+      <!-- Patch → WelcomeDlg -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back"
+               Event="NewDialog" Value="WelcomeDlg"
+               Order="6"
+               Condition="Installed AND PATCH" />
+
+      <!-- =============== Exit =============== -->
+
+      <Publish Dialog="ExitDialog" Control="Finish"
+               Event="EndDialog" Value="Return" Order="999" />
     </UI>
+
+    <UIRef Id="WixUI_Common" />
   </Fragment>
 
 </Wix>

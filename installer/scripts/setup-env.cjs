@@ -1,6 +1,6 @@
 /**
- * Post-install script: generates sonde-hub.env with SONDE_SECRET
- * if the env file does not already exist.
+ * Post-install script: generates sonde-hub.env with SONDE_SECRET.
+ * Backs up any existing env file before regenerating.
  *
  * Runs as LocalSystem during MSI install — has write access to ProgramData.
  *
@@ -52,15 +52,8 @@ function main() {
   }
 
   if (fs.existsSync(ENV_FILE)) {
-    if (mode === 'standalone') {
-      console.log(`Env file already exists: ${ENV_FILE} — skipping.`);
-      return;
-    }
     const backup = `${ENV_FILE}.bak`;
-    console.log(
-      `Env file exists but mode changed to ${mode} — ` +
-      `backing up to ${backup}`,
-    );
+    console.log(`Backing up existing env file to ${backup}`);
     fs.copyFileSync(ENV_FILE, backup);
   }
 
