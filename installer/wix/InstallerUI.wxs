@@ -282,6 +282,15 @@
     </UI>
 
     <UIRef Id="WixUI_Common" />
+
+    <InstallUISequence>
+      <Show Dialog="WelcomeDlg" Before="PrepareDlg"
+            Condition="NOT Installed" />
+      <Show Dialog="MaintenanceWelcomeDlg" Before="PrepareDlg"
+            Condition="Installed AND NOT RESUME AND NOT Preselected" />
+      <Show Dialog="ResumeDlg" Before="PrepareDlg"
+            Condition="Installed AND (RESUME OR Preselected)" />
+    </InstallUISequence>
   </Fragment>
 
 </Wix>
