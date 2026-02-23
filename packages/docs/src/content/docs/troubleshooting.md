@@ -8,7 +8,7 @@ Common issues and their solutions when deploying and using Sonde.
 
 ### Hub won't start
 
-**"SONDE_SECRET is required"** — Set the `SONDE_SECRET` environment variable. Generate one with `openssl rand -hex 32`.
+**"SONDE_SECRET is required"** — Set the `SONDE_SECRET` environment variable. Generate one with `openssl rand -hex 32`. If using Azure Key Vault, set `SONDE_SECRET_SOURCE=keyvault` instead (see below).
 
 **Can't log into the dashboard** — Set both `SONDE_ADMIN_USER` and `SONDE_ADMIN_PASSWORD` environment variables. The hub starts without them, but dashboard login requires either these credentials or Entra SSO.
 
@@ -35,6 +35,49 @@ If this doesn't return `{ "status": "ok" }`, the hub is unhealthy. Check contain
 ```bash
 docker compose logs -f sonde-hub
 ```
+
+### Azure Key Vault
+
+**"Key Vault authentication failed (401)"** — The identity can't authenticate to the vault.
+
+- **Managed Identity:** Verify the VM or App Service has a system-assigned identity enabled (Azure Portal > VM > Identity > System assigned > Status: On).
+- **App Registration:** Verify `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` are set and correct. Client secrets expire — check if yours needs renewal in Entra > App registrations > Certificates & secrets.
+
+**"Key Vault access denied (403)"** — The identity authenticated but doesn't have permission to read secrets.
+
+- Go to Key Vault > Access control (IAM) > Add role assignment.
+- Assign the **Key Vault Secrets User** role to your managed identity or app registration.
+- If using access policies instead of RBAC, add a policy granting **Secret Get** permission.
+
+**"Key Vault secret not found (404)"** — The secret name doesn't exist in the vault.
+
+- Check the secret name matches what's configured (default: `sonde-secret`).
+- Create it: `az keyvault secret set --vault-name <vault> --name sonde-secret --value $(openssl rand -hex 32)`
+
+**"Cannot reach Key Vault"** — DNS or network connectivity failure.
+
+- Verify the vault URL format: `https://<vault-name>.vault.azure.net` (no trailing slash, no path).
+- Test DNS resolution: `nslookup <vault-name>.vault.azure.net`
+- Check outbound HTTPS (port 443) isn't blocked by a firewall or NSG.
+- If using a private endpoint, verify the private DNS zone is configured.
+
+**"Secret exists but has an empty value"** — The secret was created but never given a value.
+
+- Set it: `az keyvault secret set --vault-name <vault> --name sonde-secret --value $(openssl rand -hex 32)`
+
+**"SONDE_SECRET must be at least 16 characters"** — The secret fetched from Key Vault is too short. Update the secret value in the vault to a longer string (recommended: 64 hex characters via `openssl rand -hex 32`).
+
+### Windows service issues
+
+**Service won't start** — Check the WinSW log at `C:\Program Files\Sonde Hub\sonde-hub.wrapper.log` and the env file at `C:\ProgramData\Sonde\sonde-hub.env`. Common causes:
+
+- Missing or invalid env vars (especially after a Change operation)
+- Port conflict (another service on port 3000)
+- Key Vault unreachable at startup
+
+**Service starts but dashboard is inaccessible** — Verify the `PORT` and `HOST` values in the env file. Check Windows Firewall allows inbound connections on the configured port.
+
+**After Change operation, Key Vault auth fails** — The client secret is not stored in the registry (by design). Re-enter it during the Change wizard. For Managed Identity, no action needed.
 
 ## Agent Issues
 

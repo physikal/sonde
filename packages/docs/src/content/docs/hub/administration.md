@@ -346,10 +346,16 @@ Packs are bundled with the agent package. Updating the agent (`sonde update` or 
 
 | Variable | Required | Description |
 |---|---|---|
-| `SONDE_SECRET` | Yes | Root encryption key. Never rotate without re-entering all credentials. |
+| `SONDE_SECRET` | Yes (local mode) | Root encryption key. Not needed when using Key Vault mode. Never rotate without re-entering all credentials. |
+| `SONDE_SECRET_SOURCE` | No | `local` (default) or `keyvault`. See [Azure Key Vault configuration](/hub/configuration/#azure-key-vault). |
 | `SONDE_DB_PATH` | Recommended | Database file path. Default: `./sonde.db` |
 | `SONDE_ADMIN_USER` | Recommended | Bootstrap admin username (required for dashboard login) |
 | `SONDE_ADMIN_PASSWORD` | Recommended | Bootstrap admin password (required for dashboard login) |
 | `SONDE_HUB_URL` | Recommended | Public URL for SSO callbacks and agent enrollment |
+| `AZURE_KEYVAULT_URL` | Key Vault mode | Vault URL (e.g., `https://sonde-vault.vault.azure.net`) |
+| `AZURE_KEYVAULT_SECRET_NAME` | No | Secret name in vault. Default: `sonde-secret` |
+| `AZURE_TENANT_ID` | App Registration only | Entra tenant ID for service principal auth |
+| `AZURE_CLIENT_ID` | App Registration only | Service principal client ID |
+| `AZURE_CLIENT_SECRET` | App Registration only | Service principal client secret |
 
 Entra SSO is configured through the dashboard (**Settings** > **SSO**), not environment variables. Credentials are encrypted at rest in the database.
