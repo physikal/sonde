@@ -193,29 +193,26 @@
       <Publish Dialog="MaintenanceWelcomeDlg" Control="Next"
                Event="NewDialog" Value="MaintenanceTypeDlg" />
 
-      <!-- MaintenanceTypeDlg: Change → set mode, reinstall flag, go to SecretModeDlg -->
+      <!-- MaintenanceTypeDlg: Change → reinstall flag, go to SecretModeDlg -->
+      <!-- Note: [WixUI_InstallMode]=Change is set by the standard dialog's inline Publish -->
       <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
-               Event="[WixUI_InstallMode]" Value="Change" Order="1" />
+               Event="[REINSTALL]" Value="ALL" Order="1" />
       <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
-               Event="[REINSTALL]" Value="ALL" Order="2" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton"
-               Event="NewDialog" Value="SecretModeDlg" Order="3" />
+               Event="NewDialog" Value="SecretModeDlg" Order="2" />
 
-      <!-- MaintenanceTypeDlg: Repair → set mode, reinstall flag, go to VerifyReadyDlg -->
+      <!-- MaintenanceTypeDlg: Repair → reinstall flag, go to VerifyReadyDlg -->
+      <!-- Note: [WixUI_InstallMode]=Repair is set by the standard dialog's inline Publish -->
       <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
-               Event="[WixUI_InstallMode]" Value="Repair" Order="1" />
+               Event="[REINSTALL]" Value="ALL" Order="1" />
       <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
-               Event="[REINSTALL]" Value="ALL" Order="2" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton"
-               Event="NewDialog" Value="VerifyReadyDlg" Order="3" />
+               Event="NewDialog" Value="VerifyReadyDlg" Order="2" />
 
-      <!-- MaintenanceTypeDlg: Remove → set mode, remove flag, go to VerifyReadyDlg -->
+      <!-- MaintenanceTypeDlg: Remove → remove flag, go to VerifyReadyDlg -->
+      <!-- Note: [WixUI_InstallMode]=Remove is set by the standard dialog's inline Publish -->
       <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
-               Event="[WixUI_InstallMode]" Value="Remove" Order="1" />
+               Event="[REMOVE]" Value="ALL" Order="1" />
       <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
-               Event="[REMOVE]" Value="ALL" Order="2" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton"
-               Event="NewDialog" Value="VerifyReadyDlg" Order="3" />
+               Event="NewDialog" Value="VerifyReadyDlg" Order="2" />
 
       <!-- MaintenanceTypeDlg: Back → MaintenanceWelcomeDlg -->
       <Publish Dialog="MaintenanceTypeDlg" Control="Back"
