@@ -38,7 +38,15 @@ function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv);
+  const VALID_MODES = ['standalone', 'keyvault'];
   const mode = args['mode'] || 'standalone';
+  if (!VALID_MODES.includes(mode)) {
+    console.error(
+      `Invalid mode: "${mode}"\n` +
+      `  Expected one of: ${VALID_MODES.join(', ')}`,
+    );
+    process.exit(1);
+  }
 
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
