@@ -131,47 +131,32 @@
           </RadioButtonGroup>
         </Control>
 
-        <!-- Tenant ID (visible when App Registration selected) -->
+        <!-- Tenant ID (App Registration only) -->
         <Control Id="TenantIdLabel" Type="Text"
                  X="25" Y="162" Width="120" Height="13"
-                 NoPrefix="yes" Text="Tenant ID:">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 NoPrefix="yes"
+                 Text="Tenant ID (App Reg only):" />
         <Control Id="TenantIdEdit" Type="Edit"
                  X="145" Y="160" Width="200" Height="18"
-                 Property="AZURE_TENANT_ID">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 Property="AZURE_TENANT_ID" />
 
-        <!-- Client ID (visible when App Registration selected) -->
+        <!-- Client ID (App Registration only) -->
         <Control Id="ClientIdLabel" Type="Text"
                  X="25" Y="186" Width="120" Height="13"
-                 NoPrefix="yes" Text="Client ID:">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 NoPrefix="yes"
+                 Text="Client ID (App Reg only):" />
         <Control Id="ClientIdEdit" Type="Edit"
                  X="145" Y="184" Width="200" Height="18"
-                 Property="AZURE_CLIENT_ID">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 Property="AZURE_CLIENT_ID" />
 
-        <!-- Client Secret (visible when App Registration selected) -->
+        <!-- Client Secret (App Registration only) -->
         <Control Id="ClientSecretLabel" Type="Text"
                  X="25" Y="210" Width="120" Height="13"
-                 NoPrefix="yes" Text="Client Secret:">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 NoPrefix="yes"
+                 Text="Client Secret (App Reg only):" />
         <Control Id="ClientSecretEdit" Type="Edit"
                  X="145" Y="208" Width="200" Height="18"
-                 Property="AZURE_CLIENT_SECRET" Password="yes">
-          <Condition Action="hide">AZURE_AUTH_METHOD &lt;&gt; "app_registration"</Condition>
-          <Condition Action="show">AZURE_AUTH_METHOD = "app_registration"</Condition>
-        </Control>
+                 Property="AZURE_CLIENT_SECRET" Password="yes" />
 
         <Control Id="Back" Type="PushButton"
                  X="180" Y="243" Width="56" Height="17"
