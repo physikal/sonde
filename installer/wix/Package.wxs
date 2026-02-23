@@ -37,7 +37,7 @@
     -->
     <SetProperty
       Id="RunSetupEnv"
-      Value="&quot;[INSTALLFOLDER]node\node.exe&quot; &quot;[INSTALLFOLDER]app\installer-scripts\setup-env.cjs&quot; --mode [SONDE_SECRET_MODE] --azure-keyvault-url &quot;[AZURE_KEYVAULT_URL]&quot; --azure-keyvault-secret-name [AZURE_KEYVAULT_SECRET_NAME] --azure-auth-method [AZURE_AUTH_METHOD] --azure-tenant-id &quot;[AZURE_TENANT_ID]&quot; --azure-client-id &quot;[AZURE_CLIENT_ID]&quot; --azure-client-secret &quot;[AZURE_CLIENT_SECRET]&quot;"
+      Value="&quot;[INSTALLFOLDER]node\node.exe&quot; &quot;[INSTALLFOLDER]app\installer-scripts\setup-env.cjs&quot; --mode &quot;[SONDE_SECRET_MODE]&quot; --azure-keyvault-url &quot;[AZURE_KEYVAULT_URL]&quot; --azure-keyvault-secret-name &quot;[AZURE_KEYVAULT_SECRET_NAME]&quot; --azure-auth-method &quot;[AZURE_AUTH_METHOD]&quot; --azure-tenant-id &quot;[AZURE_TENANT_ID]&quot; --azure-client-id &quot;[AZURE_CLIENT_ID]&quot; --azure-client-secret &quot;[AZURE_CLIENT_SECRET]&quot;"
       Before="RunSetupEnv"
       Sequence="execute" />
 
