@@ -28,6 +28,14 @@ coverage/
 # Logs
 *.log
 
+# SQLite databases (created at runtime)
+*.db
+*.db-shm
+*.db-wal
+
+# Private docs
+sonde.pdf
+
 # Claude Code project instructions (private)
 CLAUDE.md
 CLAUDE-FULL.md
