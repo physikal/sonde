@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/physikal/sonde/actions/workflows/ci.yml/badge.svg)](https://github.com/physikal/sonde/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@sonde/agent)](https://www.npmjs.com/package/@sonde/agent)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 **AI infrastructure agent.** Give Claude eyes into your servers.
 
@@ -200,4 +200,4 @@ Full documentation at [sondeapp.com](https://sondeapp.com).
 
 ## License
 
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)
