@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { TagInput } from '../components/common/TagInput';
 import { useToast } from '../components/common/Toast';
 import { ActivityLog } from '../components/integration/ActivityLog';
+import { KeeperFieldInput } from '../components/integration/KeeperFieldInput';
 import { apiFetch } from '../lib/api';
 
 interface CredentialFieldDef {
@@ -44,8 +45,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
         {
           key: 'clientId',
           label: 'Client ID',
-          tooltip:
-            'From System OAuth > Application Registry in ServiceNow',
+          tooltip: 'From System OAuth > Application Registry in ServiceNow',
         },
         {
           key: 'clientSecret',
@@ -66,8 +66,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'apiKey',
           label: 'API Key',
           sensitive: true,
-          tooltip:
-            'Organization Settings → API Keys. Identifies your Datadog organization.',
+          tooltip: 'Organization Settings → API Keys. Identifies your Datadog organization.',
         },
         {
           key: 'appKey',
@@ -196,8 +195,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'username',
           label: 'Username',
           placeholder: 'sonde_svc',
-          tooltip:
-            'Splunk local user with search and rest_properties_get capabilities',
+          tooltip: 'Splunk local user with search and rest_properties_get capabilities',
         },
         {
           key: 'password',
@@ -317,8 +315,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'password',
           label: 'Password',
           sensitive: true,
-          tooltip:
-            'Grafana Cloud: service account token. Self-hosted: proxy-configured password.',
+          tooltip: 'Grafana Cloud: service account token. Self-hosted: proxy-configured password.',
         },
       ],
       bearer_token: [
@@ -341,8 +338,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'token',
           label: 'API Bearer Token',
           sensitive: true,
-          tooltip:
-            'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
+          tooltip: 'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
         },
       ],
     },
@@ -357,14 +353,12 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'apiKey',
           label: 'API Key',
           sensitive: true,
-          tooltip:
-            'Meraki Dashboard → My Profile → API access → Generate API key.',
+          tooltip: 'Meraki Dashboard → My Profile → API access → Generate API key.',
         },
         {
           key: 'orgId',
           label: 'Organization ID',
-          tooltip:
-            'Organization → Settings → Organization Info, or from organizations.list probe.',
+          tooltip: 'Organization → Settings → Organization Info, or from organizations.list probe.',
         },
       ],
     },
@@ -421,8 +415,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'apiKey',
           label: 'API Key',
           sensitive: true,
-          tooltip:
-            'Generate in Network > Settings > Control Plane > Integrations',
+          tooltip: 'Generate in Network > Settings > Control Plane > Integrations',
         },
       ],
     },
@@ -437,8 +430,24 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'apiToken',
           label: 'API Token',
           sensitive: true,
+          tooltip: 'Bearer token from UniFi Access settings (Developer API)',
+        },
+      ],
+    },
+  },
+  {
+    value: 'keeper',
+    label: 'Keeper Secrets Manager',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'oneTimeToken',
+          label: 'One-Time Access Token',
+          placeholder: 'XX:XXXXXX',
+          sensitive: true,
           tooltip:
-            'Bearer token from UniFi Access settings (Developer API)',
+            'Generate in Keeper Vault > Secrets Manager > Applications. This token is used once to create a device binding.',
         },
       ],
     },
@@ -525,6 +534,20 @@ export function IntegrationDetail() {
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
   const [savingCreds, setSavingCreds] = useState(false);
 
+  // Keeper integration support
+  const [keeperIntegrations, setKeeperIntegrations] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [credentialSources, setCredentialSources] = useState<Record<
+    string,
+    {
+      type: 'direct' | 'keeper';
+      keeperIntegrationId?: string;
+      recordUid?: string;
+      fieldType?: string;
+    }
+  > | null>(null);
+
   // Delete
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
@@ -550,6 +573,9 @@ export function IntegrationDetail() {
     apiFetch<{ keys: Array<{ id: string; name: string }> }>('/api-keys')
       .then((data) => setApiKeyNames(new Map(data.keys.map((k) => [k.id, k.name]))))
       .catch(() => {});
+    apiFetch<{ integrations: Array<{ id: string; name: string; type: string }> }>('/integrations')
+      .then((d) => setKeeperIntegrations(d.integrations.filter((i) => i.type === 'keeper')))
+      .catch(() => setKeeperIntegrations([]));
   }, [fetchIntegration, fetchEvents]);
 
   const handleTagAdd = async (tag: string) => {
@@ -826,10 +852,22 @@ export function IntegrationDetail() {
               type="button"
               onClick={async () => {
                 try {
-                  const data = await apiFetch<{ config: { endpoint?: string; headers?: Record<string, string>; tlsRejectUnauthorized?: boolean } }>(`/integrations/${id}/config`);
+                  const data = await apiFetch<{
+                    config: {
+                      endpoint?: string;
+                      headers?: Record<string, string>;
+                      tlsRejectUnauthorized?: boolean;
+                    };
+                  }>(`/integrations/${id}/config`);
                   setEditEndpoint(data.config.endpoint ?? '');
                   const hdrs = data.config.headers;
-                  setEditHeadersText(hdrs ? Object.entries(hdrs).map(([k, v]) => `${k}: ${v}`).join('\n') : '');
+                  setEditHeadersText(
+                    hdrs
+                      ? Object.entries(hdrs)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join('\n')
+                      : '',
+                  );
                   setEditTlsSkipVerify(data.config.tlsRejectUnauthorized === false);
                 } catch {
                   setEditEndpoint('');
@@ -915,6 +953,21 @@ export function IntegrationDetail() {
                 setEditAuthMethod(typeDef?.authMethods[0] ?? 'api_key');
                 setEditCredValues({});
                 setVisibleFields(new Set());
+                if (id && integration.type !== 'keeper') {
+                  apiFetch<
+                    Record<
+                      string,
+                      {
+                        type: 'direct' | 'keeper';
+                        keeperIntegrationId?: string;
+                        recordUid?: string;
+                        fieldType?: string;
+                      }
+                    >
+                  >(`/integrations/${id}/credential-sources`)
+                    .then(setCredentialSources)
+                    .catch(() => setCredentialSources(null));
+                }
                 setEditingCreds(true);
               }}
               className="text-sm text-blue-400 hover:text-blue-300"
@@ -951,34 +1004,51 @@ export function IntegrationDetail() {
                 ))}
               </select>
             </div>
-            {credFields.map((field) => (
-              <div key={field.key}>
-                <p className="text-xs font-medium text-gray-500 uppercase mb-1">{field.label}</p>
-                <div className="relative">
-                  <input
-                    type={field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'}
+            {integration.type === 'keeper'
+              ? credFields.map((field) => (
+                  <div key={field.key}>
+                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">
+                      {field.label}
+                    </p>
+                    <div className="relative">
+                      <input
+                        type={
+                          field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'
+                        }
+                        value={editCredValues[field.key] ?? ''}
+                        onChange={(e) =>
+                          setEditCredValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                        }
+                        placeholder={field.placeholder}
+                        className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
+                      />
+                      {field.sensitive && (
+                        <button
+                          type="button"
+                          onClick={() => toggleFieldVisibility(field.key)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
+                        >
+                          {visibleFields.has(field.key) ? 'Hide' : 'Show'}
+                        </button>
+                      )}
+                    </div>
+                    {field.tooltip && (
+                      <p className="mt-0.5 text-xs text-gray-500">{field.tooltip}</p>
+                    )}
+                  </div>
+                ))
+              : credFields.map((field) => (
+                  <KeeperFieldInput
+                    key={field.key}
+                    field={field}
                     value={editCredValues[field.key] ?? ''}
-                    onChange={(e) =>
-                      setEditCredValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                    placeholder={field.placeholder}
-                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
+                    onChange={(val) => setEditCredValues((prev) => ({ ...prev, [field.key]: val }))}
+                    keeperIntegrations={keeperIntegrations}
+                    existingSource={credentialSources?.[field.key]}
+                    visibleFields={visibleFields}
+                    toggleFieldVisibility={toggleFieldVisibility}
                   />
-                  {field.sensitive && (
-                    <button
-                      type="button"
-                      onClick={() => toggleFieldVisibility(field.key)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
-                    >
-                      {visibleFields.has(field.key) ? 'Hide' : 'Show'}
-                    </button>
-                  )}
-                </div>
-                {field.tooltip && (
-                  <p className="mt-0.5 text-xs text-gray-500">{field.tooltip}</p>
-                )}
-              </div>
-            ))}
+                ))}
             <p className="text-xs text-gray-500">
               All credential fields are required. Existing values cannot be displayed.
             </p>

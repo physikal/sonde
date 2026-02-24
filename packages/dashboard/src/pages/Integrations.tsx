@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CsvImportModal } from '../components/common/CsvImportModal';
 import { TagInput } from '../components/common/TagInput';
 import { useToast } from '../components/common/Toast';
+import { KeeperFieldInput } from '../components/integration/KeeperFieldInput';
 import { apiFetch } from '../lib/api';
 
 interface CredentialFieldDef {
@@ -49,8 +50,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'clientId',
           label: 'Client ID',
           placeholder: 'OAuth application client ID',
-          tooltip:
-            'From System OAuth > Application Registry in ServiceNow',
+          tooltip: 'From System OAuth > Application Registry in ServiceNow',
         },
         {
           key: 'clientSecret',
@@ -73,8 +73,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Key',
           placeholder: 'Datadog API key (32 hex characters)',
           sensitive: true,
-          tooltip:
-            'Organization Settings → API Keys. Identifies your Datadog organization.',
+          tooltip: 'Organization Settings → API Keys. Identifies your Datadog organization.',
         },
         {
           key: 'appKey',
@@ -218,8 +217,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           key: 'username',
           label: 'Username',
           placeholder: 'sonde_svc',
-          tooltip:
-            'Splunk local user with search and rest_properties_get capabilities',
+          tooltip: 'Splunk local user with search and rest_properties_get capabilities',
         },
         {
           key: 'password',
@@ -356,8 +354,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'Password',
           placeholder: 'Service account token or password',
           sensitive: true,
-          tooltip:
-            'Grafana Cloud: service account token. Self-hosted: proxy-configured password.',
+          tooltip: 'Grafana Cloud: service account token. Self-hosted: proxy-configured password.',
         },
       ],
       bearer_token: [
@@ -383,8 +380,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Bearer Token',
           placeholder: 'ThousandEyes API bearer token',
           sensitive: true,
-          tooltip:
-            'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
+          tooltip: 'Account Settings → Users and Roles → Profile → User API Tokens. Requires MFA.',
         },
       ],
     },
@@ -401,15 +397,13 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Key',
           placeholder: 'Meraki Dashboard API key',
           sensitive: true,
-          tooltip:
-            'Meraki Dashboard → My Profile → API access → Generate API key.',
+          tooltip: 'Meraki Dashboard → My Profile → API access → Generate API key.',
         },
         {
           key: 'orgId',
           label: 'Organization ID',
           placeholder: 'e.g. 549236',
-          tooltip:
-            'Organization → Settings → Organization Info, or from organizations.list probe.',
+          tooltip: 'Organization → Settings → Organization Info, or from organizations.list probe.',
         },
       ],
     },
@@ -417,8 +411,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'checkpoint',
     label: 'Check Point',
-    description:
-      'Firewall gateways, access policies, network objects, and management tasks',
+    description: 'Firewall gateways, access policies, network objects, and management tasks',
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
@@ -441,8 +434,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'a10',
     label: 'A10 Networks',
-    description:
-      'Load balancer diagnostics — virtual servers, service groups, real server health',
+    description: 'Load balancer diagnostics — virtual servers, service groups, real server health',
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
@@ -465,8 +457,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'unifi',
     label: 'UniFi Network',
-    description:
-      'Devices, clients, networks, WAN, device stats (official API)',
+    description: 'Devices, clients, networks, WAN, device stats (official API)',
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
@@ -475,8 +466,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Key',
           placeholder: 'UniFi Network API key',
           sensitive: true,
-          tooltip:
-            'Generate in Network > Settings > Control Plane > Integrations',
+          tooltip: 'Generate in Network > Settings > Control Plane > Integrations',
         },
       ],
     },
@@ -484,8 +474,7 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
   {
     value: 'unifi-access',
     label: 'UniFi Access',
-    description:
-      'Door status, access event logs, reader and hub devices',
+    description: 'Door status, access event logs, reader and hub devices',
     authMethods: ['api_key'],
     credentialFields: {
       api_key: [
@@ -494,8 +483,25 @@ const INTEGRATION_TYPES: IntegrationTypeDef[] = [
           label: 'API Token',
           placeholder: 'UniFi Access API token',
           sensitive: true,
+          tooltip: 'Bearer token from UniFi Access settings (Developer API)',
+        },
+      ],
+    },
+  },
+  {
+    value: 'keeper',
+    label: 'Keeper Secrets Manager',
+    description: 'Pull credentials from Keeper vault for use in other integrations',
+    authMethods: ['api_key'],
+    credentialFields: {
+      api_key: [
+        {
+          key: 'oneTimeToken',
+          label: 'One-Time Access Token',
+          placeholder: 'XX:XXXXXX',
+          sensitive: true,
           tooltip:
-            'Bearer token from UniFi Access settings (Developer API)',
+            'Generate in Keeper Vault > Secrets Manager > Applications. This token is used once to create a device binding.',
         },
       ],
     },
@@ -542,23 +548,19 @@ const ENDPOINT_PLACEHOLDERS: Record<string, string> = {
   a10: 'https://thunder01.corp.local',
   unifi: 'https://192.168.1.1',
   'unifi-access': 'https://192.168.1.1/proxy/access/api/v1/developer/',
+  keeper: 'keepersecurity.com',
   custom: 'https://api.example.com',
 };
 
 const ENDPOINT_TOOLTIPS: Record<string, string> = {
   servicenow: 'Your ServiceNow instance URL',
-  datadog:
-    'US1: api.datadoghq.com · EU: api.datadoghq.eu · US3/US5/AP1/AP2/Gov also available',
+  datadog: 'US1: api.datadoghq.com · EU: api.datadoghq.eu · US3/US5/AP1/AP2/Gov also available',
   pagerduty: 'Always https://api.pagerduty.com for all accounts',
   cloudflare: 'Always https://api.cloudflare.com/client/v4',
-  citrix:
-    'On-prem: Director server URL. Cloud: https://api.cloud.com/monitorodata',
-  splunk:
-    'Splunk management port — typically :8089, not the web UI port (:8000)',
-  proxmox:
-    'Any PVE node or cluster VIP. Default port 8006. Self-signed cert is common.',
-  nutanix:
-    'Prism Central URL. Default port 9440. Self-signed cert is common.',
+  citrix: 'On-prem: Director server URL. Cloud: https://api.cloud.com/monitorodata',
+  splunk: 'Splunk management port — typically :8089, not the web UI port (:8000)',
+  proxmox: 'Any PVE node or cluster VIP. Default port 8006. Self-signed cert is common.',
+  nutanix: 'Prism Central URL. Default port 9440. Self-signed cert is common.',
   vcenter: 'vCenter Server FQDN or IP. Port 443 is default.',
   jira: 'Your Jira Cloud site URL (e.g. https://your-domain.atlassian.net)',
   loki: 'Grafana Cloud: logs-prod-<region>.grafana.net. Self-hosted: your Loki HTTP URL.',
@@ -570,6 +572,7 @@ const ENDPOINT_TOOLTIPS: Record<string, string> = {
     'Your UDM/UDM-Pro IP (e.g. https://192.168.1.1). Requires Network App 9.0.108+. Self-signed cert is common.',
   'unifi-access':
     'Through UDM: https://ip/proxy/access/api/v1/developer/. Direct: https://host:12445/api/v1/developer/.',
+  keeper: 'Keeper region endpoint. Auto-set based on region selection.',
 };
 
 const NAME_PLACEHOLDERS: Record<string, string> = {
@@ -591,6 +594,7 @@ const NAME_PLACEHOLDERS: Record<string, string> = {
   a10: 'e.g. a10-thunder-01',
   unifi: 'e.g. unifi-home',
   'unifi-access': 'e.g. unifi-access-office',
+  keeper: 'e.g. keeper-vault',
   custom: 'e.g. my-integration',
 };
 
@@ -666,6 +670,9 @@ export function Integrations() {
   const [ssoStatus, setSsoStatus] = useState<{ configured: boolean; enabled: boolean } | null>(
     null,
   );
+  const [keeperIntegrations, setKeeperIntegrations] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
 
   const fetchIntegrations = useCallback(() => {
     setLoading(true);
@@ -691,6 +698,14 @@ export function Integrations() {
         .catch(() => setSsoStatus(null));
     }
   }, [selectedType]);
+
+  useEffect(() => {
+    if (showCreate) {
+      apiFetch<{ integrations: Array<{ id: string; name: string; type: string }> }>('/integrations')
+        .then((d) => setKeeperIntegrations(d.integrations.filter((i) => i.type === 'keeper')))
+        .catch(() => setKeeperIntegrations([]));
+    }
+  }, [showCreate]);
 
   const typeDef = INTEGRATION_TYPES.find((t) => t.value === selectedType);
 
@@ -747,6 +762,19 @@ export function Integrations() {
       const data = await apiFetch<{ id: string }>('/integrations/graph/activate', {
         method: 'POST',
         body: JSON.stringify({ name: name.trim() }),
+      });
+      setSavedId(data.id);
+      fetchIntegrations();
+      return data.id;
+    }
+    if (selectedType === 'keeper') {
+      const data = await apiFetch<{ id: string }>('/integrations/keeper/initialize', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          oneTimeToken: credentialValues.oneTimeToken,
+          region: endpoint.trim() || undefined,
+        }),
       });
       setSavedId(data.id);
       fetchIntegrations();
@@ -812,19 +840,18 @@ export function Integrations() {
 
   const canAdvanceToStep2 = !!selectedType;
   const canAdvanceToStep3 =
-    selectedType === 'graph' ? !!name.trim() : !!name.trim() && !!endpoint.trim();
+    selectedType === 'graph' || selectedType === 'keeper'
+      ? !!name.trim()
+      : !!name.trim() && !!endpoint.trim();
   const currentFields = typeDef?.credentialFields[authMethod] ?? [];
   const canAdvanceToStep4 =
     selectedType === 'graph'
       ? !!(ssoStatus?.configured && ssoStatus?.enabled)
       : !!authMethod && currentFields.every((f) => !!credentialValues[f.key]?.trim());
 
-  const filtered = search
-    ? integrations.filter((i) => matchesSearch(i, search))
-    : integrations;
+  const filtered = search ? integrations.filter((i) => matchesSearch(i, search)) : integrations;
 
-  const allVisibleSelected =
-    filtered.length > 0 && filtered.every((i) => selected.has(i.id));
+  const allVisibleSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -848,10 +875,7 @@ export function Integrations() {
       await apiFetch(`/integrations/${integrationId}/tags`, {
         method: 'PUT',
         body: JSON.stringify({
-          tags: [
-            ...(integrations.find((i) => i.id === integrationId)?.tags ?? []),
-            tag,
-          ],
+          tags: [...(integrations.find((i) => i.id === integrationId)?.tags ?? []), tag],
         }),
       });
       fetchIntegrations();
@@ -1019,7 +1043,9 @@ export function Integrations() {
           {/* Step 2: Name & Endpoint */}
           {step === 2 && (
             <div>
-              <h3 className="text-lg font-medium text-white">{typeDef?.label ?? 'Integration'} — Configuration</h3>
+              <h3 className="text-lg font-medium text-white">
+                {typeDef?.label ?? 'Integration'} — Configuration
+              </h3>
               <div className="mt-4 space-y-3">
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">Name</p>
@@ -1031,30 +1057,56 @@ export function Integrations() {
                     className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
-                {selectedType !== 'graph' && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase mb-1">Endpoint URL</p>
-                    <input
-                      type="url"
-                      value={endpoint}
-                      onChange={(e) => setEndpoint(e.target.value)}
-                      placeholder={ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'}
-                      className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    {ENDPOINT_TOOLTIPS[selectedType] && (
-                      <p className="mt-0.5 text-xs text-gray-500">{ENDPOINT_TOOLTIPS[selectedType]}</p>
-                    )}
-                    <label className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                {selectedType !== 'graph' &&
+                  (selectedType === 'keeper' ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-1">Region</p>
+                      <select
+                        value={endpoint}
+                        onChange={(e) => setEndpoint(e.target.value)}
+                        className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="US">United States (default)</option>
+                        <option value="EU">Europe</option>
+                        <option value="AU">Australia</option>
+                        <option value="GOV">US Government</option>
+                        <option value="JP">Japan</option>
+                        <option value="CA">Canada</option>
+                      </select>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Select the Keeper region where your vault is hosted
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-1">
+                        Endpoint URL
+                      </p>
                       <input
-                        type="checkbox"
-                        checked={tlsSkipVerify}
-                        onChange={(e) => setTlsSkipVerify(e.target.checked)}
-                        className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                        type="url"
+                        value={endpoint}
+                        onChange={(e) => setEndpoint(e.target.value)}
+                        placeholder={
+                          ENDPOINT_PLACEHOLDERS[selectedType] ?? 'https://api.example.com'
+                        }
+                        className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                       />
-                      Allow self-signed TLS certificates
-                    </label>
-                  </div>
-                )}
+                      {ENDPOINT_TOOLTIPS[selectedType] && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {ENDPOINT_TOOLTIPS[selectedType]}
+                        </p>
+                      )}
+                      <label className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={tlsSkipVerify}
+                          onChange={(e) => setTlsSkipVerify(e.target.checked)}
+                          className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                        />
+                        Allow self-signed TLS certificates
+                      </label>
+                    </div>
+                  ))}
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">
                     Headers{' '}
@@ -1127,36 +1179,50 @@ export function Integrations() {
                       ))}
                     </select>
                   </div>
-                  {currentFields.map((field) => (
-                    <div key={field.key}>
-                      <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-                        {field.label}
-                      </p>
-                      <div className="relative">
-                        <input
-                          type={
-                            field.sensitive && !visibleFields.has(field.key) ? 'password' : 'text'
-                          }
+                  {selectedType === 'keeper'
+                    ? currentFields.map((field) => (
+                        <div key={field.key}>
+                          <p className="text-xs font-medium text-gray-500 uppercase mb-1">
+                            {field.label}
+                          </p>
+                          <div className="relative">
+                            <input
+                              type={
+                                field.sensitive && !visibleFields.has(field.key)
+                                  ? 'password'
+                                  : 'text'
+                              }
+                              value={credentialValues[field.key] ?? ''}
+                              onChange={(e) => setCredential(field.key, e.target.value)}
+                              placeholder={field.placeholder}
+                              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
+                            />
+                            {field.sensitive && (
+                              <button
+                                type="button"
+                                onClick={() => toggleFieldVisibility(field.key)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
+                              >
+                                {visibleFields.has(field.key) ? 'Hide' : 'Show'}
+                              </button>
+                            )}
+                          </div>
+                          {field.tooltip && (
+                            <p className="mt-0.5 text-xs text-gray-500">{field.tooltip}</p>
+                          )}
+                        </div>
+                      ))
+                    : currentFields.map((field) => (
+                        <KeeperFieldInput
+                          key={field.key}
+                          field={field}
                           value={credentialValues[field.key] ?? ''}
-                          onChange={(e) => setCredential(field.key, e.target.value)}
-                          placeholder={field.placeholder}
-                          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none pr-16"
+                          onChange={(val) => setCredential(field.key, val)}
+                          keeperIntegrations={keeperIntegrations}
+                          visibleFields={visibleFields}
+                          toggleFieldVisibility={toggleFieldVisibility}
                         />
-                        {field.sensitive && (
-                          <button
-                            type="button"
-                            onClick={() => toggleFieldVisibility(field.key)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300"
-                          >
-                            {visibleFields.has(field.key) ? 'Hide' : 'Show'}
-                          </button>
-                        )}
-                      </div>
-                      {field.tooltip && (
-                        <p className="mt-0.5 text-xs text-gray-500">{field.tooltip}</p>
-                      )}
-                    </div>
-                  ))}
+                      ))}
                 </div>
               )}
               <div className="mt-4 flex justify-between">
@@ -1272,9 +1338,7 @@ export function Integrations() {
         />
         {selected.size > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">
-              {selected.size} selected
-            </span>
+            <span className="text-xs text-gray-400">{selected.size} selected</span>
             <button
               type="button"
               onClick={() => {

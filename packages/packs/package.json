@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@sonde/shared": "*"
+    "@sonde/shared": "*",
+    "@keeper-security/secrets-manager-core": "17.4.0"
   },
   "devDependencies": {
     "vitest": "^2.1.8"

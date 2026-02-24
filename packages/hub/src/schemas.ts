@@ -115,6 +115,15 @@ export const ActivateGraphBody = z.object({
     .transform((s) => s.trim()),
 });
 
+export const InitializeKeeperBody = z.object({
+  name: z
+    .string()
+    .min(1, 'name is required')
+    .transform((s) => s.trim()),
+  oneTimeToken: z.string().min(1, 'oneTimeToken is required'),
+  region: z.enum(['US', 'EU', 'AU', 'GOV', 'JP', 'CA']).optional(),
+});
+
 const OAuth2Schema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import os from 'node:os';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
@@ -21,7 +22,9 @@ export function StepHub({ onNext, initialHubUrl }: StepHubProps): JSX.Element {
   const [activeField, setActiveField] = useState<Field>(initialHubUrl ? 'apiKey' : 'hubUrl');
   const [hubUrl, setHubUrl] = useState(initialHubUrl ?? '');
   const [apiKey, setApiKey] = useState('');
-  const [agentName, setAgentName] = useState(os.hostname());
+  const [agentName, setAgentName] = useState(
+    `${os.hostname()}-${crypto.randomBytes(3).toString('hex')}`,
+  );
   const [error, setError] = useState('');
 
   const values: Record<Field, string> = { hubUrl, apiKey, agentName };
@@ -63,7 +66,8 @@ export function StepHub({ onNext, initialHubUrl }: StepHubProps): JSX.Element {
       onNext({
         hubUrl: hubUrl.trim(),
         apiKey: apiKey.trim(),
-        agentName: agentName.trim() || os.hostname(),
+        agentName: agentName.trim()
+          || `${os.hostname()}-${crypto.randomBytes(3).toString('hex')}`,
       });
     }
   });

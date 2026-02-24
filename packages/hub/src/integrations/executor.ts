@@ -24,12 +24,16 @@ function isRetryable(error: unknown): boolean {
   return false;
 }
 
+export type CredentialResolver = (creds: IntegrationCredentials) => Promise<IntegrationCredentials>;
+
 export class IntegrationExecutor {
   private packs = new Map<string, RegisteredPack>();
   private fetchFn: FetchFn;
+  private credentialResolver?: CredentialResolver;
 
-  constructor(fetchFn?: FetchFn) {
+  constructor(fetchFn?: FetchFn, credentialResolver?: CredentialResolver) {
     this.fetchFn = fetchFn ?? globalThis.fetch.bind(globalThis);
+    this.credentialResolver = credentialResolver;
   }
 
   registerPack(
@@ -62,7 +66,21 @@ export class IntegrationExecutor {
       return this.errorResponse(probe, startTime, `Unknown integration pack: ${packName}`);
     }
 
-    const { pack, config, credentials } = registered;
+    const { pack, config } = registered;
+    let { credentials } = registered;
+
+    if (this.credentialResolver) {
+      try {
+        credentials = await this.credentialResolver(credentials);
+      } catch (error) {
+        return this.errorResponse(
+          probe,
+          startTime,
+          `Credential resolution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
     const handlerName = probe.slice(packName!.length + 1);
     const handler = pack.handlers[handlerName];
 
