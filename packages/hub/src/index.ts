@@ -12,7 +12,9 @@ import {
   datadogPack,
   graphPack,
   httpbinPack,
+  initializeKeeper,
   jiraPack,
+  keeperPack,
   lokiPack,
   merakiPack,
   nutanixDiagnosticRunbooks,
@@ -21,6 +23,7 @@ import {
   pagerdutyPack,
   proxmoxDiagnosticRunbooks,
   proxmoxPack,
+  regionToHostname,
   servicenowPack,
   splunkPack,
   thousandeyesPack,
@@ -28,7 +31,12 @@ import {
   unifiPack,
   vcenterPack,
 } from '@sonde/packs';
-import { DiagnoseInput, type IntegrationPack, ProbeInput } from '@sonde/shared';
+import {
+  DiagnoseInput,
+  type IntegrationCredentials,
+  type IntegrationPack,
+  ProbeInput,
+} from '@sonde/shared';
 import { Hono } from 'hono';
 import { hashApiKey } from './auth.js';
 import {
@@ -51,6 +59,7 @@ import { SondeDb } from './db/index.js';
 import { RunbookEngine } from './engine/runbooks.js';
 import { decrypt, encrypt } from './integrations/crypto.js';
 import { IntegrationExecutor } from './integrations/executor.js';
+import { KeeperResolver, isKeeperRef } from './integrations/keeper-resolver.js';
 import { IntegrationManager } from './integrations/manager.js';
 import { ProbeRouter } from './integrations/probe-router.js';
 import { logger } from './logger.js';
@@ -73,6 +82,7 @@ import {
   CreateCriticalPathBody,
   CreateIntegrationBody,
   CreateSsoBody,
+  InitializeKeeperBody,
   SetTagsBody,
   TagImportBody,
   UpdateAccessGroupBody,
@@ -104,7 +114,21 @@ const probeCleanupTimer = setInterval(() => {
 // Run cleanup on startup to purge stale rows from previous runs
 db.cleanExpiredProbeResults();
 const dispatcher = new AgentDispatcher();
-const integrationExecutor = new IntegrationExecutor();
+
+// KeeperResolver uses a lazy callback to break the circular dependency:
+// resolver needs manager.getDecryptedConfig, manager needs executor,
+// executor needs resolver.
+let integrationManager: IntegrationManager;
+const keeperResolver = new KeeperResolver(
+  (id) => integrationManager.getDecryptedConfig(id),
+);
+const resolveCredentials = (creds: IntegrationCredentials) =>
+  keeperResolver.resolveCredentials(creds);
+
+const integrationExecutor = new IntegrationExecutor(
+  undefined,
+  resolveCredentials,
+);
 const probeRouter = new ProbeRouter(dispatcher, integrationExecutor, db, (packName) => {
   const integration = db.listIntegrations().find((i) => i.type === packName);
   return integration?.id;
@@ -130,12 +154,14 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [a10Pack.manifest.name, a10Pack],
   [unifiPack.manifest.name, unifiPack],
   [unifiAccessPack.manifest.name, unifiAccessPack],
+  [keeperPack.manifest.name, keeperPack],
 ]);
-const integrationManager = new IntegrationManager(
+integrationManager = new IntegrationManager(
   db,
   integrationExecutor,
   config.secret,
   integrationCatalog,
+  resolveCredentials,
 );
 integrationManager.loadAll();
 
@@ -979,6 +1005,45 @@ app.post('/api/v1/integrations/graph/activate', async (c) => {
   }
 });
 
+// --- Keeper initialization endpoint ---
+
+app.post('/api/v1/integrations/keeper/initialize', async (c) => {
+  const parsed = parseBody(InitializeKeeperBody, await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  const body = parsed.data;
+
+  const existing = integrationManager.list().find((i) => i.type === 'keeper');
+  if (existing) {
+    return c.json({ error: 'A Keeper integration already exists' }, 409);
+  }
+
+  try {
+    const hostname = regionToHostname(body.region);
+    const deviceConfig = await initializeKeeper(
+      body.oneTimeToken,
+      hostname,
+    );
+
+    const result = integrationManager.create({
+      type: 'keeper',
+      name: body.name,
+      config: {
+        endpoint: hostname ?? 'keepersecurity.com',
+      },
+      credentials: {
+        packName: 'keeper',
+        authMethod: 'api_key',
+        credentials: { deviceConfig },
+      },
+    });
+    return c.json(result, 201);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Keeper initialization failed';
+    return c.json({ error: message }, 400);
+  }
+});
+
 // --- Integration management endpoints (require master API key) ---
 
 app.post('/api/v1/integrations', async (c) => {
@@ -1075,6 +1140,53 @@ app.get('/api/v1/integrations/:id/events', (c) => {
   const offset = Number(c.req.query('offset')) || 0;
   const events = db.getIntegrationEvents(c.req.param('id'), { limit, offset });
   return c.json({ events });
+});
+
+app.get('/api/v1/integrations/:id/credential-sources', (c) => {
+  const id = c.req.param('id');
+  const integration = integrationManager.get(id);
+  if (!integration) {
+    return c.json({ error: 'Integration not found' }, 404);
+  }
+
+  const decrypted = integrationManager.getDecryptedConfig(id);
+  if (!decrypted) {
+    return c.json({ error: 'Failed to decrypt config' }, 500);
+  }
+
+  const sources: Record<
+    string,
+    | { type: 'direct' }
+    | {
+        type: 'keeper';
+        keeperIntegrationId: string;
+        recordUid: string;
+        fieldType: string;
+      }
+  > = {};
+
+  for (const [key, value] of Object.entries(
+    decrypted.credentials.credentials,
+  )) {
+    if (isKeeperRef(value)) {
+      const match =
+        /^keeper:\/\/([^/]+)\/([^/]+)\/(field|custom_field)\/(.+)$/.exec(
+          value,
+        );
+      if (match) {
+        sources[key] = {
+          type: 'keeper',
+          keeperIntegrationId: match[1]!,
+          recordUid: match[2]!,
+          fieldType: match[4]!,
+        };
+        continue;
+      }
+    }
+    sources[key] = { type: 'direct' };
+  }
+
+  return c.json({ sources });
 });
 
 // --- Global tag management endpoints ---

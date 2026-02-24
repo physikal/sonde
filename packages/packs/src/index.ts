@@ -50,6 +50,7 @@ export { checkpointPack } from './integrations/checkpoint.js';
 export { a10Pack } from './integrations/a10.js';
 export { unifiPack } from './integrations/unifi.js';
 export { unifiAccessPack } from './integrations/unifi-access.js';
+export { keeperPack, initializeKeeper, regionToHostname } from './integrations/keeper.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
 export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 

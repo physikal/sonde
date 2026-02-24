@@ -2,13 +2,16 @@ import crypto from 'node:crypto';
 import type { SondeDb } from '../db/index.js';
 import { decrypt, encrypt } from './crypto.js';
 import type { IntegrationExecutor } from './executor.js';
-import type { FetchFn, IntegrationConfig, IntegrationCredentials, IntegrationPack } from './types.js';
 import { buildTlsFetch } from './tls-fetch.js';
+import type {
+  FetchFn,
+  IntegrationConfig,
+  IntegrationCredentials,
+  IntegrationPack,
+} from './types.js';
 
 /** Prepend https:// if no protocol is present */
-function normalizeEndpoint(
-  config: IntegrationConfig,
-): IntegrationConfig {
+function normalizeEndpoint(config: IntegrationConfig): IntegrationConfig {
   const ep = config.endpoint;
   if (ep && !/^https?:\/\//i.test(ep)) {
     return { ...config, endpoint: `https://${ep}` };
@@ -17,22 +20,16 @@ function normalizeEndpoint(
 }
 
 /** Non-sensitive config snapshot for event logging */
-function configSummary(
-  config: IntegrationConfig,
-): Record<string, unknown> {
+function configSummary(config: IntegrationConfig): Record<string, unknown> {
   return {
     endpoint: config.endpoint,
-    headerKeys: config.headers
-      ? Object.keys(config.headers)
-      : [],
+    headerKeys: config.headers ? Object.keys(config.headers) : [],
     tlsRejectUnauthorized: config.tlsRejectUnauthorized ?? true,
   };
 }
 
 /** Non-sensitive credential snapshot for event logging */
-function credentialSummary(
-  creds: IntegrationCredentials,
-): Record<string, unknown> {
+function credentialSummary(creds: IntegrationCredentials): Record<string, unknown> {
   return {
     authMethod: creds.authMethod,
     credentialKeys: Object.keys(creds.credentials),
@@ -62,13 +59,20 @@ interface IntegrationSummary {
   createdAt: string;
 }
 
+type CredentialResolver = (creds: IntegrationCredentials) => Promise<IntegrationCredentials>;
+
 export class IntegrationManager {
+  private credentialResolver?: CredentialResolver;
+
   constructor(
     private db: SondeDb,
     private executor: IntegrationExecutor,
     private secret: string,
     private packCatalog: ReadonlyMap<string, IntegrationPack> = new Map(),
-  ) {}
+    credentialResolver?: CredentialResolver,
+  ) {
+    this.credentialResolver = credentialResolver;
+  }
 
   create(input: CreateInput): IntegrationSummary {
     const id = crypto.randomUUID();
@@ -150,9 +154,7 @@ export class IntegrationManager {
     const existing = this.getDecryptedConfig(id);
     if (!existing) return false;
 
-    const mergedConfig = input.config
-      ? normalizeEndpoint(input.config)
-      : existing.config;
+    const mergedConfig = input.config ? normalizeEndpoint(input.config) : existing.config;
     const merged = {
       config: mergedConfig,
       credentials: input.credentials ?? existing.credentials,
@@ -229,12 +231,13 @@ export class IntegrationManager {
 
     const testedAt = new Date().toISOString();
     try {
+      let credentials = decrypted.credentials;
+      if (this.credentialResolver) {
+        credentials = await this.credentialResolver(credentials);
+      }
+
       const fetchFn = buildTlsFetch(decrypted.config);
-      const success = await pack.testConnection(
-        decrypted.config,
-        decrypted.credentials,
-        fetchFn,
-      );
+      const success = await pack.testConnection(decrypted.config, credentials, fetchFn);
       const result = success ? 'ok' : 'failed';
       this.db.updateIntegration(id, {
         lastTestedAt: testedAt,
