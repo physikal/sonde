@@ -36,7 +36,9 @@ coverage/
 # Private docs
 sonde.pdf
 
-# Claude Code project instructions (private)
+# Claude Code / Serena (developer tooling, not part of the project)
+.claude/
+.serena/
 CLAUDE.md
 CLAUDE-FULL.md
 SONDE-QUICKSTART.md
