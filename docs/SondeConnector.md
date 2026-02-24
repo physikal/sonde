@@ -90,6 +90,6 @@ Once connected, Claude has access to:
 ## Example Prompts
 
 - "List all connected sonde agents"
-- "Check disk usage on gmtek01"
-- "Run a docker diagnostic on gmtek01"
-- "What's the memory usage on gmtek01?"
+- "Check disk usage on web-server-01"
+- "Run a docker diagnostic on web-server-01"
+- "What's the memory usage on web-server-01?"

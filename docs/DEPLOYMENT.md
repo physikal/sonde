@@ -109,7 +109,7 @@ Permission approval → enrollment → systemd service → connected.
 Running `sonde` launches persistent interactive app:
 
 ```
-┌─ Sonde Agent: gmtek01-a7f3 ──────── Connected 🟢 ─┐
+┌─ Sonde Agent: srv-web01-a7f3 ─────── Connected 🟢 ─┐
 │  Packs              Status       Last Probe          │
 │  ▶ docker           active       12s ago             │
 │  ▶ systemd          active       45s ago             │

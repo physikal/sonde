@@ -6,8 +6,6 @@ services:
     environment:
       SONDE_SECRET: ${SONDE_SECRET:?Set SONDE_SECRET env var}
       SONDE_DB_PATH: /data/sonde.db
-      # SONDE_ADMIN_USER: admin
-      # SONDE_ADMIN_PASSWORD: changeme
     volumes:
       - hub-data:/data
     ports:

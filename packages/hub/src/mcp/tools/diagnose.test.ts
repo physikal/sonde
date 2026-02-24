@@ -254,7 +254,7 @@ describe('handleDiagnose', () => {
     });
 
     const result = await handleDiagnose(
-      { agent: 'gmtek01', category: 'proxmox-cluster' },
+      { agent: 'srv-web01', category: 'proxmox-cluster' },
       createMockProbeRouter(),
       engine,
       createMockDb(),

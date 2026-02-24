@@ -27,7 +27,7 @@ In the service's **Environment** tab, add these variables:
 
 | Variable | Required | Example | Description |
 |----------|----------|---------|-------------|
-| `SONDE_API_KEY` | Yes | `a1b2c3d4e5...` | Hub API key. Generate with `openssl rand -hex 32` |
+| `SONDE_SECRET` | Yes | `a1b2c3d4e5...` | Encryption secret (root of trust). Generate with `openssl rand -hex 32` |
 | `SONDE_DOMAIN` | Yes | `sonde.example.com` | Your domain (hostname only, no `https://`) |
 | `SONDE_HUB_URL` | No | `https://sonde.example.com` | Defaults to `https://${SONDE_DOMAIN}` if omitted |
 
@@ -37,7 +37,7 @@ Generate an API key from your terminal:
 openssl rand -hex 32
 ```
 
-Save this key securely — you'll need it to enroll agents and it cannot be recovered from the hub.
+Save this secret securely — the hub uses it for all encryption and it cannot be recovered.
 
 ### 3. Deploy
 
@@ -81,7 +81,7 @@ labels:
 Once the hub is running, enroll agents from your target machines:
 
 ```bash
-sonde enroll --hub https://sonde.example.com --key YOUR_API_KEY --name my-server
+sonde enroll --hub https://sonde.example.com --token YOUR_ENROLLMENT_TOKEN --name my-server
 sonde start
 ```
 
@@ -115,7 +115,7 @@ Check the build logs in Dokploy. Common causes:
 The container has a health check that hits `http://localhost:3000/health`. If it fails:
 
 1. Check container logs in Dokploy for startup errors
-2. Ensure `SONDE_API_KEY` is set (the container will fail to start without it)
+2. Ensure `SONDE_SECRET` is set (the container will fail to start without it)
 3. Verify the `hub-data` volume has write permissions
 
 ### WebSocket connections failing

@@ -44,9 +44,9 @@ High-level, intent-driven tools (not raw probe wrappers):
 
 ## Diagnostic Workflow Example
 
-User: "My docker isn't working on gmtek01"
+User: "My docker isn't working on web-server-01"
 
-1. Claude calls `diagnose` with `{ agent: "gmtek01", category: "docker" }`
+1. Claude calls `diagnose` with `{ agent: "web-server-01", category: "docker" }`
 2. Hub fires runbook probes in parallel: daemon status, containers, logs, disk, memory
 3. Hub assembles structured report, returns in ONE MCP tool call
 4. Claude reads report, identifies root cause, tells user how to fix
