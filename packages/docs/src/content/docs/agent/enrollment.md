@@ -31,9 +31,13 @@ sonde enroll --hub https://your-hub:3000 --key <api-key>
 | `--hub <url>` | Hub URL (required) | -- |
 | `--token <token>` | Enrollment token | -- |
 | `--key <key>` | API key | -- |
-| `--name <name>` | Agent display name | System hostname |
+| `--name <name>` | Agent display name | `hostname-<random>` (6 hex chars) |
 
 Either `--token` or `--key` is required.
+
+### Agent name
+
+By default, the agent name is the system hostname with a random 6-character hex suffix (e.g., `web-server-a3f1b2`). This avoids name collisions when multiple agents share the same hostname. On re-enrollment, the existing config's name is reused to preserve stable identity. The `--name` flag overrides both defaults.
 
 ## What happens during enrollment
 

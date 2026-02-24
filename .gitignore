@@ -27,3 +27,8 @@ coverage/
 
 # Logs
 *.log
+
+# Claude Code project instructions (private)
+CLAUDE.md
+SONDE-QUICKSTART.md
+OLD_Sonde_CLAUDE.md.zip

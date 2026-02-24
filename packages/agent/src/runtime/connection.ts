@@ -94,6 +94,7 @@ export function enrollWithHub(
           keyPem?: string;
           caCertPem?: string;
           apiKey?: string;
+          warning?: string;
         };
 
         ws.close();
@@ -101,6 +102,10 @@ export function enrollWithHub(
         if (ackPayload.error) {
           reject(new Error(ackPayload.error));
           return;
+        }
+
+        if (ackPayload.warning) {
+          console.warn(`[sonde] Hub warning: ${ackPayload.warning}`);
         }
 
         const agentId = ackPayload.agentId;
@@ -295,10 +300,16 @@ export class AgentConnection {
   }
 
   private handleAck(envelope: MessageEnvelope): void {
-    const payload = envelope.payload as { agentId?: string };
+    const payload = envelope.payload as {
+      agentId?: string;
+      warning?: string;
+    };
     if (payload.agentId) {
       this.agentId = payload.agentId;
       this.events.onRegistered?.(this.agentId);
+    }
+    if (payload.warning) {
+      this.events.onError?.(new Error(`Hub warning: ${payload.warning}`));
     }
     this.events.onConnected?.(this.agentId ?? '');
   }

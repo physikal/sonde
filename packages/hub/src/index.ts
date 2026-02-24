@@ -336,7 +336,7 @@ if [ -t 0 ]; then
   if [ -n "$SONDE_USER" ]; then
     exec su -s /bin/sh "$SONDE_USER" -c "sonde install --hub ${hubUrl}"
   else
-    exec sonde install --hub ${hubUrl}
+    exec sonde install --hub "${hubUrl}"
   fi
 else
   ok "Installation complete! To finish setup, run:"

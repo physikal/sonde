@@ -468,6 +468,45 @@ The API key is read-only. No username or password needed.
 - "Who accessed the server room recently?"
 - "Are all door readers online?"
 
+## Keeper Secrets Manager
+
+### Prerequisites
+
+- Keeper Secrets Manager application created in the Keeper admin console
+- One-time access token generated for device binding
+
+### Generate a One-Time Access Token
+
+1. Log into the Keeper admin console
+2. Navigate to **Secrets Manager** > **Applications**
+3. Create an application (or select an existing one) and assign the shared folders it can access
+4. Click **Devices** > **Add Device** and generate a one-time access token
+5. Copy the token — it can only be used once
+
+### Configuration in Dashboard
+
+Navigate to **Manage** > **Integrations** > **Add Integration** and select **Keeper**.
+
+| Field | Value |
+|---|---|
+| One-Time Token | (the token from the admin console) |
+| Region | US, EU, AU, GOV, JP, or CA |
+
+During creation, the hub uses the one-time token to establish a device binding with Keeper. The token is consumed immediately and the resulting device configuration is encrypted and stored in the database.
+
+### Credential Resolver
+
+Keeper can act as a credential resolver for other integrations. When configuring an integration's credentials, you can reference a Keeper record using a `keeper://` URI instead of entering secrets directly. The hub resolves the URI at runtime by fetching the value from the Keeper vault.
+
+### Available Probes
+
+- **list-records** — List accessible record UIDs and titles from the vault
+
+### Example Queries
+
+- "List records in the Keeper vault"
+- "What secrets are available in Keeper?"
+
 ## Testing Integrations
 
 After configuring any integration:

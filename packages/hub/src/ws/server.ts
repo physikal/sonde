@@ -265,6 +265,9 @@ function handleRegister(
       });
     }
 
+    // Revoke any previous agent-scoped key before minting a new one
+    db.revokeAgentApiKeys(payload.name);
+
     // Mint a scoped API key so the agent can reconnect without the consumed token
     const keyId = crypto.randomUUID();
     mintedApiKey = crypto.randomUUID();
@@ -284,18 +287,17 @@ function handleRegister(
 
   dispatcher.registerAgent(agentId, payload.name, ws);
 
-  // Handle attestation data
+  // Handle attestation data (use pre-upsert `existing` for comparison —
+  // db.getAgent() after upsert would return the just-written version/packs)
   let attestationMismatch = false;
   if (payload.attestation) {
     const parsed = AttestationData.safeParse(payload.attestation);
     if (parsed.success) {
       const newJson = JSON.stringify(parsed.data);
-      // Check for mismatch on re-registration (existing agent by name)
-      const existingAgent = db.getAgent(payload.name);
-      const storedJson = existingAgent?.attestationJson;
+      const storedJson = existing?.attestationJson;
       // Accept new attestation baseline if agent version changed (expected after self-update)
       const versionChanged =
-        existingAgent?.agentVersion && existingAgent.agentVersion !== payload.agentVersion;
+        existing?.agentVersion && existing.agentVersion !== payload.agentVersion;
       attestationMismatch = !!(
         storedJson &&
         storedJson !== '{}' &&

@@ -225,6 +225,18 @@ The hub stores these records and compares them on each connection. If any value 
 
 Legitimate updates (agent version bumps) are handled gracefully — the hub accepts a new attestation baseline when the agent version changes.
 
+### Mismatch handling
+
+When a mismatch is detected, the agent is marked `degraded` and the hub logs a warning. The hub acknowledgement includes a `warning` field that the agent surfaces to the operator.
+
+Common legitimate causes of attestation mismatches:
+
+- **OS update** — kernel or package changes alter the OS fingerprint.
+- **Configuration change** — modifying the agent's config file changes its hash.
+- **Pack version change** — updating packs changes the loaded pack list. Pack version changes are exempted automatically and do not trigger a mismatch.
+
+Re-enrolling the agent resets the attestation baseline. This is the intended recovery path after legitimate environment changes.
+
 ---
 
 ## Audit Trail
