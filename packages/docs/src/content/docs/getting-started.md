@@ -18,6 +18,8 @@ docker run -d --name sonde-hub \
 
 Open [http://localhost:3000](http://localhost:3000) and log in with the admin credentials you set above. The setup wizard walks through API key configuration, AI tool registration, and agent enrollment.
 
+**Windows:** Download the `.msi` installer from [GitHub Releases](https://github.com/physikal/sonde/releases). See [Windows deployment](/hub/deployment/#windows-msi) for details.
+
 ## Step 2: Install an Agent
 
 On the target machine you want to monitor:
@@ -39,6 +41,8 @@ sonde start --headless
 Generate enrollment tokens from the hub dashboard or via the REST API. Each token is single-use.
 
 ## Step 3: Connect Claude
+
+Create an API key from the dashboard at **Manage > API Keys** (admin) or **My API Keys** (self-service). Use this key in the configuration below.
 
 ### Claude Desktop
 

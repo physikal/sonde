@@ -2,7 +2,7 @@
 title: Integration Packs
 ---
 
-Integration packs run on the hub and connect to external REST APIs — no agent required on the remote system. They're used for platforms like Proxmox VE, ServiceNow, Citrix, Splunk, and Nutanix.
+Integration packs run on the hub and connect to external REST APIs — no agent required on the remote system. There are currently 19 integration packs covering hypervisors, ITSM, observability, networking, security, and secrets management.
 
 ## How they work
 
@@ -50,5 +50,10 @@ You can run probes via the MCP `probe` tool or through diagnostic runbooks via t
 | PagerDuty | Token | Incidents, services, on-call schedules |
 | UniFi Network | API Key (`X-API-KEY`) | Devices, clients, networks, WAN, device stats |
 | UniFi Access | Bearer Token | Door status, access logs, reader/hub devices |
+| ThousandEyes | Bearer Token | Network path analysis, latency, outage detection |
+| Cisco Meraki | API Key | Device fleet status, switch ports, network topology |
+| Check Point | Session (login) | Gateways, access rules, host/network objects |
+| A10 Thunder | Session (login) | Virtual servers, service groups, real server health |
+| Keeper | One-Time Token | Secrets Manager vault access, credential resolver |
 
 For per-type setup instructions (required permissions, credential format, example queries), see the [Integration Packs Setup](/integrations/setup) page.

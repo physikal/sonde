@@ -595,6 +595,15 @@ export class SondeDb {
       .run(new Date().toISOString(), id);
   }
 
+  revokeAgentApiKeys(agentName: string): void {
+    this.db
+      .prepare(
+        `UPDATE api_keys SET revoked_at = ?
+         WHERE name = ? AND key_type = 'agent' AND revoked_at IS NULL`,
+      )
+      .run(new Date().toISOString(), `agent:${agentName}`);
+  }
+
   updateApiKeyPolicy(id: string, policyJson: string): boolean {
     const result = this.db
       .prepare('UPDATE api_keys SET policy_json = ? WHERE id = ?')

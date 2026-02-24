@@ -12,7 +12,9 @@ The fastest way to install is the one-liner bootstrap script. It installs Node.j
 curl -fsSL https://your-hub-url/install | sh
 ```
 
-The hub serves this bootstrap script directly (requires `SONDE_HUB_URL` to be set on the hub). The script auto-detects your platform and package manager:
+The hub serves this bootstrap script directly (requires `SONDE_HUB_URL` to be set on the hub). In non-TTY environments (e.g., piping to a file or running in CI), the script prints manual instructions instead of launching the interactive TUI.
+
+The script auto-detects your platform and package manager:
 
 - **Debian / Ubuntu** -- installs via `apt`
 - **RHEL / Fedora** -- installs via `dnf`
@@ -45,6 +47,8 @@ sonde --version
 | **Privileges** | Runs as a regular user. The agent refuses to run as root. |
 
 ## What happens next
+
+The default agent name includes a random hex suffix for uniqueness (e.g., `web-server-a3f1b2`). See [Enrollment](/agent/enrollment/) for details on naming.
 
 After installation, enroll the agent with your hub:
 
