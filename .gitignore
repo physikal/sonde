@@ -36,6 +36,12 @@ coverage/
 # Private docs
 sonde.pdf
 
+# Internal task tracking / security audit notes
+tasks/
+
+# Editor/sync conflict artifacts
+*Edit conflict*
+
 # Claude Code / Serena (developer tooling, not part of the project)
 .claude/
 .serena/
