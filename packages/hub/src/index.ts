@@ -332,10 +332,21 @@ fi
 # --- Launch interactive installer TUI ---
 info "Launching Sonde installer..."
 printf "\\n"
-if [ -n "$SONDE_USER" ]; then
-  exec su -s /bin/sh "$SONDE_USER" -c "sonde install --hub ${hubUrl}"
+if [ -t 0 ]; then
+  if [ -n "$SONDE_USER" ]; then
+    exec su -s /bin/sh "$SONDE_USER" -c "sonde install --hub ${hubUrl}"
+  else
+    exec sonde install --hub ${hubUrl}
+  fi
 else
-  exec sonde install --hub ${hubUrl}
+  ok "Installation complete! To finish setup, run:"
+  printf "\\n"
+  if [ -n "$SONDE_USER" ]; then
+    printf "  su -s /bin/sh %s -c 'sonde install --hub %s'\\n" "$SONDE_USER" "${hubUrl}"
+  else
+    printf "  sonde install --hub %s\\n" "${hubUrl}"
+  fi
+  printf "\\n"
 fi
 `;
 }

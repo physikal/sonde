@@ -203,6 +203,14 @@ function handleRegister(
     payload.enrollmentToken ||
     (bearerToken && db.isValidEnrollmentToken(bearerToken) ? bearerToken : undefined);
 
+  // Warn when a new enrollment token overwrites an existing agent identity
+  if (existing && enrollmentToken) {
+    logger.warn(
+      { agent: payload.name, agentId, previousLastSeen: existing.lastSeen },
+      'Agent re-enrolled with new token — previous identity overwritten',
+    );
+  }
+
   // If enrollment token is present, validate and consume it
   let certData: { certPem: string; keyPem: string; caCertPem: string } | undefined;
   let mintedApiKey: string | undefined;
@@ -277,6 +285,7 @@ function handleRegister(
   dispatcher.registerAgent(agentId, payload.name, ws);
 
   // Handle attestation data
+  let attestationMismatch = false;
   if (payload.attestation) {
     const parsed = AttestationData.safeParse(payload.attestation);
     if (parsed.success) {
@@ -287,17 +296,17 @@ function handleRegister(
       // Accept new attestation baseline if agent version changed (expected after self-update)
       const versionChanged =
         existingAgent?.agentVersion && existingAgent.agentVersion !== payload.agentVersion;
-      const mismatch = !!(
+      attestationMismatch = !!(
         storedJson &&
         storedJson !== '{}' &&
         storedJson !== newJson &&
         !versionChanged
       );
-      if (mismatch) {
+      if (attestationMismatch) {
         db.updateAgentStatus(agentId, 'degraded', now);
         logger.warn({ agent: payload.name, agentId }, 'Attestation mismatch');
       }
-      db.updateAgentAttestation(agentId, newJson, mismatch);
+      db.updateAgentAttestation(agentId, newJson, attestationMismatch);
     }
   }
 
@@ -309,6 +318,9 @@ function handleRegister(
   }
   if (mintedApiKey) {
     ackPayload.apiKey = mintedApiKey;
+  }
+  if (attestationMismatch) {
+    ackPayload.warning = 'Attestation mismatch detected — agent marked as degraded';
   }
 
   const ack = {

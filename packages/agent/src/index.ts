@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { packRegistry } from '@sonde/packs';
@@ -110,7 +111,10 @@ async function cmdUpdate(): Promise<void> {
 async function cmdEnroll(): Promise<void> {
   const hubUrl = getArg('--hub');
   const apiKey = getArg('--key');
-  const agentName = getArg('--name') ?? os.hostname();
+  const existingConfig = loadConfig();
+  const defaultName = existingConfig?.agentName
+    ?? `${os.hostname()}-${crypto.randomBytes(3).toString('hex')}`;
+  const agentName = getArg('--name') ?? defaultName;
   const enrollmentToken = getArg('--token');
 
   if (!hubUrl) {
@@ -329,6 +333,14 @@ function handleServiceCommand(subArgs: string[]): void {
 
 async function cmdInstall(): Promise<void> {
   const initialHubUrl = getArg('--hub');
+
+  if (!process.stdin.isTTY) {
+    console.log('\n[sonde] Interactive installer requires a terminal.');
+    console.log('[sonde] Run the following command manually:\n');
+    console.log(`  sonde install${initialHubUrl ? ` --hub ${initialHubUrl}` : ''}\n`);
+    process.exit(1);
+  }
+
   const { render } = await import('ink');
   const { createElement } = await import('react');
   const { InstallerApp } = await import('./tui/installer/InstallerApp.js');
