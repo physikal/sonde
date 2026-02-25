@@ -1936,6 +1936,25 @@ if (config.hubUrl) {
   oauthApp = express();
   oauthApp.use(express.json());
   oauthApp.use(express.urlencoded({ extended: false }));
+
+  // Session guard: require dashboard login before OAuth authorization
+  oauthApp.use('/authorize', (req, _res, next) => {
+    const cookies = req.headers.cookie ?? '';
+    const match = cookies.match(/sonde_session=([^\s;]+)/);
+    const sessionId = match?.[1];
+
+    if (sessionId) {
+      const user = sessionManager.getSession(sessionId);
+      if (user) {
+        next();
+        return;
+      }
+    }
+
+    const returnTo = req.originalUrl ?? req.url;
+    _res.redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+  });
+
   oauthApp.use(
     mcpAuthRouter({
       provider: oauthProvider,

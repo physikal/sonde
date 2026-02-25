@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
 import {
+  InvalidClientMetadataError,
   InvalidGrantError,
   InvalidTokenError,
 } from '@modelcontextprotocol/sdk/server/auth/errors.js';
@@ -40,11 +41,25 @@ class SondeClientsStore implements OAuthRegisteredClientsStore {
   registerClient(
     client: Omit<OAuthClientInformationFull, 'client_id' | 'client_id_issued_at'>,
   ): OAuthClientInformationFull {
+    // Validate redirect URIs: only localhost origins are permitted
+    for (const uri of client.redirect_uris ?? []) {
+      const parsed = new URL(uri);
+      const host = parsed.hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
+        throw new InvalidClientMetadataError(
+          'Only localhost redirect URIs are permitted',
+        );
+      }
+    }
+
+    // Force grant_types to authorization_code only (defense in depth)
+    const sanitized = { ...client, grant_types: ['authorization_code'] };
+
     const clientId = crypto.randomUUID();
     const issuedAt = Math.floor(Date.now() / 1000);
 
     // Separate the client_secret from metadata for DB storage
-    const { client_secret, client_secret_expires_at, ...metadata } = client;
+    const { client_secret, client_secret_expires_at, ...metadata } = sanitized;
 
     this.db.insertOAuthClient(
       clientId,

@@ -55,7 +55,11 @@ export function Login() {
       }
 
       // Full reload so AuthProvider re-fetches /auth/status with the new cookie
-      window.location.href = '/';
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      // Only allow relative paths to prevent open redirect
+      const redirectTo = returnTo?.startsWith('/') ? returnTo : '/';
+      window.location.href = redirectTo;
     } catch {
       setError('Network error. Is the hub running?');
     } finally {

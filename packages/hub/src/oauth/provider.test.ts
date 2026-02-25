@@ -195,4 +195,46 @@ describe('SondeOAuthProvider', () => {
     const { provider } = setup();
     await expect(provider.verifyAccessToken('nonexistent')).rejects.toThrow('Unknown token');
   });
+
+  it('rejects non-localhost redirect URIs', () => {
+    const { provider } = setup();
+
+    const metadata = {
+      ...makeClientMetadata(),
+      redirect_uris: ['https://evil.com/callback'],
+    };
+
+    expect(() =>
+      provider.clientsStore.registerClient?.(metadata),
+    ).toThrow('Only localhost redirect URIs are permitted');
+  });
+
+  it('allows localhost redirect URIs', () => {
+    const { provider } = setup();
+
+    for (const uri of [
+      'http://localhost:3000/callback',
+      'http://127.0.0.1:8080/cb',
+      'http://[::1]:9000/cb',
+    ]) {
+      const metadata = { ...makeClientMetadata(), redirect_uris: [uri] };
+      const registered = provider.clientsStore.registerClient?.(metadata) as OAuthClientInformationFull;
+      expect(registered.client_id).toBeTruthy();
+    }
+  });
+
+  it('forces grant_types to authorization_code', () => {
+    const { provider } = setup();
+
+    const metadata = {
+      ...makeClientMetadata(),
+      grant_types: ['password', 'client_credentials'],
+    };
+
+    const registered = provider.clientsStore.registerClient?.(metadata) as OAuthClientInformationFull;
+    expect(registered.client_id).toBeTruthy();
+
+    const retrieved = provider.clientsStore.getClient(registered.client_id) as OAuthClientInformationFull;
+    expect(retrieved.grant_types).toEqual(['authorization_code']);
+  });
 });
