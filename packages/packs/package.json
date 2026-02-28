@@ -1,7 +1,20 @@
 {
   "name": "@sonde/packs",
-  "version": "0.1.8",
+  "version": "0.1.9",
+  "description": "Agent and integration pack definitions for the Sonde diagnostic platform",
   "private": false,
+  "license": "Apache-2.0",
+  "author": "Sonde Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/physikal/sonde.git",
+    "directory": "packages/packs"
+  },
+  "homepage": "https://github.com/physikal/sonde#readme",
+  "bugs": {
+    "url": "https://github.com/physikal/sonde/issues"
+  },
+  "keywords": ["mcp", "infrastructure", "diagnostics", "packs", "probes"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

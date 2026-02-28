@@ -4,13 +4,13 @@ Connect Claude to your Sonde hub so it can query agents, run probes, and execute
 
 ## Prerequisites
 
-- A running Sonde hub (e.g. `https://mcp.sondeapp.com`)
+- A running Sonde hub (e.g. `https://your-hub-url:3000`)
 - An API key generated during hub setup
 - At least one enrolled agent
 
 ## Option A: Claude Desktop — Config File (API Key Auth)
 
-Claude Desktop's built-in Connectors UI requires OAuth. Since Sonde currently uses API key auth, we use `mcp-remote` as a local stdio-to-HTTP bridge.
+Claude Desktop's built-in Connectors UI requires OAuth. For API key auth, we use `mcp-remote` as a local stdio-to-HTTP bridge. Sonde also supports OAuth 2.0 with PKCE and session-based auth.
 
 ### Steps
 

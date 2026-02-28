@@ -33,7 +33,7 @@ docker run -d --name sonde-hub \
 
 Open `http://localhost:3000` to access the dashboard and complete the setup wizard. The wizard creates an admin account and generates your first API key.
 
-**Windows:** Download the `.msi` installer from [GitHub Releases](https://github.com/physikal/sonde/releases). It bundles Node.js, the hub, dashboard, and installs as a Windows service. See the [Windows deployment docs](https://sondeapp.com/hub/deployment/#windows-msi) for details.
+**Windows:** Download the `.msi` installer from [GitHub Releases](https://github.com/physikal/sonde/releases). It bundles Node.js, the hub, dashboard, and installs as a Windows service. See the [Windows deployment docs](https://github.com/physikal/sonde/tree/main/packages/docs/src/content/docs/hub/deployment.md#windows-msi) for details.
 
 ### 2. Install an Agent
 
@@ -169,7 +169,7 @@ Three-tier RBAC: **member** (MCP only), **admin** (MCP + dashboard), **owner** (
 
 Defense-in-depth across nine layers: dedicated unprivileged user, no raw shell execution, mTLS, payload signing (RSA-SHA256), output scrubbing, agent attestation, policy engine (per-key agent/probe/client restrictions), Zod schema validation at every boundary, and tamper-evident hash-chained audit logging.
 
-All probes are read-only. Agents never listen on a port. There is no code path from any external input to arbitrary shell execution. See the [Security Model](https://sondeapp.com/reference/security/) docs.
+All probes are read-only. Agents never listen on a port. There is no code path from any external input to arbitrary shell execution. See the [Security Model](https://github.com/physikal/sonde/tree/main/packages/docs/src/content/docs/reference/security.md) docs.
 
 ## Monorepo
 
@@ -196,7 +196,7 @@ Requires Node.js 22+ and npm 10+. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
 
 ## Documentation
 
-Full documentation at [sondeapp.com](https://sondeapp.com).
+Full documentation is available in the [docs site](packages/docs/src/content/docs), served at `/docs` when running the hub.
 
 ## License
 

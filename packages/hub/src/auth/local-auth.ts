@@ -18,6 +18,49 @@ function timingSafeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 60_000;
+
+interface LoginAttempt {
+  count: number;
+  resetAt: number;
+}
+
+const loginAttempts = new Map<string, LoginAttempt>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function recordFailedLogin(ip: string): void {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  } else {
+    entry.count += 1;
+  }
+}
+
+function clearLoginAttempts(ip: string): void {
+  loginAttempts.delete(ip);
+}
+
+// Prune stale entries every 5 minutes to prevent unbounded growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now >= entry.resetAt) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 5 * 60_000).unref();
+
 interface LocalAuthConfig {
   adminUser?: string;
   adminPassword?: string;
@@ -32,9 +75,22 @@ export function createAuthRoutes(
 
   // POST /auth/local/login
   auth.post('/local/login', async (c) => {
+    const clientIp =
+      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+      c.req.header('x-real-ip') ??
+      'unknown';
+
+    if (isRateLimited(clientIp)) {
+      return c.json(
+        { error: 'Too many login attempts. Try again in 1 minute.' },
+        429,
+      );
+    }
+
     const body = await c.req.json<{ username?: string; password?: string }>();
 
     if (!body.username || !body.password) {
+      recordFailedLogin(clientIp);
       return c.json({ error: 'Invalid credentials' }, 401);
     }
 
@@ -47,6 +103,7 @@ export function createAuthRoutes(
         dbAdmin.salt,
       );
       if (valid) {
+        clearLoginAttempts(clientIp);
         const sessionId = sessionManager.createSession({
           authMethod: 'local',
           userId: `local:${dbAdmin.id}`,
@@ -77,6 +134,7 @@ export function createAuthRoutes(
       timingSafeEqual(body.username, config.adminUser) &&
       timingSafeEqual(body.password, config.adminPassword)
     ) {
+      clearLoginAttempts(clientIp);
       const sessionId = sessionManager.createSession({
         authMethod: 'local',
         userId: 'local:admin',
@@ -99,6 +157,7 @@ export function createAuthRoutes(
       });
     }
 
+    recordFailedLogin(clientIp);
     return c.json({ error: 'Invalid credentials' }, 401);
   });
 

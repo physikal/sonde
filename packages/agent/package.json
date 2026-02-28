@@ -1,7 +1,20 @@
 {
   "name": "@sonde/agent",
-  "version": "0.2.11",
+  "version": "0.2.12",
+  "description": "Lightweight infrastructure agent for the Sonde MCP diagnostic platform",
   "private": false,
+  "license": "Apache-2.0",
+  "author": "Sonde Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/physikal/sonde.git",
+    "directory": "packages/agent"
+  },
+  "homepage": "https://github.com/physikal/sonde#readme",
+  "bugs": {
+    "url": "https://github.com/physikal/sonde/issues"
+  },
+  "keywords": ["mcp", "infrastructure", "diagnostics", "agent", "monitoring"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

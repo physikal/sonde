@@ -11,7 +11,6 @@ concurrency:
 permissions:
   contents: write
   packages: write
-  pull-requests: write
 
 jobs:
   ci:
@@ -48,10 +47,19 @@ jobs:
       - name: Build all packages
         run: npx turbo run build
 
+  build-msi:
+    name: Build Windows MSI
+    needs: ci
+    uses: ./.github/workflows/build-msi.yml
+
   release:
     name: Release
     needs: ci
     runs-on: ubuntu-latest
+
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      version: ${{ steps.hub-version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -107,9 +115,25 @@ jobs:
             ghcr.io/physikal/hub:sha-${{ github.sha }}
             ghcr.io/physikal/hub:v${{ steps.hub-version.outputs.version }}
 
-      - name: Create GitHub Release
-        if: steps.changesets.outputs.published == 'true'
+  github-release:
+    name: GitHub Release
+    needs: [release, build-msi]
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download MSI artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: sonde-hub-msi
+          path: msi
+
+      - name: Create GitHub Release with MSI
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
         with:
-          tag_name: v${{ steps.hub-version.outputs.version }}
+          tag_name: v${{ needs.release.outputs.version }}
           generate_release_notes: true
+          files: msi/*.msi
