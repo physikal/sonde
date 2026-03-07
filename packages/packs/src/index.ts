@@ -1,6 +1,7 @@
 import { dockerPack } from './docker/index.js';
 import { mysqlPack } from './mysql/index.js';
 import { nginxPack } from './nginx/index.js';
+import { opentofuPack } from './opentofu/index.js';
 import { postgresPack } from './postgres/index.js';
 import { proxmoxAgentPack } from './proxmox/index.js';
 import { redisPack } from './redis/index.js';
@@ -51,6 +52,10 @@ export { a10Pack } from './integrations/a10.js';
 export { unifiPack } from './integrations/unifi.js';
 export { unifiAccessPack } from './integrations/unifi-access.js';
 export { keeperPack, initializeKeeper, regionToHostname } from './integrations/keeper.js';
+export { netdataPack } from './integrations/netdata.js';
+export { kubernetesPack } from './integrations/kubernetes.js';
+export { kuberoPack } from './integrations/kubero.js';
+export { opentofuPack } from './opentofu/index.js';
 export { proxmoxDiagnosticRunbooks } from './runbooks/proxmox.js';
 export { nutanixDiagnosticRunbooks } from './runbooks/nutanix.js';
 
@@ -79,6 +84,7 @@ export const packRegistry: ReadonlyMap<string, Pack> = createPackRegistry(
     redisPack,
     mysqlPack,
     proxmoxAgentPack,
+    opentofuPack,
   ]),
   { allowUnsignedPacks: true },
 );

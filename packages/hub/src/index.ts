@@ -15,8 +15,11 @@ import {
   initializeKeeper,
   jiraPack,
   keeperPack,
+  kuberoPack,
+  kubernetesPack,
   lokiPack,
   merakiPack,
+  netdataPack,
   nutanixDiagnosticRunbooks,
   nutanixPack,
   packRegistry,
@@ -155,6 +158,9 @@ const integrationCatalog: ReadonlyMap<string, IntegrationPack> = new Map([
   [unifiPack.manifest.name, unifiPack],
   [unifiAccessPack.manifest.name, unifiAccessPack],
   [keeperPack.manifest.name, keeperPack],
+  [netdataPack.manifest.name, netdataPack],
+  [kubernetesPack.manifest.name, kubernetesPack],
+  [kuberoPack.manifest.name, kuberoPack],
 ]);
 integrationManager = new IntegrationManager(
   db,
